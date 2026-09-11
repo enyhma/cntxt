@@ -1,6 +1,6 @@
 {
-  "name": "wxt-solid-starter",
-  "description": "manifest.json description",
+  "name": "vistap",
+  "description": "Save the current window's tabs as a named workspace, close it, and restore it later.",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -18,7 +18,9 @@
     "solid-js": "^1.9.11"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@wxt-dev/module-solid": "^1.1.4",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^8.1.5",
     "web-ext": "^10.5.0",
