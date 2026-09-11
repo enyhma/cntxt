@@ -1,0 +1,4 @@
+[tools]
+lefthook = "latest"
+node = "latest"
+pnpm = "latest"

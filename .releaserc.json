@@ -1,0 +1,9 @@
+{
+  "branches": ["main"],
+  "repositoryUrl": "https://github.com/enyhma/vistap.git",
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    ["@semantic-release/npm", { "npmPublish": false, "pkgRoot": "extension" }]
+  ]
+}

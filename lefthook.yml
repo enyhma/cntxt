@@ -1,0 +1,11 @@
+commit-msg:
+  commands:
+    conventional:
+      run: pnpm exec commitlint --edit {1}
+
+pre-commit:
+  commands:
+    lint:
+      run: pnpm exec eslint .
+    format:
+      run: pnpm exec prettier --check .
