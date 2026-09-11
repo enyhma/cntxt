@@ -1,0 +1,4 @@
+node_modules
+extension/.output
+extension/.wxt
+pnpm-lock.yaml
