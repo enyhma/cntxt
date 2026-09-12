@@ -10,16 +10,22 @@ Personal first, team second. No deep third-party integrations (Drive, Trello, Sl
 - Skip tab suspension — Chrome's built-in memory saver already covers this.
 - Ship as a standalone usable free tool before touching sync.
 
-## Phase 2 — Personal + Sync
+## Phase 2 — Personal + Sync (Supabase)
 
-- Auth (email or OAuth) + backend (Postgres/Supabase-style) so workspaces sync across devices.
-- Keep server dumb: `workspaces` table, `resources` table, tabs stored as JSON blob per workspace.
-- Web dashboard for viewing/editing workspaces outside the browser — management only, not a second full UI.
+- Auth: Supabase Auth (email magic link + Google OAuth). No custom auth server.
+- No custom API layer: extension and web dashboard talk to Supabase directly via `supabase-js`, using its auto-generated PostgREST API. "Keep server dumb" becomes "no server."
+- Schema (Postgres, via Supabase):
+  - `workspaces (id, user_id, name, tabs jsonb, created_at, updated_at)`
+  - `resources (id, workspace_id, type, url, note, created_at)`
+- Authorization: Row-Level Security policies (`auth.uid() = user_id`) instead of app-level access checks — the DB enforces isolation, extension code doesn't have to.
+- Sync: last-write-wins via `updated_at` — good enough for one user on multiple devices, no CRDT/merge logic.
+- Web dashboard: thin SPA using `supabase-js` against the same tables — still management-only, not a second full UI.
 
 ## Phase 3 — Team
 
-- Shared workspaces: `owner` / `shared_with` model, real-time updates (websockets or polling) so teammates see the same tab set.
-- Seats/billing (Stripe) — this is the point it becomes a paying product.
+- Shared workspaces: add a `workspace_members (workspace_id, user_id, role)` join table; extend RLS policies to check membership instead of just `user_id`.
+- Real-time updates: Supabase Realtime (Postgres change subscriptions) — skip building a websocket layer.
+- Seats/billing (Stripe) — this is the point it becomes a paying product. Supabase has no billing primitive, so this stays custom regardless.
 - No Drive/Trello/Slack connectors, by design.
 
 ## Explicit non-goals

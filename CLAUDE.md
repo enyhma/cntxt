@@ -28,7 +28,7 @@ Extension (`cd extension`):
 - `pnpm compile` — `tsc --noEmit`
 - `pnpm test` — `vitest run`; single file: `pnpm exec vitest run utils/restoreMachine.test.ts`; watch mode: `pnpm exec vitest`
 
-Commits are gated by lefthook (`lefthook.yml`): pre-commit runs `eslint .` and `prettier --check .` across the **entire repo**, not just staged files — a failure in `marketing/` or `supabase/` will block a commit that only touches `extension/`. Commit-msg runs commitlint (conventional commits required).
+Commits are gated by lefthook (`lefthook.yml`): pre-commit runs `eslint .` and `prettier --check .` across the **entire repo**, not just staged files — a failure in `marketing/` or `supabase/` will block a commit that only touches `extension/`. Commit-msg runs commitlint (conventional commits required): every commit message must follow Conventional Commits (`type(scope): subject`, e.g. `feat(extension): ...`, `chore: ...`, `docs: ...`) since `pnpm release` (semantic-release) derives the version bump from these types. This doesn't require splitting unrelated work into separate commits, but when a change set spans genuinely different types (e.g. a `chore` alongside a `docs` change), commit them separately rather than picking one type to cover both.
 
 ## Architecture (`extension/`)
 
