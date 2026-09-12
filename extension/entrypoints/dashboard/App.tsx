@@ -1,13 +1,22 @@
-import { createSignal, For, Show, onMount } from "solid-js";
+import { useMachine } from "@xstate/solid";
+import {
+  createEffect,
+  createSignal,
+  For,
+  Show,
+  onCleanup,
+  onMount,
+  untrack,
+} from "solid-js";
 import { ensureWorkspaceForWindow } from "@/utils/attach";
-import { getWindowWorkspaceMap, setWindowWorkspace } from "@/utils/session";
+import { restoreMachine } from "@/utils/restoreMachine";
+import { getWindowWorkspaceMap } from "@/utils/session";
 import {
   type Settings,
   type StartupBehavior,
   getSettings,
   updateSettings,
 } from "@/utils/settings";
-import { DASHBOARD_URL } from "@/utils/tabs";
 import {
   type Workspace,
   deleteWorkspace,
@@ -17,32 +26,51 @@ import {
 
 function App() {
   const [workspaces, setWorkspaces] = createSignal<Workspace[]>([]);
-  const [openIds, setOpenIds] = createSignal<Set<string>>(new Set());
-  const [currentId, setCurrentId] = createSignal<string>();
+  const [windowMap, setWindowMap] = createSignal<Record<number, string>>({});
+  const [myWindowId, setMyWindowId] = createSignal<number>();
   const [name, setName] = createSignal("");
   const [startupBehavior, setStartupBehavior] =
     createSignal<StartupBehavior>("none");
+  const [state, send] = useMachine(restoreMachine);
 
+  const openIds = () => new Set(Object.values(windowMap()));
+  const currentId = () => {
+    const windowId = myWindowId();
+    return windowId !== undefined ? windowMap()[windowId] : undefined;
+  };
   const current = () => workspaces().find((w) => w.id === currentId());
   const savedWorkspaces = () =>
     workspaces().filter((w) => w.id !== currentId() && !openIds().has(w.id));
 
   async function refresh() {
     setWorkspaces(await getWorkspaces());
-    setOpenIds(new Set(Object.values(await getWindowWorkspaceMap())));
+    setWindowMap(await getWindowWorkspaceMap());
   }
+
+  // Reseed the rename input only when switching to a different workspace,
+  // not on every routine refresh (which would clobber an in-progress edit).
+  createEffect(() => {
+    const id = currentId();
+    const workspace = untrack(() => workspaces().find((w) => w.id === id));
+    if (workspace) setName(workspace.name);
+  });
 
   onMount(async () => {
     const win = await browser.windows.getCurrent();
     if (win.id !== undefined) {
-      setCurrentId(await ensureWorkspaceForWindow(win.id));
+      setMyWindowId(win.id);
+      await ensureWorkspaceForWindow(win.id);
     }
     await refresh();
-    const currentWorkspace = current();
-    if (currentWorkspace) setName(currentWorkspace.name);
 
     const settings: Settings = await getSettings();
     setStartupBehavior(settings.startupBehavior);
+
+    const handleStorageChange = () => refresh();
+    browser.storage.onChanged.addListener(handleStorageChange);
+    onCleanup(() =>
+      browser.storage.onChanged.removeListener(handleStorageChange),
+    );
   });
 
   async function handleRename() {
@@ -53,36 +81,12 @@ function App() {
     await refresh();
   }
 
-  async function handleCloseTabs() {
-    const win = await browser.windows.getCurrent();
-    if (win.id === undefined) return;
-    const tabs = await browser.tabs.query({ windowId: win.id });
-    const idsToClose = tabs
-      .filter((t) => t.url !== DASHBOARD_URL)
-      .map((t) => t.id)
-      .filter((id): id is number => id !== undefined);
-    if (idsToClose.length > 0) await browser.tabs.remove(idsToClose);
+  function handleCloseTabs() {
+    send({ type: "CLOSE_TABS" });
   }
 
-  async function handleRestore(workspace: Workspace) {
-    const win = await browser.windows.getCurrent();
-    if (win.id === undefined) return;
-
-    const tabs = await browser.tabs.query({ windowId: win.id });
-    const idsToClose = tabs
-      .filter((t) => t.url !== DASHBOARD_URL)
-      .map((t) => t.id)
-      .filter((id): id is number => id !== undefined);
-
-    await setWindowWorkspace(win.id, workspace.id);
-    if (idsToClose.length > 0) await browser.tabs.remove(idsToClose);
-    for (const tab of workspace.tabs) {
-      await browser.tabs.create({ windowId: win.id, url: tab.url });
-    }
-
-    setCurrentId(workspace.id);
-    setName(workspace.name);
-    await refresh();
+  function handleRestore(workspace: Workspace) {
+    send({ type: "RESTORE", workspace });
   }
 
   async function handleDelete(id: string) {
@@ -113,7 +117,8 @@ function App() {
                   onKeyDown={(e) => e.key === "Enter" && handleRename()}
                 />
                 <button
-                  class="shrink-0 rounded bg-blue-600 px-4 py-2 text-sm text-white"
+                  class="shrink-0 rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50"
+                  disabled={!state.matches("idle")}
                   onClick={handleCloseTabs}
                 >
                   Close all tabs
@@ -157,7 +162,8 @@ function App() {
                 </div>
                 <div class="flex gap-1">
                   <button
-                    class="rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                    class="rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+                    disabled={!state.matches("idle")}
                     onClick={() => handleRestore(workspace)}
                   >
                     Restore

@@ -12,10 +12,13 @@
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
+    "test": "vitest run",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
-    "solid-js": "^1.9.11"
+    "@xstate/solid": "^2.0.0",
+    "solid-js": "^1.9.11",
+    "xstate": "^5.32.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -23,6 +26,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^8.1.5",
+    "vitest": "^5.0.0",
     "web-ext": "^10.5.0",
     "wxt": "^0.21.3"
   }
