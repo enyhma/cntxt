@@ -9,5 +9,6 @@ export default defineConfig({
   }),
   manifest: {
     permissions: ["tabs", "storage"],
+    action: {},
   },
 });
