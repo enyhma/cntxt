@@ -44,40 +44,56 @@ Infra only, no product code.
 
 ## M1 — Entitlements schema
 
-Postgres only.
+**Status: done.** Migration `20260912162121_entitlements.sql`, tested
+locally via `supabase test db --local` (pgTAP,
+`supabase/tests/entitlements_test.sql`).
 
-- [ ] New migration: an `entitlements` table, one row per `user_id`, e.g.
-      `max_workspaces int not null default 10`, plus
-      `access_expires_at timestamptz` (null until a purchase sets it — see
-      M8/M9). Start with exactly the columns needed for what's actually
-      enforced (M2's limit, M9's expiry) — _(ponytail: skip a `plans` table
-      entirely until there's a second tier to differentiate; a flat
-      per-user row with hardcoded free-tier defaults is the whole schema
-      until then.)_
-- [ ] RLS: the owning user can `select` their row; nobody can `insert`/
-      `update`/`delete` it via PostgREST. (Changing someone's limits — e.g.
-      after a Stripe webhook in Phase 3 — is a privileged write path, not in
-      scope here.)
-- [ ] Seed a row per new user. Simplest dumb option: a trigger on
-      `auth.users` insert that creates the default `entitlements` row — one
-      more small, boring SQL trigger, not application code.
+- [x] `entitlements` table, one row per `user_id`: `max_workspaces int not
+null default 10`, `access_expires_at timestamptz` (null until a
+      purchase sets it — see M8/M9). _(ponytail: no `plans` table — a flat
+      per-user row with hardcoded free-tier defaults, until there's a
+      second tier to differentiate.)_
+- [x] RLS: owner can `select` their row; no insert/update/delete policy
+      exists, so PostgREST default-denies all writes. Verified by test, not
+      just asserted: a direct `update` from the owning `authenticated` role
+      silently affects 0 rows.
+- [x] `on_auth_user_created` trigger (`security definer`) seeds the default
+      row on signup. Verified: a fresh `auth.users` insert produces a
+      matching `entitlements` row with the default limit.
 
 ## M2 — The one exception: `create_workspace`
 
-- [ ] One `plpgsql` function, `security invoker` (not `definer` — runs as
-      the calling user, so the existing `workspaces` RLS policy still
-      applies inside it; no re-implementing "owner-only" logic in SQL).
-      Body: count the caller's workspaces, compare to their `entitlements`
-      row, insert-and-return on success, raise an exception otherwise — all
-      in one transaction, closing the two-devices-race problem from
-      `architecture-sync.md`.
-- [ ] Exposed automatically as `supabase.rpc('create_workspace', {...})` —
+**Status: done.** Migration `20260912162121_entitlements.sql`, tests in
+`supabase/tests/`.
+
+- [x] One `plpgsql` function, `security definer` — **not** `invoker` as
+      originally planned here. `entitlements` deliberately has no UPDATE
+      policy (read-only to clients), but the row lock this function needs
+      (`select ... for update`) requires one anyway: under RLS, `SELECT ...
+FOR UPDATE` checks the UPDATE policy's `USING` clause, not just
+      SELECT's, since locking implies a potential update. TDD caught this
+      directly — the first test run under `invoker` silently let a caller
+      exceed their limit, because the lock matched zero rows and the limit
+      check was skipped rather than erroring. `security definer` runs as
+      the function's owner, which bypasses RLS the same way any table owner
+      does, so ownership is enforced explicitly via `auth.uid()` inside the
+      function instead of through the `workspaces` policy.
+- [x] Body: lock the caller's `entitlements` row (`for update`), count
+      their workspaces, compare to the limit, insert-and-return on success,
+      raise otherwise.
+- [x] Exposed automatically as `supabase.rpc('create_workspace', {...})` —
       PostgREST does this for free once the function exists; no extra
       server-side wiring.
-- [ ] Write the test for this in SQL against a local Supabase instance
-      (`supabase test db` / pgTAP, or a plain script) before wiring the
-      extension to it: two concurrent calls at the limit, exactly one
-      should succeed.
+- [x] pgTAP tests (`supabase/tests/create_workspace_test.sql`,
+      `entitlements_test.sql`) written before the migration, red then
+      green: under-limit success, ownership via `auth.uid()` not a
+      client-supplied id, at-limit rejection, RLS read/write behavior on
+      `entitlements`.
+- [x] Concurrency check (`supabase/tests/concurrent_create_workspace.sh`) —
+      pgTAP can't exercise two genuinely concurrent backends in one script,
+      so this fires two real `psql` connections at a user with exactly one
+      slot free. Confirmed: one succeeds, one is rejected, final count is
+      exactly the limit — not limit+1.
 
 ## M3 — Extension: auth gate
 
