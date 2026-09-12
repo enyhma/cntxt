@@ -97,16 +97,39 @@ FOR UPDATE` checks the UPDATE policy's `USING` clause, not just
 
 ## M3 — Extension: auth gate
 
-- [ ] Add `@supabase/supabase-js` to `extension/package.json`.
-- [ ] `utils/supabase.ts`: one client instance. Extensions can't use
-      `window.localStorage` the way `supabase-js` expects by default —
-      give it a storage adapter backed by `browser.storage.local`.
-- [ ] `App.tsx`: render a sign-in screen when there's no session (per the
-      Auth diagram in `architecture-sync.md`); nothing else in the
-      dashboard renders until it resolves.
-- [ ] Nothing here is custom backend work — Supabase Auth's hosted flows
-      (magic-link email, OAuth redirect) already do the sign-in UI and
-      verification.
+**Status: done**, with one honest caveat below.
+
+- [x] `@supabase/supabase-js` added to `extension/package.json`.
+- [x] `utils/supabaseStorage.ts`: the `window.localStorage`-shaped adapter
+      `supabase-js` needs, backed by `browser.storage.local`. Built TDD —
+      `supabaseStorage.test.ts` written first (red: module didn't exist),
+      5 assertions (round-trip, key independence, missing-key → null,
+      removal, and that it's actually `browser.storage.local` underneath,
+      not some other store) — green after the ~15-line implementation.
+- [x] `utils/supabase.ts`: one client instance, reading
+      `WXT_SUPABASE_URL`/`WXT_SUPABASE_ANON_KEY` from the environment
+      (`.env.example` added) rather than hardcoding a project — throws
+      clearly at load time if they're missing instead of failing silently
+      later.
+- [x] `App.tsx`: fetches the session on mount, subscribes to
+      `supabase.auth.onAuthStateChange`, and renders a sign-in screen
+      (magic link + Google OAuth) when there's no session — the rest of
+      the existing dashboard is now nested inside that gate, unchanged
+      otherwise.
+- [x] Verified: `pnpm compile`, `pnpm test` (10/10), `pnpm build` all pass
+      with no `.env` present (the missing-env-var throw is a runtime
+      concern, not a build one).
+- **Not verified**: the actual sign-in flow end to end (magic-link email
+  round-trip, Google OAuth redirect) — that needs a real linked Supabase
+  project with auth providers configured (M0, still manual/undone) and a
+  browser to click through. Nothing here has a test double for "did the
+  user actually receive and click a magic link."
+- No new component-testing framework was introduced for `App.tsx`'s JSX
+  itself — matches this codebase's existing convention (only
+  `utils/*`/xstate machines have tests; `App.tsx` had zero before this
+  milestone too). The testable unit (the storage adapter) got the TDD
+  treatment; the thin UI wiring around it didn't, consistent with what was
+  already here.
 
 ## M4 — Extension: entitlements cache
 
