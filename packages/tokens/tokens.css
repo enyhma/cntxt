@@ -1,0 +1,124 @@
+/*
+ * Design tokens extracted from the PocketBase design system
+ * (pocketbase/pocketbase/ui/src/css: vars.css, base.css, form.css),
+ * recomputed as a single dark palette (this product has no light theme).
+ *
+ * Consumers: `@import "@vistap/tokens/tokens.css";` after `@import "tailwindcss";`
+ * so the @theme block below extends Tailwind's generated utilities
+ * (bg-surface, text-danger, rounded, font-mono, ...).
+ */
+
+@theme {
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --radius-DEFAULT: 5px;
+  --radius-lg: 15px;
+
+  --color-surface: #1c1c1c;
+  --color-surface-alt1: color-mix(in srgb, var(--color-surface), white 2%);
+  --color-surface-alt2: color-mix(in srgb, var(--color-surface), white 7%);
+  --color-surface-alt3: color-mix(in srgb, var(--color-surface), white 12%);
+  --color-surface-alt4: color-mix(in srgb, var(--color-surface), white 14%);
+  --color-surface-alt5: color-mix(in srgb, var(--color-surface), white 16%);
+  --color-surface-txt: #ebebeb;
+  --color-surface-txt-hint: color-mix(
+    in srgb,
+    var(--color-surface-txt),
+    transparent 35%
+  );
+  --color-surface-txt-disabled: color-mix(
+    in srgb,
+    var(--color-surface-txt),
+    transparent 50%
+  );
+
+  --color-primary-DEFAULT: var(--color-surface-alt4);
+  --color-primary-txt: var(--color-surface-txt);
+
+  --color-info-DEFAULT: #4273bd;
+  --color-info-alt1: color-mix(in srgb, var(--color-info-DEFAULT), black 10%);
+  --color-info-alt2: color-mix(in srgb, var(--color-info-DEFAULT), black 15%);
+  --color-info-txt: #fff;
+
+  --color-success-DEFAULT: #27865d;
+  --color-success-alt1: color-mix(
+    in srgb,
+    var(--color-success-DEFAULT),
+    black 10%
+  );
+  --color-success-alt2: color-mix(
+    in srgb,
+    var(--color-success-DEFAULT),
+    black 15%
+  );
+  --color-success-txt: #fff;
+
+  --color-warning-DEFAULT: #cf4e17;
+  --color-warning-alt1: color-mix(
+    in srgb,
+    var(--color-warning-DEFAULT),
+    black 10%
+  );
+  --color-warning-alt2: color-mix(
+    in srgb,
+    var(--color-warning-DEFAULT),
+    black 15%
+  );
+  --color-warning-txt: #fff;
+
+  --color-danger-DEFAULT: #bb303e;
+  --color-danger-alt1: color-mix(
+    in srgb,
+    var(--color-danger-DEFAULT),
+    black 10%
+  );
+  --color-danger-alt2: color-mix(
+    in srgb,
+    var(--color-danger-DEFAULT),
+    black 15%
+  );
+  --color-danger-txt: #fff;
+
+  /* Accent lightens on hover/active (mix toward white), unlike the other
+     semantic colors which darken — matches the header/primary-button blue
+     in both the PB light-theme table and the mockup's hover states. */
+  --color-accent-DEFAULT: #1055c9;
+  --color-accent-alt1: color-mix(
+    in srgb,
+    var(--color-accent-DEFAULT),
+    white 10%
+  );
+  --color-accent-alt2: color-mix(
+    in srgb,
+    var(--color-accent-DEFAULT),
+    white 15%
+  );
+  --color-accent-txt: #fff;
+}
+
+/*
+ * Everything below has no Tailwind utility equivalent (no such thing as a
+ * `btn-height-sm` or `duration-slide` scale) — plain custom properties,
+ * used directly (`h-[var(--btn-height-sm)]`, `transition-duration:
+ * var(--duration)`) rather than forced into Tailwind's namespaces.
+ */
+:root {
+  --btn-height: 45px;
+  --btn-height-sm: 35px;
+  --btn-height-lg: 52px;
+  --input-padding: 13px;
+  --page-sidebar-width: 240px;
+
+  --duration-fast: 70ms; /* active/pressed state */
+  --duration: 150ms; /* default hover/transition */
+  --duration-slide: 200ms;
+  --duration-modal: 200ms;
+
+  /* Concrete dark-mode shadow values (the design system only documents the
+     light-theme rgba(34,36,36,...) numbers and says dark "swaps for
+     rgba(0,0,0,...) at higher opacity" without giving them — these are
+     the mockup's actual popover/dropdown/modal shadows). */
+  --shadow-dropdown: 0px 8px 5px -5px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0px 8px 5px -5px rgba(0, 0, 0, 0.5);
+}
