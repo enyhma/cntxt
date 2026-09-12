@@ -1,61 +1,98 @@
-import { createSignal, For, onMount } from "solid-js";
+import { createSignal, For, Show, onMount } from "solid-js";
+import { ensureWorkspaceForWindow } from "@/utils/attach";
+import { getWindowWorkspaceMap, setWindowWorkspace } from "@/utils/session";
+import {
+  type Settings,
+  type StartupBehavior,
+  getSettings,
+  updateSettings,
+} from "@/utils/settings";
+import { DASHBOARD_URL } from "@/utils/tabs";
 import {
   type Workspace,
   deleteWorkspace,
   getWorkspaces,
-  saveWorkspace,
-} from "./workspaces";
-
-const DASHBOARD_URL = browser.runtime.getURL("/dashboard.html");
+  updateWorkspace,
+} from "@/utils/workspaces";
 
 function App() {
   const [workspaces, setWorkspaces] = createSignal<Workspace[]>([]);
+  const [openIds, setOpenIds] = createSignal<Set<string>>(new Set());
+  const [currentId, setCurrentId] = createSignal<string>();
   const [name, setName] = createSignal("");
+  const [startupBehavior, setStartupBehavior] =
+    createSignal<StartupBehavior>("none");
+
+  const current = () => workspaces().find((w) => w.id === currentId());
+  const savedWorkspaces = () =>
+    workspaces().filter((w) => w.id !== currentId() && !openIds().has(w.id));
+
+  async function refresh() {
+    setWorkspaces(await getWorkspaces());
+    setOpenIds(new Set(Object.values(await getWindowWorkspaceMap())));
+  }
 
   onMount(async () => {
-    setWorkspaces(await getWorkspaces());
+    const win = await browser.windows.getCurrent();
+    if (win.id !== undefined) {
+      setCurrentId(await ensureWorkspaceForWindow(win.id));
+    }
+    await refresh();
+    const currentWorkspace = current();
+    if (currentWorkspace) setName(currentWorkspace.name);
+
+    const settings: Settings = await getSettings();
+    setStartupBehavior(settings.startupBehavior);
   });
 
-  async function handleSaveAndClose() {
-    const workspaceName = name().trim();
-    if (!workspaceName) return;
+  async function handleRename() {
+    const id = currentId();
+    const trimmed = name().trim();
+    if (!id || !trimmed) return;
+    await updateWorkspace(id, { name: trimmed });
+    await refresh();
+  }
 
-    const tabs = await browser.tabs.query({ currentWindow: true });
-    const tabsToSave = tabs.filter((t) => t.url !== DASHBOARD_URL);
-    await saveWorkspace({
-      id: crypto.randomUUID(),
-      name: workspaceName,
-      tabs: tabsToSave.map((t) => ({
-        url: t.url ?? "",
-        title: t.title ?? "",
-      })),
-      createdAt: Date.now(),
-    });
-    setName("");
-
-    const idsToClose = tabsToSave
+  async function handleCloseTabs() {
+    const win = await browser.windows.getCurrent();
+    if (win.id === undefined) return;
+    const tabs = await browser.tabs.query({ windowId: win.id });
+    const idsToClose = tabs
+      .filter((t) => t.url !== DASHBOARD_URL)
       .map((t) => t.id)
       .filter((id): id is number => id !== undefined);
     if (idsToClose.length > 0) await browser.tabs.remove(idsToClose);
   }
 
   async function handleRestore(workspace: Workspace) {
-    const win = await browser.windows.create({
-      url: workspace.tabs.map((t) => t.url),
-    });
-    if (win?.id !== undefined) {
-      await browser.tabs.create({
-        windowId: win.id,
-        url: DASHBOARD_URL,
-        pinned: true,
-        index: 0,
-      });
+    const win = await browser.windows.getCurrent();
+    if (win.id === undefined) return;
+
+    const tabs = await browser.tabs.query({ windowId: win.id });
+    const idsToClose = tabs
+      .filter((t) => t.url !== DASHBOARD_URL)
+      .map((t) => t.id)
+      .filter((id): id is number => id !== undefined);
+
+    await setWindowWorkspace(win.id, workspace.id);
+    if (idsToClose.length > 0) await browser.tabs.remove(idsToClose);
+    for (const tab of workspace.tabs) {
+      await browser.tabs.create({ windowId: win.id, url: tab.url });
     }
+
+    setCurrentId(workspace.id);
+    setName(workspace.name);
+    await refresh();
   }
 
   async function handleDelete(id: string) {
     await deleteWorkspace(id);
-    setWorkspaces(await getWorkspaces());
+    await refresh();
+  }
+
+  async function handleStartupBehaviorChange(value: StartupBehavior) {
+    setStartupBehavior(value);
+    await updateSettings({ startupBehavior: value });
   }
 
   return (
@@ -63,26 +100,53 @@ function App() {
       <div class="mx-auto max-w-2xl">
         <h1 class="mb-6 text-2xl font-semibold">Vistap</h1>
 
-        <div class="mb-6 flex gap-2">
-          <input
-            class="min-w-0 flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
-            type="text"
-            placeholder="Workspace name"
-            value={name()}
-            onInput={(e) => setName(e.currentTarget.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSaveAndClose()}
-          />
-          <button
-            class="shrink-0 rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50"
-            disabled={!name().trim()}
-            onClick={handleSaveAndClose}
+        <Show when={current()}>
+          {(workspace) => (
+            <div class="mb-6 rounded border border-gray-200 bg-white p-3">
+              <div class="mb-2 flex gap-2">
+                <input
+                  class="min-w-0 flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+                  type="text"
+                  value={name()}
+                  onInput={(e) => setName(e.currentTarget.value)}
+                  onBlur={handleRename}
+                  onKeyDown={(e) => e.key === "Enter" && handleRename()}
+                />
+                <button
+                  class="shrink-0 rounded bg-blue-600 px-4 py-2 text-sm text-white"
+                  onClick={handleCloseTabs}
+                >
+                  Close all tabs
+                </button>
+              </div>
+              <div class="text-xs text-gray-500">
+                {workspace().tabs.length} tabs synced
+              </div>
+            </div>
+          )}
+        </Show>
+
+        <div class="mb-6 flex items-center gap-2 text-sm">
+          <label for="startup-behavior" class="text-gray-600">
+            On browser start:
+          </label>
+          <select
+            id="startup-behavior"
+            class="rounded border border-gray-300 px-2 py-1"
+            value={startupBehavior()}
+            onChange={(e) =>
+              handleStartupBehaviorChange(
+                e.currentTarget.value as StartupBehavior,
+              )
+            }
           >
-            Save & close tabs
-          </button>
+            <option value="none">Start fresh</option>
+            <option value="lastUsed">Resume last used workspace</option>
+          </select>
         </div>
 
         <ul class="flex flex-col gap-2">
-          <For each={workspaces()}>
+          <For each={savedWorkspaces()}>
             {(workspace) => (
               <li class="flex items-center justify-between rounded border border-gray-200 bg-white px-3 py-2">
                 <div>
