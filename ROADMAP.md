@@ -5,14 +5,15 @@ Personal first, team second. No deep third-party integrations (Drive, Trello, Sl
 ## Phase 1 — Personal (MVP)
 
 - Browser extension (Manifest V3): save current window/tabs as a named workspace, close it, restore it later.
-- Local storage only (chrome.storage / IndexedDB) — no backend yet.
+- Account required from first use (Supabase Auth: email magic link + Google OAuth) — moved up from Phase 2, so the server can enforce plan limits (entitlements) from day one. See `docs/architecture-sync.md`.
+- Local-first data: once signed in, `storage.local` stays authoritative for day-to-day reads/writes — instant, offline-friendly. Only entitlement-gated actions (e.g. creating a workspace) need a server round-trip.
 - Resources: workspace can hold manually-added links/notes, not just live tabs.
 - Skip tab suspension — Chrome's built-in memory saver already covers this.
-- Ship as a standalone usable free tool before touching sync.
+- Ship as a free tool before building cross-device sync of workspace data (Phase 2).
 
-## Phase 2 — Personal + Sync (Supabase)
+## Phase 2 — Sync across devices (Supabase)
 
-- Auth: Supabase Auth (email magic link + Google OAuth). No custom auth server.
+- Builds on Phase 1's account + entitlements — no separate auth step here.
 - No custom API layer: extension and web dashboard talk to Supabase directly via `supabase-js`, using its auto-generated PostgREST API. "Keep server dumb" becomes "no server."
 - Schema (Postgres, via Supabase):
   - `workspaces (id, user_id, name, tabs jsonb, created_at, updated_at)`
