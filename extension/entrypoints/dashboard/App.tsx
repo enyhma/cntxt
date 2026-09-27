@@ -18,7 +18,8 @@ import {
   getSettings,
   updateSettings,
 } from "@/utils/settings";
-import { supabase } from "@/utils/supabase";
+import { parseTokensFromRedirectUrl } from "@/utils/oauthRedirect";
+import { supabase, supabaseConfigured } from "@/utils/supabase";
 import {
   type Workspace,
   deleteWorkspace,
@@ -38,7 +39,8 @@ function App() {
   const [session, setSession] = createSignal<Session | null>(null);
   const [authLoading, setAuthLoading] = createSignal(true);
   const [email, setEmail] = createSignal("");
-  const [magicLinkSent, setMagicLinkSent] = createSignal(false);
+  const [otpSent, setOtpSent] = createSignal(false);
+  const [otpCode, setOtpCode] = createSignal("");
   const [authError, setAuthError] = createSignal("");
 
   const openIds = () => new Set(Object.values(windowMap()));
@@ -64,14 +66,16 @@ function App() {
   });
 
   onMount(async () => {
-    const { data } = await supabase.auth.getSession();
-    setSession(data.session);
-    setAuthLoading(false);
+    if (supabaseConfigured) {
+      const { data } = await supabase!.auth.getSession();
+      setSession(data.session);
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => setSession(newSession),
-    );
-    onCleanup(() => authListener.subscription.unsubscribe());
+      const { data: authListener } = supabase!.auth.onAuthStateChange(
+        (_event, newSession) => setSession(newSession),
+      );
+      onCleanup(() => authListener.subscription.unsubscribe());
+    }
+    setAuthLoading(false);
 
     const win = await browser.windows.getCurrent();
     if (win.id !== undefined) {
@@ -90,20 +94,75 @@ function App() {
     );
   });
 
-  async function handleMagicLink(e: Event) {
+  // Email OTP as a typed code, not a clicked link: a link can't reliably
+  // redirect back into an extension page across browsers (Chrome's id can
+  // be pinned, but Edge assigns its own unpredictably and Firefox
+  // randomizes moz-extension://'s uuid per profile to prevent
+  // fingerprinting — see docs/architecture-sync.md). A code typed into the
+  // extension's own UI sidesteps all of that: no redirect, no per-browser
+  // config.
+  async function handleSendCode(e: Event) {
     e.preventDefault();
     setAuthError("");
-    const { error } = await supabase.auth.signInWithOtp({ email: email() });
+    const { error } = await supabase!.auth.signInWithOtp({ email: email() });
     if (error) setAuthError(error.message);
-    else setMagicLinkSent(true);
+    else setOtpSent(true);
   }
 
-  async function handleGoogleSignIn() {
+  async function handleVerifyCode(e: Event) {
+    e.preventDefault();
     setAuthError("");
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
+    const { error } = await supabase!.auth.verifyOtp({
+      email: email(),
+      token: otpCode(),
+      type: "email",
     });
     if (error) setAuthError(error.message);
+  }
+
+  // browser.identity.launchWebAuthFlow is the extension-native way to do
+  // OAuth: its redirect target (getRedirectURL()) is a reserved URL the
+  // browser intercepts before ever loading a page, so the result comes
+  // back directly as a return value — chrome-extension://, moz-extension://
+  // and their per-browser id problems never enter the picture.
+  async function handleGoogleSignIn() {
+    setAuthError("");
+    const redirectTo = browser.identity.getRedirectURL();
+    const { data, error } = await supabase!.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo, skipBrowserRedirect: true },
+    });
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+    if (!data.url) {
+      setAuthError("Supabase didn't return an OAuth URL.");
+      return;
+    }
+
+    let resultUrl: string | undefined;
+    try {
+      resultUrl = await browser.identity.launchWebAuthFlow({
+        url: data.url,
+        interactive: true,
+      });
+    } catch {
+      // User closed the auth window — not an error worth surfacing.
+      return;
+    }
+
+    const tokens = parseTokensFromRedirectUrl(resultUrl);
+    if (!tokens) {
+      setAuthError("Google sign-in didn't return a valid session.");
+      return;
+    }
+
+    const { error: setSessionError } = await supabase!.auth.setSession({
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+    });
+    if (setSessionError) setAuthError(setSessionError.message);
   }
 
   async function handleRename() {
@@ -137,21 +196,57 @@ function App() {
       <div class="mx-auto max-w-2xl">
         <h1 class="mb-6 text-2xl font-semibold">Vistap</h1>
 
-        <Show when={!authLoading()}>
+        <Show when={!supabaseConfigured}>
+          <div class="rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p class="font-medium">Supabase isn't configured yet.</p>
+            <p class="mt-1">
+              Copy <code>extension/.env.example</code> to{" "}
+              <code>extension/.env</code> and fill in
+              <code> WXT_SUPABASE_URL</code> /
+              <code> WXT_SUPABASE_ANON_KEY</code>, then restart{" "}
+              <code>pnpm dev</code>. Local dev values come from{" "}
+              <code>npx supabase status</code> (run <code>supabase start</code>{" "}
+              from the repo root first).
+            </p>
+          </div>
+        </Show>
+
+        <Show when={supabaseConfigured && !authLoading()}>
           <Show
             when={session()}
             fallback={
               <div class="rounded border border-gray-200 bg-white p-6">
                 <h2 class="mb-4 text-lg font-medium">Sign in to Vistap</h2>
                 <Show
-                  when={!magicLinkSent()}
+                  when={!otpSent()}
                   fallback={
-                    <p class="text-sm text-gray-600">
-                      Check {email()} for a sign-in link.
-                    </p>
+                    <form
+                      class="flex flex-col gap-2"
+                      onSubmit={handleVerifyCode}
+                    >
+                      <p class="text-sm text-gray-600">
+                        Enter the code sent to {email()}.
+                      </p>
+                      <input
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="one-time-code"
+                        required
+                        placeholder="123456"
+                        class="rounded border border-gray-300 px-3 py-2 text-sm"
+                        value={otpCode()}
+                        onInput={(e) => setOtpCode(e.currentTarget.value)}
+                      />
+                      <button
+                        type="submit"
+                        class="rounded bg-blue-600 px-4 py-2 text-sm text-white"
+                      >
+                        Verify code
+                      </button>
+                    </form>
                   }
                 >
-                  <form class="flex flex-col gap-2" onSubmit={handleMagicLink}>
+                  <form class="flex flex-col gap-2" onSubmit={handleSendCode}>
                     <input
                       type="email"
                       required
@@ -164,7 +259,7 @@ function App() {
                       type="submit"
                       class="rounded bg-blue-600 px-4 py-2 text-sm text-white"
                     >
-                      Send magic link
+                      Send sign-in code
                     </button>
                   </form>
                   <div class="my-3 text-center text-xs text-gray-400">or</div>

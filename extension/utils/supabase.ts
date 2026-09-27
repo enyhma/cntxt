@@ -8,17 +8,25 @@ import { extensionStorage } from "./supabaseStorage";
 const url = import.meta.env.WXT_SUPABASE_URL;
 const anonKey = import.meta.env.WXT_SUPABASE_ANON_KEY;
 
-if (!url || !anonKey) {
-  throw new Error(
-    "Missing WXT_SUPABASE_URL / WXT_SUPABASE_ANON_KEY — copy .env.example to .env and fill them in (see supabase status for local dev values).",
-  );
-}
+// Deliberately not a top-level throw: that would crash the whole module
+// (and with it, the entire dashboard render) before anything reaches the
+// screen — a blank page with the actual reason visible only in devtools,
+// which isn't "failing loudly" so much as failing invisibly. App.tsx
+// checks this flag and renders the missing-config message on the page
+// instead.
+export const supabaseConfigured = Boolean(url && anonKey);
 
-export const supabase = createClient(url, anonKey, {
-  auth: {
-    storage: extensionStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: false,
-  },
-});
+export const supabase = supabaseConfigured
+  ? createClient(url!, anonKey!, {
+      auth: {
+        storage: extensionStorage,
+        persistSession: true,
+        autoRefreshToken: true,
+        // The dashboard page IS the redirect target for magic-link/OAuth
+        // sign-in (see DASHBOARD_URL usage in App.tsx) — this has to be
+        // true so supabase-js reads the access_token out of the redirect
+        // URL's hash instead of silently doing nothing with it.
+        detectSessionInUrl: true,
+      },
+    })
+  : null;

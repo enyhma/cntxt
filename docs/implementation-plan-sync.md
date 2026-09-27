@@ -112,18 +112,47 @@ FOR UPDATE` checks the UPDATE policy's `USING` clause, not just
       clearly at load time if they're missing instead of failing silently
       later.
 - [x] `App.tsx`: fetches the session on mount, subscribes to
-      `supabase.auth.onAuthStateChange`, and renders a sign-in screen
-      (magic link + Google OAuth) when there's no session — the rest of
-      the existing dashboard is now nested inside that gate, unchanged
-      otherwise.
-- [x] Verified: `pnpm compile`, `pnpm test` (10/10), `pnpm build` all pass
-      with no `.env` present (the missing-env-var throw is a runtime
-      concern, not a build one).
-- **Not verified**: the actual sign-in flow end to end (magic-link email
-  round-trip, Google OAuth redirect) — that needs a real linked Supabase
-  project with auth providers configured (M0, still manual/undone) and a
-  browser to click through. Nothing here has a test double for "did the
-  user actually receive and click a magic link."
+      `supabase.auth.onAuthStateChange`, and renders a sign-in screen when
+      there's no session — the rest of the existing dashboard is now nested
+      inside that gate, unchanged otherwise.
+- [x] **Revised after manual testing surfaced real cross-browser
+      problems**: the first version used a plain redirect back to
+      `DASHBOARD_URL` for both magic-link and Google OAuth. That broke in
+      practice (`detectSessionInUrl: false`, no allowlisted redirect —
+      fixed once), and further investigation for Edge/Firefox support
+      surfaced worse structural problems: Chrome's id can be pinned
+      (`manifest.key`, see `wxt.config.ts`), but Edge assigns its own id on
+      publish with no way to pre-pin it, and Firefox randomizes
+      `moz-extension://`'s uuid per browser profile specifically to prevent
+      fingerprinting — no static redirect URL can ever work there. Replaced
+      both flows to avoid extension-page redirects entirely:
+  - Magic link → **typed OTP code** instead of a clicked link
+    (`signInWithOtp` + `verifyOtp`) — completes the session inside the
+    extension's own JS, identical on every browser, no redirect URL at all.
+  - Google OAuth → `browser.identity.launchWebAuthFlow` +
+    `getRedirectURL()` (the `identity` permission, added to
+    `wxt.config.ts`) — the browser-native way to do OAuth in an extension;
+    its redirect target is a reserved URL the browser intercepts before
+    loading a page, so it never touches `chrome-extension://`/
+    `moz-extension://` or their per-browser id problems.
+  - `utils/oauthRedirect.ts` (the token-parsing logic for the
+    `launchWebAuthFlow` result) built TDD — 6 assertions written first
+    (red: module didn't exist), green after implementation.
+  - `wxt.config.ts`'s `manifest` is now a per-browser function: Chrome gets
+    the pinned `key`, Firefox gets a `browser_specific_settings.gecko.id`
+    (fixes AMO identity/updates — does **not** fix the redirect problem,
+    that's structural), Edge gets neither (rejects `key` per Microsoft's
+    own support answer). Added `dev:edge`/`build:edge`/`zip:edge` scripts
+    to match the existing chrome/firefox pattern.
+- [x] Verified: `pnpm compile`, `pnpm test` (16/16), and `pnpm build` /
+      `build:firefox` / `build:edge` all pass, each producing the expected
+      per-browser manifest (checked `key`/`gecko.id`/`identity` presence
+      directly in the built output).
+- **Still not verified**: the actual sign-in round-trip end to end (does a
+  real OTP email arrive with a usable code; does the Google consent screen
+  actually hand back a valid session via `launchWebAuthFlow`) — needs a
+  real linked Supabase project with providers configured (M0, still
+  manual/undone) and a browser to click through.
 - No new component-testing framework was introduced for `App.tsx`'s JSX
   itself — matches this codebase's existing convention (only
   `utils/*`/xstate machines have tests; `App.tsx` had zero before this
