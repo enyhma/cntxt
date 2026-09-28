@@ -15,7 +15,10 @@
   --radius-DEFAULT: 5px;
   --radius-lg: 15px;
 
-  --color-surface: #1c1c1c;
+  /* Cool ink-navy rather than a hue-less gray, so the ground reads as
+     chosen rather than the default every dark tool starts from — picked
+     to sit with the blue accent below instead of fighting it. */
+  --color-surface: #12151c;
   --color-surface-alt1: color-mix(in srgb, var(--color-surface), white 2%);
   --color-surface-alt2: color-mix(in srgb, var(--color-surface), white 7%);
   --color-surface-alt3: color-mix(in srgb, var(--color-surface), white 12%);
@@ -43,22 +46,25 @@
   --color-primary: var(--color-surface-alt4);
   --color-primary-txt: var(--color-surface-txt);
 
-  --color-info: #4273bd;
+  /* info/success/warning/danger are deliberately desaturated relative to
+     accent below — they're utility signals, not competing brand colors,
+     so accent stays the only fully-saturated hue in the room. */
+  --color-info: #5b7396;
   --color-info-alt1: color-mix(in srgb, var(--color-info), black 10%);
   --color-info-alt2: color-mix(in srgb, var(--color-info), black 15%);
   --color-info-txt: #fff;
 
-  --color-success: #27865d;
+  --color-success: #3f7860;
   --color-success-alt1: color-mix(in srgb, var(--color-success), black 10%);
   --color-success-alt2: color-mix(in srgb, var(--color-success), black 15%);
   --color-success-txt: #fff;
 
-  --color-warning: #cf4e17;
+  --color-warning: #a8623c;
   --color-warning-alt1: color-mix(in srgb, var(--color-warning), black 10%);
   --color-warning-alt2: color-mix(in srgb, var(--color-warning), black 15%);
   --color-warning-txt: #fff;
 
-  --color-danger: #bb303e;
+  --color-danger: #9c4a52;
   --color-danger-alt1: color-mix(in srgb, var(--color-danger), black 10%);
   --color-danger-alt2: color-mix(in srgb, var(--color-danger), black 15%);
   --color-danger-txt: #fff;
@@ -107,25 +113,30 @@
  * element; no need to restate those formulas per theme.
  */
 :root[data-theme="indigo"] {
-  /* Graphite Indigo: near-black ground, one desaturated indigo accent —
-     the current Linear/Raycast "premium dev tool" look. */
-  --color-surface: #131316;
-  --color-info: #3d63b8;
-  --color-success: #1c8562;
-  --color-warning: #c97a1f;
-  --color-danger: #c13c57;
+  /* Graphite Indigo: near-black ground with a cool-violet undertone
+     matched to its own accent, not a neutral gray borrowed from
+     baseline — one desaturated indigo accent leads, same logic as
+     baseline's blue. */
+  --color-surface: #15131f;
+  --color-info: #57699b;
+  --color-success: #3c7862;
+  --color-warning: #a97b46;
+  --color-danger: #a14a5f;
   --color-accent: #5b56e0;
 }
 
 :root[data-theme="brass"] {
   /* Brass on Obsidian: warm near-black ground, brass/gold accent. Gold is
      light, so unlike every other theme here it needs dark ink on top of
-     it — every text-accent-txt usage in App.tsx exists for this. */
+     it — every text-accent-txt usage in App.tsx exists for this. Surface
+     was already a deliberate warm tone, so it's untouched; warning shifts
+     redder than the other themes' so it doesn't compete with the gold
+     accent's own warmth. */
   --color-surface: #14120e;
-  --color-info: #3e6fa3;
-  --color-success: #2e7a52;
-  --color-warning: #b5541f;
-  --color-danger: #9e2f3d;
+  --color-info: #5c7089;
+  --color-success: #4a7a5e;
+  --color-warning: #a85f35;
+  --color-danger: #954049;
   --color-accent: #b8862e;
   --color-accent-txt: #14120e;
 }
