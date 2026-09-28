@@ -271,12 +271,12 @@ const STEPS = [
               <li>Unlimited tabs per workspace</li>
               <li>Everything in Free</li>
             </ul>
-            <a href={CREEM_MONTHLY_URL} class="btn btn-primary price-monthly">
-              Subscribe monthly
-            </a>
-            <a href={CREEM_YEARLY_URL} class="btn btn-primary price-yearly">
-              Subscribe yearly
-            </a>
+            <span class="btn btn-ghost price-monthly" aria-disabled="true">
+              Coming soon — pending review
+            </span>
+            <span class="btn btn-ghost price-yearly" aria-disabled="true">
+              Coming soon — pending review
+            </span>
           </div>
         </div>
       </section>
@@ -289,6 +289,11 @@ const STEPS = [
 
     <footer class="site-footer">
       <span>cntxt</span>
+      <nav class="footer-nav">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="mailto:support@cntxt.work">support@cntxt.work</a>
+      </nav>
     </footer>
   </body>
 </html>
@@ -768,13 +773,28 @@ const STEPS = [
   }
 
   .site-footer {
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
     max-width: 1080px;
     margin: 0 auto;
     padding: 2rem 1.5rem 3rem;
     color: var(--surface-txt-hint);
     font-size: 0.85rem;
     border-top: 1px solid var(--surface-alt2);
+  }
+  .footer-nav {
+    display: flex;
+    gap: 1.25rem;
+  }
+  .footer-nav a {
+    color: var(--surface-txt-hint);
+    text-decoration: none;
+  }
+  .footer-nav a:hover {
+    color: var(--surface-txt);
   }
 
   @media (max-width: 720px) {

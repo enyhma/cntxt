@@ -1,0 +1,274 @@
+---
+const LAST_UPDATED = "September 28, 2026";
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta
+      name="description"
+      content="cntxt's terms of service: the rules for using the browser extension and its paid plans."
+    />
+    <title>Terms of Service — cntxt</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/" class="brand">
+        <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true">
+          <path
+            d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85"
+            fill="none"
+            stroke="var(--accent)"
+            stroke-width="14"
+            stroke-linecap="round"></path>
+          <rect x="74" y="40" width="8" height="20" rx="4" fill="var(--accent)"
+          ></rect>
+        </svg>
+        cntxt
+      </a>
+      <nav class="site-nav">
+        <a href="/#features">Features</a>
+        <a href="/#pricing">Pricing</a>
+      </nav>
+    </header>
+
+    <main>
+      <article class="policy">
+        <p class="eyebrow">Legal</p>
+        <h1>Terms of Service</h1>
+        <p class="updated">Last updated: {LAST_UPDATED}</p>
+
+        <p>
+          These terms govern your use of cntxt, a browser extension that
+          saves a window's tabs as a named workspace you can close and
+          restore later. By installing or using cntxt, you agree to them.
+        </p>
+
+        <h2>The service</h2>
+        <p>
+          cntxt runs locally in your browser. Workspace data — names, tabs,
+          colors, icons — is stored on your device. If you sign in, that same
+          data is also synced to our backend so it's available across your
+          devices. See the <a href="/privacy">Privacy Policy</a> for details
+          on what's collected and why.
+        </p>
+
+        <h2>Accounts</h2>
+        <p>
+          Signing in is optional and only needed for cross-device sync. You're
+          responsible for keeping your sign-in method secure. We may suspend
+          an account used to abuse or disrupt the service.
+        </p>
+
+        <h2>Plans and billing</h2>
+        <p>
+          The Free plan is limited to a fixed number of workspaces and tabs
+          per workspace, at no cost, for as long as you use the extension.
+          The Pro plan removes those limits for a recurring monthly or yearly
+          fee, billed and processed by our payment provider, <a
+            href="https://www.creem.io"
+            target="_blank"
+            rel="noopener noreferrer">Creem</a
+          >. Subscriptions renew automatically until canceled; you can cancel
+          at any time and you'll keep Pro access through the end of the
+          billing period you already paid for. We don't offer prorated
+          refunds for unused time, except where required by law.
+        </p>
+
+        <h2>Acceptable use</h2>
+        <p>
+          Don't use cntxt to store or sync content that's illegal, infringes
+          someone else's rights, or attempts to abuse, reverse-engineer, or
+          disrupt the service or our backend.
+        </p>
+
+        <h2>Availability</h2>
+        <p>
+          cntxt is provided "as is," without warranty of any kind. We aim to
+          keep sync reliable, but we don't guarantee the service will be
+          uninterrupted, error-free, or available at all times, and we're not
+          liable for lost tabs or workspace data — local browser storage and,
+          if you sign in, our backend are the only copies kept.
+        </p>
+
+        <h2>Limitation of liability</h2>
+        <p>
+          To the extent permitted by law, cntxt and its operator aren't
+          liable for any indirect, incidental, or consequential damages
+          arising from your use of the service, and our total liability for
+          any claim is limited to the amount you paid us in the twelve months
+          before the claim.
+        </p>
+
+        <h2>Changes</h2>
+        <p>
+          We may update these terms or the service over time. If changes are
+          material, we'll update the date at the top of this page. Continuing
+          to use cntxt after a change means you accept the new terms.
+        </p>
+
+        <h2>Contact</h2>
+        <p>
+          Questions about these terms: <a href="mailto:support@cntxt.work"
+            >support@cntxt.work</a
+          >.
+        </p>
+      </article>
+    </main>
+
+    <footer class="site-footer">
+      <span>cntxt</span>
+      <nav class="footer-nav">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="mailto:support@cntxt.work">support@cntxt.work</a>
+      </nav>
+    </footer>
+  </body>
+</html>
+
+<style>
+  :root {
+    --surface: #12151c;
+    --surface-alt1: #171a21;
+    --surface-alt2: #21242c;
+    --surface-alt3: #2c2f38;
+    --surface-txt: #ebebeb;
+    --surface-txt-hint: rgb(235 235 235 / 65%);
+    --accent: #1055c9;
+    --accent-alt1: #2c6bd6;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--surface);
+    color: var(--surface-txt);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    line-height: 1.6;
+  }
+
+  a {
+    color: var(--accent-alt1);
+  }
+
+  h1,
+  h2 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.5rem;
+    background: color-mix(in srgb, var(--surface), transparent 8%);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--surface-alt2);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 500;
+    font-size: 1.05rem;
+    text-decoration: none;
+    color: inherit;
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    font-size: 0.9rem;
+  }
+  .site-nav a {
+    color: var(--surface-txt-hint);
+    text-decoration: none;
+  }
+  .site-nav a:hover {
+    color: var(--surface-txt);
+  }
+
+  main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  .policy {
+    padding: 4rem 0 5rem;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--surface-txt-hint);
+    margin: 0 0 0.5rem;
+  }
+  .policy h1 {
+    font-size: 2.2rem;
+    margin: 0;
+  }
+  .updated {
+    color: var(--surface-txt-hint);
+    font-size: 0.9rem;
+    margin: 0.5rem 0 2.5rem;
+  }
+  .policy h2 {
+    font-size: 1.15rem;
+    margin: 2.25rem 0 0.75rem;
+  }
+  .policy p {
+    color: var(--surface-txt-hint);
+    font-size: 0.95rem;
+  }
+
+  .site-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+    color: var(--surface-txt-hint);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--surface-alt2);
+  }
+  .footer-nav {
+    display: flex;
+    gap: 1.25rem;
+  }
+  .footer-nav a {
+    color: var(--surface-txt-hint);
+    text-decoration: none;
+  }
+  .footer-nav a:hover {
+    color: var(--surface-txt);
+  }
+</style>

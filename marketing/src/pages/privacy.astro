@@ -1,0 +1,308 @@
+---
+const LAST_UPDATED = "September 28, 2026";
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta
+      name="description"
+      content="cntxt's privacy policy: what data the browser extension collects, why, and how to request deletion."
+    />
+    <title>Privacy Policy — cntxt</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/" class="brand">
+        <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true">
+          <path
+            d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85"
+            fill="none"
+            stroke="var(--accent)"
+            stroke-width="14"
+            stroke-linecap="round"></path>
+          <rect x="74" y="40" width="8" height="20" rx="4" fill="var(--accent)"
+          ></rect>
+        </svg>
+        cntxt
+      </a>
+      <nav class="site-nav">
+        <a href="/#features">Features</a>
+        <a href="/#pricing">Pricing</a>
+        <a href="/terms">Terms</a>
+      </nav>
+    </header>
+
+    <main>
+      <article class="policy">
+        <p class="eyebrow">Legal</p>
+        <h1>Privacy Policy</h1>
+        <p class="updated">Last updated: {LAST_UPDATED}</p>
+
+        <p>
+          cntxt is a browser extension that turns each browser window into a
+          named "workspace": a saved list of tabs you can close and restore
+          later. This policy explains what data the extension collects, why,
+          and how you can have it removed.
+        </p>
+
+        <h2>What we collect</h2>
+        <ul>
+          <li>
+            <strong>Workspace data.</strong> The name, color, icon, and tab list
+            (page title and URL — not page content) of each workspace you create.
+            This is stored on your device via the browser's built-in storage. Tab
+            titles and URLs are, by their nature, a record of the sites you've
+            visited while a tab belonged to a workspace.
+          </li>
+          <li>
+            <strong>Account email.</strong> If you choose to sign in (via an
+            emailed one-time code or Google), we store your email address to
+            identify your account.
+          </li>
+          <li>
+            <strong>Authentication tokens.</strong> Session tokens issued by our
+            authentication provider (Supabase) so you stay signed in.
+          </li>
+        </ul>
+        <p>
+          We do not read the content of the pages in your tabs, your browsing
+          history outside of saved workspaces, your keystrokes, clicks, or
+          mouse activity, and we do not collect health, financial, or location
+          data.
+        </p>
+
+        <h2>Why we collect it</h2>
+        <p>
+          Workspace data, your account email, and authentication tokens exist
+          for one purpose: to let you save, close, and restore a window's tabs
+          — and, only if you sign in, to sync that same data across your
+          devices. Nothing here is used for advertising, profiling, or any
+          purpose unrelated to that.
+        </p>
+
+        <h2>Where it's stored</h2>
+        <p>
+          If you never sign in, everything stays local to your browser via
+          chrome.storage and never leaves your device. If you sign in,
+          workspace data, your email, and session tokens are also stored on
+          <a href="https://supabase.com" target="_blank" rel="noopener noreferrer"
+            >Supabase</a
+          >, the backend we use for sync — under our account, not shared or
+          resold to any other party.
+        </p>
+
+        <h2>Payments</h2>
+        <p>
+          Upgrading to a paid plan opens a checkout page hosted by <a
+            href="https://www.creem.io"
+            target="_blank"
+            rel="noopener noreferrer">Creem</a
+          >, our payment processor. cntxt never sees or stores your card
+          details — Creem handles the transaction and tells us only that a
+          given account has an active subscription.
+        </p>
+
+        <h2>What we don't do</h2>
+        <ul>
+          <li>We don't sell or transfer your data to third parties.</li>
+          <li>
+            We don't use your data for anything outside the single purpose
+            described above.
+          </li>
+          <li>
+            We don't use your data to determine creditworthiness or for
+            lending purposes.
+          </li>
+        </ul>
+
+        <h2>Your choices</h2>
+        <p>
+          You can delete individual workspaces at any time from the
+          extension. To delete your account and all associated data, or to
+          ask what data we hold about you, email <a
+            href="mailto:privacy@cntxt.work">privacy@cntxt.work</a
+          >.
+        </p>
+
+        <h2>Changes to this policy</h2>
+        <p>
+          If this policy changes, we'll update the date at the top of this
+          page.
+        </p>
+
+        <h2>Contact</h2>
+        <p>
+          Questions about this policy: <a href="mailto:privacy@cntxt.work"
+            >privacy@cntxt.work</a
+          >.
+        </p>
+      </article>
+    </main>
+
+    <footer class="site-footer">
+      <span>cntxt</span>
+      <nav class="footer-nav">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="mailto:support@cntxt.work">support@cntxt.work</a>
+      </nav>
+    </footer>
+  </body>
+</html>
+
+<style>
+  :root {
+    --surface: #12151c;
+    --surface-alt1: #171a21;
+    --surface-alt2: #21242c;
+    --surface-alt3: #2c2f38;
+    --surface-txt: #ebebeb;
+    --surface-txt-hint: rgb(235 235 235 / 65%);
+    --accent: #1055c9;
+    --accent-alt1: #2c6bd6;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--surface);
+    color: var(--surface-txt);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    line-height: 1.6;
+  }
+
+  a {
+    color: var(--accent-alt1);
+  }
+
+  h1,
+  h2 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.5rem;
+    background: color-mix(in srgb, var(--surface), transparent 8%);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--surface-alt2);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 500;
+    font-size: 1.05rem;
+    text-decoration: none;
+    color: inherit;
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    font-size: 0.9rem;
+  }
+  .site-nav a {
+    color: var(--surface-txt-hint);
+    text-decoration: none;
+  }
+  .site-nav a:hover {
+    color: var(--surface-txt);
+  }
+
+  main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  .policy {
+    padding: 4rem 0 5rem;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--surface-txt-hint);
+    margin: 0 0 0.5rem;
+  }
+  .policy h1 {
+    font-size: 2.2rem;
+    margin: 0;
+  }
+  .updated {
+    color: var(--surface-txt-hint);
+    font-size: 0.9rem;
+    margin: 0.5rem 0 2.5rem;
+  }
+  .policy h2 {
+    font-size: 1.15rem;
+    margin: 2.25rem 0 0.75rem;
+  }
+  .policy p,
+  .policy li {
+    color: var(--surface-txt-hint);
+    font-size: 0.95rem;
+  }
+  .policy ul {
+    padding-left: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .policy strong {
+    color: var(--surface-txt);
+  }
+
+  .site-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+    color: var(--surface-txt-hint);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--surface-alt2);
+  }
+  .footer-nav {
+    display: flex;
+    gap: 1.25rem;
+  }
+  .footer-nav a {
+    color: var(--surface-txt-hint);
+    text-decoration: none;
+  }
+  .footer-nav a:hover {
+    color: var(--surface-txt);
+  }
+</style>
