@@ -6,6 +6,11 @@ export type Workspace = {
   tabs: WorkspaceTab[];
   createdAt: number;
   updatedAt: number;
+  // Explicit picks from the dashboard's customize dialog; a workspace
+  // without either falls back to a hash-derived color and the default
+  // cntxt mark (see App.tsx's colorFor/faviconHrefFor).
+  color?: string;
+  icon?: string;
 };
 
 const STORAGE_KEY = "workspaces";
@@ -37,7 +42,7 @@ export async function createWorkspace(
 
 export async function updateWorkspace(
   id: string,
-  patch: Partial<Pick<Workspace, "name" | "tabs">>,
+  patch: Partial<Pick<Workspace, "name" | "tabs" | "color" | "icon">>,
 ) {
   const workspaces = await getWorkspaces();
   await setWorkspaces(

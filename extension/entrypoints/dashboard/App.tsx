@@ -11,6 +11,7 @@ import {
   onMount,
   untrack,
 } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import { ensureWorkspaceForWindow } from "@/utils/attach";
 import { restoreMachine } from "@/utils/restoreMachine";
 import { getWindowWorkspaceMap } from "@/utils/session";
@@ -51,39 +52,222 @@ import {
 } from "@/utils/workspaces";
 
 // Dot/avatar colors are derived from a hash of a stable id rather than
-// stored, so workspaces and tabs get a consistent color without a schema
-// migration — same trick the design mockup used for tab favicons. Paired
-// with a matching *-txt role (not always white — a light accent theme
-// like Brass on Obsidian needs dark ink on its own hue) so an avatar that
-// happens to land on the active theme's accent color stays legible.
-const DOT_COLORS = [
-  "bg-accent",
-  "bg-success",
-  "bg-warning",
-  "bg-info",
-  "bg-danger",
-];
-const DOT_TXT_COLORS = [
-  "text-accent-txt",
-  "text-success-txt",
-  "text-warning-txt",
-  "text-info-txt",
-  "text-danger-txt",
-];
-function colorFor(seed: string): string {
+// stored, so tabs (and workspaces without an explicit color) get a
+// consistent color without a schema migration — same trick the design
+// mockup used for tab favicons. A workspace can also pick one of these
+// five explicitly via the customize dialog, stored as its `color` field.
+// Paired with a matching *-txt role (not always white — a light accent
+// theme like Brass on Obsidian needs dark ink on its own hue) so a color
+// that happens to land on the active theme's accent color stays legible.
+const COLOR_KEYS = ["accent", "success", "warning", "info", "danger"] as const;
+type ColorKey = (typeof COLOR_KEYS)[number];
+const COLOR_CLASS: Record<ColorKey, string> = {
+  accent: "bg-accent",
+  success: "bg-success",
+  warning: "bg-warning",
+  info: "bg-info",
+  danger: "bg-danger",
+};
+const COLOR_TXT_CLASS: Record<ColorKey, string> = {
+  accent: "text-accent-txt",
+  success: "text-success-txt",
+  warning: "text-warning-txt",
+  info: "text-info-txt",
+  danger: "text-danger-txt",
+};
+function hashColorKey(seed: string): ColorKey {
   let hash = 0;
   for (let i = 0; i < seed.length; i++)
     hash = (hash * 31 + seed.charCodeAt(i)) % 997;
-  return DOT_COLORS[hash % DOT_COLORS.length]!;
+  return COLOR_KEYS[hash % COLOR_KEYS.length]!;
+}
+function colorFor(seed: string): string {
+  return COLOR_CLASS[hashColorKey(seed)];
 }
 function textColorFor(seed: string): string {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++)
-    hash = (hash * 31 + seed.charCodeAt(i)) % 997;
-  return DOT_TXT_COLORS[hash % DOT_TXT_COLORS.length]!;
+  return COLOR_TXT_CLASS[hashColorKey(seed)];
+}
+function workspaceColorKey(w: Workspace | undefined): ColorKey {
+  return (w?.color as ColorKey | undefined) ?? hashColorKey(w?.id ?? "cntxt");
+}
+function workspaceDotClass(w: Workspace | undefined): string {
+  return COLOR_CLASS[workspaceColorKey(w)];
+}
+function workspaceTxtClass(w: Workspace | undefined): string {
+  return COLOR_TXT_CLASS[workspaceColorKey(w)];
 }
 function domainOf(url: string): string {
   return url.replace(/^https?:\/\//, "").split("/")[0] || url;
+}
+
+// A small curated subset of Lucide's path data (see lucide-solid's
+// dist/source/icons/*.jsx — there's no typed way to import __iconNode
+// directly, only the wrapped component), inlined so the exact same
+// geometry can be drawn both by a SolidJS <Icon> in the picker/UI and as a
+// raw string in the pinned tab's favicon data URI, which can't render
+// components.
+type IconNode = ReadonlyArray<
+  readonly [string, Record<string, string | number>]
+>;
+const ICONS = {
+  folder: [
+    [
+      "path",
+      {
+        d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z",
+      },
+    ],
+  ],
+  star: [
+    [
+      "path",
+      {
+        d: "M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z",
+      },
+    ],
+  ],
+  rocket: [
+    ["path", { d: "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" }],
+    [
+      "path",
+      {
+        d: "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09",
+      },
+    ],
+    [
+      "path",
+      {
+        d: "M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z",
+      },
+    ],
+    ["path", { d: "M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05" }],
+  ],
+  zap: [
+    [
+      "path",
+      {
+        d: "M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z",
+      },
+    ],
+  ],
+  heart: [
+    [
+      "path",
+      {
+        d: "M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5",
+      },
+    ],
+  ],
+  bookmark: [
+    [
+      "path",
+      {
+        d: "M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z",
+      },
+    ],
+  ],
+  briefcase: [
+    ["path", { d: "M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" }],
+    ["rect", { width: "20", height: "14", x: "2", y: "6", rx: "2" }],
+  ],
+  globe: [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" }],
+    ["path", { d: "M2 12h20" }],
+  ],
+  flag: [
+    [
+      "path",
+      {
+        d: "M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528",
+      },
+    ],
+  ],
+  coffee: [
+    ["path", { d: "M10 2v2" }],
+    ["path", { d: "M14 2v2" }],
+    [
+      "path",
+      {
+        d: "M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1",
+      },
+    ],
+    ["path", { d: "M6 2v2" }],
+  ],
+  sparkles: [
+    [
+      "path",
+      {
+        d: "M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z",
+      },
+    ],
+    ["path", { d: "M20 2v4" }],
+    ["path", { d: "M22 4h-4" }],
+    ["circle", { cx: "4", cy: "20", r: "2" }],
+  ],
+  code: [
+    ["path", { d: "m16 18 6-6-6-6" }],
+    ["path", { d: "m8 6-6 6 6 6" }],
+  ],
+} satisfies Record<string, IconNode>;
+type IconName = keyof typeof ICONS;
+const ICON_NAMES = Object.keys(ICONS) as IconName[];
+
+function Icon(props: { name: IconName; size?: number; class?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={props.size ?? 14}
+      height={props.size ?? 14}
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class={props.class}
+    >
+      <For each={ICONS[props.name]}>
+        {([tag, attrs]) => <Dynamic component={tag} {...attrs} />}
+      </For>
+    </svg>
+  );
+}
+
+function iconNodeToSvgString(node: IconNode, color: string): string {
+  return node
+    .map(([tag, attrs]) => {
+      const attrStr = Object.entries(attrs)
+        .map(([k, v]) => `${k}="${v}"`)
+        .join(" ");
+      return `<${tag} ${attrStr} stroke="${color}"/>`;
+    })
+    .join("");
+}
+
+function WorkspaceDot(props: {
+  workspace: Workspace | undefined;
+  ring?: boolean;
+  title?: string;
+}) {
+  const icon = () => props.workspace?.icon as IconName | undefined;
+  return (
+    <span
+      title={props.title}
+      class={
+        "grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full " +
+        workspaceDotClass(props.workspace) +
+        (props.ring ? " ring-2 ring-accent" : "")
+      }
+    >
+      <Show when={icon()}>
+        <Icon
+          name={icon()!}
+          size={9}
+          class={workspaceTxtClass(props.workspace)}
+        />
+      </Show>
+    </span>
+  );
 }
 
 // Resolves a `bg-*` utility class to its actual computed color so the
@@ -101,12 +285,16 @@ function resolveDotColor(colorClass: string): string {
   return getComputedStyle(colorProbe).backgroundColor;
 }
 
-// The cntxt mark (open ring + caret) traced in the workspace's own dot
-// color, so each window's pinned dashboard tab stays identifiable at a
-// glance while also carrying the brand shape instead of a plain dot.
-function faviconHrefFor(seed: string): string {
-  const color = resolveDotColor(colorFor(seed));
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32"><path d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/><rect x="74" y="40" width="8" height="20" rx="4" fill="${color}"/></svg>`;
+// A workspace with a chosen icon draws that icon (in its own dot color);
+// otherwise falls back to the cntxt mark (open ring + caret) traced in that
+// same color, so every window's pinned dashboard tab stays identifiable at
+// a glance even without a custom icon set.
+function faviconHrefFor(workspace: Workspace | undefined): string {
+  const color = resolveDotColor(workspaceDotClass(workspace));
+  const icon = workspace?.icon as IconName | undefined;
+  const svg = icon
+    ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconNodeToSvgString(ICONS[icon], color)}</svg>`
+    : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32"><path d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/><rect x="74" y="40" width="8" height="20" rx="4" fill="${color}"/></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
@@ -147,13 +335,10 @@ function WorkspaceRow(props: {
           : " text-surface-txt-hint")
       }
     >
-      <span
+      <WorkspaceDot
+        workspace={props.workspace}
+        ring={props.isCurrent}
         title={props.isCurrent ? "Active" : undefined}
-        class={
-          "h-1.75 w-1.75 shrink-0 rounded-full " +
-          colorFor(props.workspace.id) +
-          (props.isCurrent ? " ring-2 ring-accent" : "")
-        }
       />
       <span class="min-w-0 flex-1 truncate text-sm">
         {props.workspace.name}
@@ -278,6 +463,7 @@ function Dashboard(props: {
   const [selected, setSelected] = createSignal<Set<number>>(new Set());
   const [paletteQuery, setPaletteQuery] = createSignal("");
   let paletteRef: HTMLDialogElement | undefined;
+  let customizeRef: HTMLDialogElement | undefined;
 
   onMount(() => {
     try {
@@ -404,6 +590,26 @@ function Dashboard(props: {
     setRenaming(false);
     if (!id || !trimmed) return;
     await updateWorkspace(id, { name: trimmed });
+    await refresh();
+  }
+
+  function openCustomize() {
+    closeOpenDropdowns();
+    customizeRef?.showModal();
+  }
+  function closeCustomize() {
+    customizeRef?.close();
+  }
+  async function handleSetColor(color: ColorKey) {
+    const id = viewedId();
+    if (!id) return;
+    await updateWorkspace(id, { color });
+    await refresh();
+  }
+  async function handleSetIcon(icon: IconName | undefined) {
+    const id = viewedId();
+    if (!id) return;
+    await updateWorkspace(id, { icon });
     await refresh();
   }
 
@@ -554,12 +760,8 @@ function Dashboard(props: {
                 <PanelLeftOpen size={14} />
               </button>
               <details class="dropdown shrink-0">
-                <summary class="btn h-8 list-none gap-2 rounded-full border border-surface-alt3 bg-surface-alt1 px-2.75 font-normal">
-                  <span
-                    class={
-                      "h-2 w-2 rounded-full " + colorFor(viewed()?.id ?? "")
-                    }
-                  />
+                <summary class="btn h-8 list-none gap-2 rounded-full border border-surface-alt3 bg-surface-alt1 px-2.75 font-normal shadow-[var(--shadow-card)]">
+                  <WorkspaceDot workspace={viewed()} />
                   <span class="text-sm font-bold">{viewed()?.name}</span>
                   <span class="font-mono text-[11px] text-surface-txt-hint">
                     {viewed()?.tabs.length ?? 0}
@@ -630,7 +832,7 @@ function Dashboard(props: {
                   type="button"
                   disabled={busy()}
                   onClick={() => viewed() && openAll(viewed()!)}
-                  class="btn btn-sm shrink-0 gap-1.5 border-none bg-accent text-accent-txt hover:bg-accent-alt1 disabled:opacity-50"
+                  class="btn btn-sm shrink-0 gap-1.5 border-none bg-accent text-accent-txt shadow-[var(--shadow-raised)] hover:bg-accent-alt1 disabled:opacity-50"
                 >
                   <Show when={current()} fallback={<Plug size={13} />}>
                     <ArrowRightLeft size={13} />
@@ -663,7 +865,7 @@ function Dashboard(props: {
             <details class="dropdown shrink-0">
               <summary
                 title="More actions"
-                class="btn btn-square btn-sm list-none border border-surface-alt3 bg-surface-alt2"
+                class="btn btn-square btn-sm list-none border border-surface-alt3 bg-surface-alt2 shadow-[var(--shadow-card)]"
               >
                 <MoreHorizontal size={15} />
               </summary>
@@ -671,6 +873,11 @@ function Dashboard(props: {
                 <li>
                   <button type="button" onClick={startRename}>
                     Rename workspace
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={openCustomize}>
+                    Customize icon &amp; color
                   </button>
                 </li>
                 <Show when={isViewingCurrent()}>
@@ -703,7 +910,7 @@ function Dashboard(props: {
               type="button"
               title="Search workspaces"
               onClick={openPalette}
-              class="btn btn-sm shrink-0 border border-surface-alt3 bg-surface-alt1"
+              class="btn btn-sm shrink-0 border border-surface-alt3 bg-surface-alt1 shadow-[var(--shadow-card)]"
             >
               <Search size={13} />
               <span class="rounded border border-surface-alt3 bg-surface-alt2 px-1.25 font-mono text-[11px]">
@@ -721,7 +928,7 @@ function Dashboard(props: {
                 </p>
               }
             >
-              <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1">
+              <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
                 <For each={viewed()!.tabs}>
                   {(tab, i) => (
                     <TabRow
@@ -740,7 +947,7 @@ function Dashboard(props: {
         </main>
 
         <Show when={props.popupOpen()}>
-          <aside class="flex w-80 shrink-0 flex-col border-l border-surface-alt2 bg-surface-alt1">
+          <aside class="flex w-80 shrink-0 flex-col border-l border-surface-alt2 bg-surface-alt1 shadow-[-6px_0_16px_rgba(0,0,0,0.35)]">
             <div class="flex h-13 shrink-0 items-center gap-2 border-b border-surface-alt2 px-3">
               <span class="text-sm font-semibold">Current window</span>
               <span class="font-mono text-[11px] text-surface-txt-hint">
@@ -854,6 +1061,83 @@ function Dashboard(props: {
           </Show>
         </div>
       </dialog>
+
+      <dialog
+        ref={customizeRef}
+        onClick={(e) => e.target === e.currentTarget && closeCustomize()}
+        class="m-auto w-full max-w-[340px] rounded border border-surface-alt4 bg-surface-alt2 p-4 text-surface-txt shadow-[var(--shadow-modal)] backdrop:bg-black/55"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="min-w-0 truncate text-sm font-semibold">
+            Customize {viewed()?.name}
+          </h3>
+          <button
+            type="button"
+            onClick={closeCustomize}
+            class="btn btn-square btn-ghost btn-xs shrink-0"
+          >
+            <X size={13} />
+          </button>
+        </div>
+
+        <p class="mt-3.5 mb-1.5 font-mono text-[11px] tracking-wider text-surface-txt-hint">
+          COLOR
+        </p>
+        <div class="flex gap-2">
+          <For each={COLOR_KEYS}>
+            {(key) => (
+              <button
+                type="button"
+                title={key}
+                onClick={() => handleSetColor(key)}
+                class={
+                  "h-6 w-6 rounded-full " +
+                  COLOR_CLASS[key] +
+                  (workspaceColorKey(viewed()) === key
+                    ? " ring-2 ring-offset-2 ring-offset-surface-alt2 ring-surface-txt"
+                    : "")
+                }
+              />
+            )}
+          </For>
+        </div>
+
+        <p class="mt-3.5 mb-1.5 font-mono text-[11px] tracking-wider text-surface-txt-hint">
+          ICON
+        </p>
+        <div class="grid grid-cols-6 gap-1.5">
+          <button
+            type="button"
+            title="Default mark"
+            onClick={() => handleSetIcon(undefined)}
+            class={
+              "btn btn-square btn-sm border-none bg-surface-alt1 hover:bg-surface-alt3" +
+              (!viewed()?.icon
+                ? " ring-2 ring-surface-txt ring-offset-1 ring-offset-surface-alt2"
+                : "")
+            }
+          >
+            <span class="h-3.5 w-3.5 rounded-full border border-surface-txt-hint" />
+          </button>
+          <For each={ICON_NAMES}>
+            {(name) => (
+              <button
+                type="button"
+                title={name}
+                onClick={() => handleSetIcon(name)}
+                class={
+                  "btn btn-square btn-sm border-none bg-surface-alt1 hover:bg-surface-alt3" +
+                  (viewed()?.icon === name
+                    ? " ring-2 ring-surface-txt ring-offset-1 ring-offset-surface-alt2"
+                    : "")
+                }
+              >
+                <Icon name={name} size={14} />
+              </button>
+            )}
+          </For>
+        </div>
+      </dialog>
     </>
   );
 }
@@ -871,7 +1155,7 @@ function SettingsPanel(props: {
         <label class="flex flex-col gap-1.5 text-sm">
           <span class="text-surface-txt-hint">On browser start</span>
           <select
-            class="select bg-surface-alt1"
+            class="select bg-surface-alt1 shadow-[var(--shadow-card)]"
             value={props.startupBehavior()}
             onChange={(e) =>
               props.onStartupBehaviorChange(
@@ -886,7 +1170,7 @@ function SettingsPanel(props: {
         <label class="flex flex-col gap-1.5 text-sm">
           <span class="text-surface-txt-hint">Color theme</span>
           <select
-            class="select bg-surface-alt1"
+            class="select bg-surface-alt1 shadow-[var(--shadow-card)]"
             value={props.theme()}
             onChange={(e) =>
               props.onThemeChange(e.currentTarget.value as Theme)
@@ -1066,14 +1350,14 @@ function App() {
     const favicon = document.getElementById(
       "favicon",
     ) as HTMLLinkElement | null;
-    if (favicon) favicon.href = faviconHrefFor(workspace?.id ?? "cntxt");
+    if (favicon) favicon.href = faviconHrefFor(workspace);
   });
 
   return (
     <>
       <Show when={!supabaseConfigured}>
         <div class="min-h-screen bg-surface p-8 font-sans text-surface-txt">
-          <div class="mx-auto max-w-2xl rounded border border-warning bg-warning/10 p-4 text-sm">
+          <div class="mx-auto max-w-2xl rounded border border-warning bg-warning/10 p-4 text-sm shadow-[var(--shadow-card)]">
             <p class="font-medium">Supabase isn't configured yet.</p>
             <p class="mt-1">
               Copy <code>extension/.env.example</code> to{" "}
@@ -1092,7 +1376,7 @@ function App() {
           when={session()}
           fallback={
             <div class="flex min-h-screen items-center justify-center bg-surface p-8 font-sans text-surface-txt">
-              <div class="w-full max-w-sm rounded border border-surface-alt3 bg-surface-alt1 p-6">
+              <div class="w-full max-w-sm rounded border border-surface-alt3 bg-surface-alt1 p-6 shadow-[var(--shadow-raised)]">
                 <h2 class="mb-4 text-lg font-medium">Sign in to cntxt</h2>
                 <Show
                   when={!otpSent()}
