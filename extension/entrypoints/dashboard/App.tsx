@@ -101,9 +101,12 @@ function resolveDotColor(colorClass: string): string {
   return getComputedStyle(colorProbe).backgroundColor;
 }
 
+// The cntxt mark (open ring + caret) traced in the workspace's own dot
+// color, so each window's pinned dashboard tab stays identifiable at a
+// glance while also carrying the brand shape instead of a plain dot.
 function faviconHrefFor(seed: string): string {
   const color = resolveDotColor(colorFor(seed));
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><circle cx="16" cy="16" r="14" fill="${color}"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32"><path d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/><rect x="74" y="40" width="8" height="20" rx="4" fill="${color}"/></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
@@ -1155,9 +1158,28 @@ function App() {
         >
           <div class="flex min-h-screen flex-col bg-surface font-sans text-surface-txt">
             <header class="sticky top-0 z-40 flex h-13 shrink-0 items-center gap-2 bg-accent px-3.5 text-accent-txt">
-              <div class="grid h-7 w-7 place-items-center rounded bg-accent-txt/16 text-xs font-bold">
-                V
-              </div>
+              <svg
+                viewBox="0 0 100 100"
+                width="22"
+                height="22"
+                aria-hidden="true"
+              >
+                <path
+                  d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="14"
+                  stroke-linecap="round"
+                />
+                <rect
+                  x="74"
+                  y="40"
+                  width="8"
+                  height="20"
+                  rx="4"
+                  fill="currentColor"
+                />
+              </svg>
               <For each={NAV_ITEMS}>
                 {(n) => (
                   <button
