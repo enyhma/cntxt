@@ -2,4 +2,4 @@
 @plugin "daisyui" {
   themes: false;
 }
-@import "@vistap/tokens/tokens.css";
+@import "@cntxt/tokens/tokens.css";

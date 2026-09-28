@@ -2,7 +2,7 @@
 
 Sequence diagrams for the ✅ capabilities in [`capabilities.md`](./capabilities.md).
 Each one pairs two levels: **"What you experience"** — just the user and
-Vistap as a black box, the goal it serves — and **"Under the hood"** — traced
+cntxt as a black box, the goal it serves — and **"Under the hood"** — traced
 directly from the current code (`extension/entrypoints/background.ts`,
 `utils/attach.ts`, `utils/restoreMachine.ts`, `utils/workspaceWindowMachine.ts`).
 The "under the hood" diagrams are accurate to what runs today — update them
@@ -24,11 +24,11 @@ first time you click the extension icon in a window that has no mapping yet.
 ```mermaid
 sequenceDiagram
     actor User
-    participant Vistap
+    participant cntxt
 
-    User->>Vistap: opens a new browser window and starts working
-    Vistap-->>User: nothing to do — it's already a workspace
-    Note over User,Vistap: Goal: never have to remember to "save"
+    User->>cntxt: opens a new browser window and starts working
+    cntxt-->>User: nothing to do — it's already a workspace
+    Note over User,cntxt: Goal: never have to remember to "save"
 ```
 
 **Under the hood:**
@@ -77,11 +77,11 @@ its mapped workspace — this is what makes "saving" invisible.
 ```mermaid
 sequenceDiagram
     actor User
-    participant Vistap
+    participant cntxt
 
-    User->>Vistap: opens, closes, or edits tabs while working
-    Vistap-->>User: keeps this window's saved workspace up to date, silently
-    Note over User,Vistap: Goal: there's never a state of "unsaved" work to lose
+    User->>cntxt: opens, closes, or edits tabs while working
+    cntxt-->>User: keeps this window's saved workspace up to date, silently
+    Note over User,cntxt: Goal: there's never a state of "unsaved" work to lose
 ```
 
 **Under the hood:**
@@ -152,11 +152,11 @@ Runs once per browser launch, for every already-open window, when
 ```mermaid
 sequenceDiagram
     actor User
-    participant Vistap
+    participant cntxt
 
-    User->>Vistap: quits and relaunches the browser
-    Vistap-->>User: reopens the tabs from your last-used workspace
-    Note over User,Vistap: Goal: no manual "reopen everything" step after a restart
+    User->>cntxt: quits and relaunches the browser
+    cntxt-->>User: reopens the tabs from your last-used workspace
+    Note over User,cntxt: Goal: no manual "reopen everything" step after a restart
 ```
 
 **Under the hood:**
@@ -195,11 +195,11 @@ stays mapped to its current workspace throughout.
 ```mermaid
 sequenceDiagram
     actor User
-    participant Vistap
+    participant cntxt
 
-    User->>Vistap: clicks "Close all tabs"
-    Vistap-->>User: closes the window's tabs — the workspace stays saved, just empty
-    Note over User,Vistap: Goal: reclaim screen and memory with zero risk of losing the set
+    User->>cntxt: clicks "Close all tabs"
+    cntxt-->>User: closes the window's tabs — the workspace stays saved, just empty
+    Note over User,cntxt: Goal: reclaim screen and memory with zero risk of losing the set
 ```
 
 **Under the hood:**
@@ -235,11 +235,11 @@ being closed. Covered by `utils/restoreMachine.test.ts`.
 ```mermaid
 sequenceDiagram
     actor User
-    participant Vistap
+    participant cntxt
 
-    User->>Vistap: clicks "Restore" on a different saved workspace
-    Vistap-->>User: swaps this window's tabs for that workspace's tabs
-    Note over User,Vistap: Goal: jump between projects without losing either one
+    User->>cntxt: clicks "Restore" on a different saved workspace
+    cntxt-->>User: swaps this window's tabs for that workspace's tabs
+    Note over User,cntxt: Goal: jump between projects without losing either one
 ```
 
 **Under the hood:**

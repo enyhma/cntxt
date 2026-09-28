@@ -3,7 +3,7 @@
  * (pocketbase/pocketbase/ui/src/css: vars.css, base.css, form.css),
  * recomputed as a single dark palette (this product has no light theme).
  *
- * Consumers: `@import "@vistap/tokens/tokens.css";` after `@import "tailwindcss";`
+ * Consumers: `@import "@cntxt/tokens/tokens.css";` after `@import "tailwindcss";`
  * so the @theme block below extends Tailwind's generated utilities
  * (bg-surface, text-danger, rounded, font-mono, ...).
  */

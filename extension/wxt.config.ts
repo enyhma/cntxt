@@ -42,7 +42,7 @@ export default defineConfig({
       return {
         ...base,
         browser_specific_settings: {
-          // Fixes Vistap's identity for AMO updates/versioning — this does
+          // Fixes cntxt's identity for AMO updates/versioning — this does
           // NOT make the runtime moz-extension://<uuid> redirect URL
           // stable, though: Firefox randomizes that uuid per browser
           // profile on install, specifically to prevent extension

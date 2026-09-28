@@ -11,7 +11,7 @@ ordered build plan this design turns into.
 
 ## Two separate questions this doc keeps distinct
 
-1. **Is an account required to use Vistap at all?** Yes — settled by this
+1. **Is an account required to use cntxt at all?** Yes — settled by this
    revision. The server needs to know who you are to enforce usage limits,
    so sign-in gates the product before anything else happens.
 2. **Does every read/write block on a network round-trip once you're signed
@@ -309,7 +309,7 @@ call rather than an architectural default:
   behind past the limit. "Fully backed up" quietly becomes false.
 - Stop syncing new tabs into that workspace once the cached entitlement
   says it's full, and surface that in the dashboard. Keeps local and remote
-  in agreement, but means Vistap visibly stops tracking tabs the user is
+  in agreement, but means cntxt visibly stops tracking tabs the user is
   still actively using.
 
 ## Payments (Polar.sh)

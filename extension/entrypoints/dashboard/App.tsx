@@ -278,7 +278,7 @@ function Dashboard(props: {
 
   onMount(() => {
     try {
-      const stored = localStorage.getItem("vistap.railOpen");
+      const stored = localStorage.getItem("cntxt.railOpen");
       if (stored !== null) setRailOpen(stored === "1");
     } catch {
       // localStorage can throw in some extension contexts; default stands.
@@ -308,7 +308,7 @@ function Dashboard(props: {
 
   function setRail(v: boolean) {
     try {
-      localStorage.setItem("vistap.railOpen", v ? "1" : "0");
+      localStorage.setItem("cntxt.railOpen", v ? "1" : "0");
     } catch {
       // best-effort persistence only
     }
@@ -1059,11 +1059,11 @@ function App() {
   createEffect(() => {
     const workspace = current();
     theme(); // recompute the resolved color when the palette changes
-    document.title = workspace ? `${workspace.name} — Vistap` : "Vistap";
+    document.title = workspace ? `${workspace.name} — cntxt` : "cntxt";
     const favicon = document.getElementById(
       "favicon",
     ) as HTMLLinkElement | null;
-    if (favicon) favicon.href = faviconHrefFor(workspace?.id ?? "vistap");
+    if (favicon) favicon.href = faviconHrefFor(workspace?.id ?? "cntxt");
   });
 
   return (
@@ -1090,7 +1090,7 @@ function App() {
           fallback={
             <div class="flex min-h-screen items-center justify-center bg-surface p-8 font-sans text-surface-txt">
               <div class="w-full max-w-sm rounded border border-surface-alt3 bg-surface-alt1 p-6">
-                <h2 class="mb-4 text-lg font-medium">Sign in to Vistap</h2>
+                <h2 class="mb-4 text-lg font-medium">Sign in to cntxt</h2>
                 <Show
                   when={!otpSent()}
                   fallback={

@@ -38,12 +38,12 @@ importers:
 
   extension:
     dependencies:
+      '@cntxt/tokens':
+        specifier: workspace:*
+        version: link:../packages/tokens
       '@supabase/supabase-js':
         specifier: ^2.116.0
         version: 2.116.0
-      '@vistap/tokens':
-        specifier: workspace:*
-        version: link:../packages/tokens
       '@xstate/solid':
         specifier: ^2.0.0
         version: 2.0.0(solid-js@1.9.15)(xstate@5.32.6)

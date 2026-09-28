@@ -1,6 +1,6 @@
 # Capabilities
 
-What Vistap can do today, what it can't yet, and why each capability matters.
+What cntxt can do today, what it can't yet, and why each capability matters.
 Sourced from the current `extension/` code, `ROADMAP.md`, and the
 `Workspace Dashboard v2` UI design. Update this alongside the roadmap as
 things ship — it's a snapshot, not a contract.
@@ -55,8 +55,8 @@ usage scenarios for the ❌ ones.
 See [`architecture-sync.md`](./architecture-sync.md) for the local-first
 sync design (diagrams included) behind the two Phase 2 rows below.
 
-| Capability                   | Status       | Value                                                                                                                                                         |
-| ---------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Account/auth                 | ❌ (Phase 2) | Prerequisite for anything cross-device — without an identity, "your workspaces" can only ever mean "this browser profile."                                    |
-| Cross-device sync (Supabase) | ❌ (Phase 2) | The extension is single-machine today; sync is what makes a saved workspace follow you to a laptop, not just survive a restart.                               |
-| Shared/team workspaces       | ❌ (Phase 3) | Turns Vistap from a personal tool into one a team can use to hand off or co-own a set of tabs — the point at which it becomes a paid product per the roadmap. |
+| Capability                   | Status       | Value                                                                                                                                                        |
+| ---------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Account/auth                 | ❌ (Phase 2) | Prerequisite for anything cross-device — without an identity, "your workspaces" can only ever mean "this browser profile."                                   |
+| Cross-device sync (Supabase) | ❌ (Phase 2) | The extension is single-machine today; sync is what makes a saved workspace follow you to a laptop, not just survive a restart.                              |
+| Shared/team workspaces       | ❌ (Phase 3) | Turns cntxt from a personal tool into one a team can use to hand off or co-own a set of tabs — the point at which it becomes a paid product per the roadmap. |

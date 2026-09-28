@@ -19,7 +19,7 @@
 set -euo pipefail
 
 USER_ID="66666666-6666-6666-6666-666666666666"
-PSQL() { docker exec -i supabase_db_vistap psql -U postgres -d postgres "$@"; }
+PSQL() { docker exec -i supabase_db_cntxt psql -U postgres -d postgres "$@"; }
 
 PSQL <<SQL
 insert into auth.users (id, email) values ('$USER_ID', 'race2@example.com')

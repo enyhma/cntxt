@@ -1,5 +1,5 @@
 {
-  "name": "vistap",
+  "name": "cntxt",
   "description": "Save the current window's tabs as a named workspace, close it, and restore it later.",
   "private": true,
   "version": "0.1.0",
@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",
-    "@vistap/tokens": "workspace:*",
+    "@cntxt/tokens": "workspace:*",
     "@xstate/solid": "^2.0.0",
     "lucide-solid": "^1.48.0",
     "solid-js": "^1.9.11",

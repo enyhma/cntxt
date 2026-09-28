@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Vistap: a Workona-style browser workspace manager (save a window's tabs as a named workspace, close it, restore it later). See `ROADMAP.md` for the phased plan and explicit non-goals — Phase 1 (local-only extension) is where almost all current work lives; Phase 2 (sync via Supabase) and Phase 3 (team) are not built yet.
+cntxt: a Workona-style browser workspace manager (save a window's tabs as a named workspace, close it, restore it later). See `ROADMAP.md` for the phased plan and explicit non-goals — Phase 1 (local-only extension) is where almost all current work lives; Phase 2 (sync via Supabase) and Phase 3 (team) are not built yet.
 
 This is a pnpm workspace (`pnpm-workspace.yaml` lists only `extension`). Three directories exist at the root:
 
