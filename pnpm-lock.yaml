@@ -47,6 +47,9 @@ importers:
       '@xstate/solid':
         specifier: ^2.0.0
         version: 2.0.0(solid-js@1.9.15)(xstate@5.32.6)
+      lucide-solid:
+        specifier: ^1.48.0
+        version: 1.48.0(solid-js@1.9.15)
       solid-js:
         specifier: ^1.9.11
         version: 1.9.15
@@ -60,6 +63,9 @@ importers:
       '@wxt-dev/module-solid':
         specifier: ^1.1.4
         version: 1.1.4(solid-js@1.9.15)(vite@8.3.0(@types/node@22.20.2)(jiti@2.7.0))(wxt@0.21.4(eslint@9.39.4(jiti@2.7.0))(rolldown@1.2.8)(typescript@5.9.3)(vite@8.3.0(@types/node@22.20.2)(jiti@2.7.0))(web-ext@10.6.0(jiti@2.7.0)))
+      daisyui:
+        specifier: ^5.7.46
+        version: 5.7.46
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
@@ -1382,6 +1388,9 @@ packages:
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
+  daisyui@5.7.46:
+    resolution: {integrity: sha512-z/tfVXLpLRe1ojGeokzxauHA9Ij5CGfk+83EdatQbFSVr02h5mUcp4nkgQJOw68wH1wAAPu/SY+MWbDdJG2R4w==}
+
   debounce@1.2.1:
     resolution: {integrity: sha512-XRRe6Glud4rd/ZGQfiV1ruXSfbvfJedlV9Y6zOlP+2K04vBYiJEte6stfFkCP03aMnY5tsipamumUjL14fofug==}
 
@@ -2379,6 +2388,11 @@ packages:
 
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
+
+  lucide-solid@1.48.0:
+    resolution: {integrity: sha512-tes5UEPXUpMYwk8MRgFS9EtV90miJ8P/19H8NR4hhaiVDBfZY39YG0zm7Ofxv3YVNNdKP95XckdYXXc0CtQaoQ==}
+    peerDependencies:
+      solid-js: ^1.4.7
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -5030,6 +5044,8 @@ snapshots:
 
   csstype@3.2.3: {}
 
+  daisyui@5.7.46: {}
+
   debounce@1.2.1: {}
 
   debug@4.3.7:
@@ -5928,6 +5944,10 @@ snapshots:
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
+
+  lucide-solid@1.48.0(solid-js@1.9.15):
+    dependencies:
+      solid-js: 1.9.15
 
   magic-string@0.30.21:
     dependencies:

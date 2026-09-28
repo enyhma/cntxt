@@ -22,12 +22,14 @@
     "@supabase/supabase-js": "^2.116.0",
     "@vistap/tokens": "workspace:*",
     "@xstate/solid": "^2.0.0",
+    "lucide-solid": "^1.48.0",
     "solid-js": "^1.9.11",
     "xstate": "^5.32.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@wxt-dev/module-solid": "^1.1.4",
+    "daisyui": "^5.7.46",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^8.1.5",

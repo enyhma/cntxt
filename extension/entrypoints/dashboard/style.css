@@ -1,2 +1,5 @@
 @import "tailwindcss";
+@plugin "daisyui" {
+  themes: false;
+}
 @import "@vistap/tokens/tokens.css";

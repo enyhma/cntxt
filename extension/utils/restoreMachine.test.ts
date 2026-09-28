@@ -106,4 +106,27 @@ describe("restoreMachine", () => {
     );
     expect(updatedA?.tabs).toEqual([]);
   });
+
+  it("disconnect closes tabs but preserves the workspace and leaves the window unmapped", async () => {
+    const { windowId, workspace: workspaceA } =
+      await setUpWindowWithWorkspace();
+
+    const actor = createActor(restoreMachine).start();
+    actor.send({ type: "DISCONNECT" });
+    await waitFor(actor, (state) => state.matches("idle"));
+    await flushAsyncWork();
+
+    const map = await getWindowWorkspaceMap();
+    expect(map[windowId]).toBeUndefined();
+
+    const openUrls = (await browser.tabs.query({ windowId })).map((t) => t.url);
+    expect(openUrls).toEqual([DASHBOARD_URL]);
+
+    // Detaching before closing (like Restore) means the closures never get
+    // attributed to workspaceA, unlike a plain close.
+    const updatedA = (await getWorkspaces()).find(
+      (w) => w.id === workspaceA.id,
+    );
+    expect(updatedA?.tabs).toEqual(workspaceA.tabs);
+  });
 });

@@ -33,67 +33,42 @@
     transparent 50%
   );
 
-  --color-primary-DEFAULT: var(--color-surface-alt4);
+  /*
+   * Tailwind v4's CSS-first @theme only maps a bare utility (bg-accent) to
+   * a bare variable (--color-accent) — unlike v3's JS `{ DEFAULT: ... }`
+   * config convention, a `-DEFAULT`-suffixed custom property here is just a
+   * shade literally named "DEFAULT" and produces bg-accent-DEFAULT, not
+   * bg-accent. Every family below is named bare for exactly this reason.
+   */
+  --color-primary: var(--color-surface-alt4);
   --color-primary-txt: var(--color-surface-txt);
 
-  --color-info-DEFAULT: #4273bd;
-  --color-info-alt1: color-mix(in srgb, var(--color-info-DEFAULT), black 10%);
-  --color-info-alt2: color-mix(in srgb, var(--color-info-DEFAULT), black 15%);
+  --color-info: #4273bd;
+  --color-info-alt1: color-mix(in srgb, var(--color-info), black 10%);
+  --color-info-alt2: color-mix(in srgb, var(--color-info), black 15%);
   --color-info-txt: #fff;
 
-  --color-success-DEFAULT: #27865d;
-  --color-success-alt1: color-mix(
-    in srgb,
-    var(--color-success-DEFAULT),
-    black 10%
-  );
-  --color-success-alt2: color-mix(
-    in srgb,
-    var(--color-success-DEFAULT),
-    black 15%
-  );
+  --color-success: #27865d;
+  --color-success-alt1: color-mix(in srgb, var(--color-success), black 10%);
+  --color-success-alt2: color-mix(in srgb, var(--color-success), black 15%);
   --color-success-txt: #fff;
 
-  --color-warning-DEFAULT: #cf4e17;
-  --color-warning-alt1: color-mix(
-    in srgb,
-    var(--color-warning-DEFAULT),
-    black 10%
-  );
-  --color-warning-alt2: color-mix(
-    in srgb,
-    var(--color-warning-DEFAULT),
-    black 15%
-  );
+  --color-warning: #cf4e17;
+  --color-warning-alt1: color-mix(in srgb, var(--color-warning), black 10%);
+  --color-warning-alt2: color-mix(in srgb, var(--color-warning), black 15%);
   --color-warning-txt: #fff;
 
-  --color-danger-DEFAULT: #bb303e;
-  --color-danger-alt1: color-mix(
-    in srgb,
-    var(--color-danger-DEFAULT),
-    black 10%
-  );
-  --color-danger-alt2: color-mix(
-    in srgb,
-    var(--color-danger-DEFAULT),
-    black 15%
-  );
+  --color-danger: #bb303e;
+  --color-danger-alt1: color-mix(in srgb, var(--color-danger), black 10%);
+  --color-danger-alt2: color-mix(in srgb, var(--color-danger), black 15%);
   --color-danger-txt: #fff;
 
   /* Accent lightens on hover/active (mix toward white), unlike the other
      semantic colors which darken — matches the header/primary-button blue
      in both the PB light-theme table and the mockup's hover states. */
-  --color-accent-DEFAULT: #1055c9;
-  --color-accent-alt1: color-mix(
-    in srgb,
-    var(--color-accent-DEFAULT),
-    white 10%
-  );
-  --color-accent-alt2: color-mix(
-    in srgb,
-    var(--color-accent-DEFAULT),
-    white 15%
-  );
+  --color-accent: #1055c9;
+  --color-accent-alt1: color-mix(in srgb, var(--color-accent), white 10%);
+  --color-accent-alt2: color-mix(in srgb, var(--color-accent), white 15%);
   --color-accent-txt: #fff;
 }
 
@@ -121,4 +96,36 @@
      the mockup's actual popover/dropdown/modal shadows). */
   --shadow-dropdown: 0px 8px 5px -5px rgba(0, 0, 0, 0.4);
   --shadow-modal: 0px 8px 5px -5px rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * Alternate themes, applied by setting data-theme on <html> (see
+ * utils/settings.ts + App.tsx). Each block only overrides the leaf colors
+ * (surface + the five semantic hues) — every *-alt1/*-alt2/*-txt-hint
+ * derived above stays a color-mix() referencing var(--color-x), so it
+ * recomputes correctly for whichever value is cascaded on the same
+ * element; no need to restate those formulas per theme.
+ */
+:root[data-theme="indigo"] {
+  /* Graphite Indigo: near-black ground, one desaturated indigo accent —
+     the current Linear/Raycast "premium dev tool" look. */
+  --color-surface: #131316;
+  --color-info: #3d63b8;
+  --color-success: #1c8562;
+  --color-warning: #c97a1f;
+  --color-danger: #c13c57;
+  --color-accent: #5b56e0;
+}
+
+:root[data-theme="brass"] {
+  /* Brass on Obsidian: warm near-black ground, brass/gold accent. Gold is
+     light, so unlike every other theme here it needs dark ink on top of
+     it — every text-accent-txt usage in App.tsx exists for this. */
+  --color-surface: #14120e;
+  --color-info: #3e6fa3;
+  --color-success: #2e7a52;
+  --color-warning: #b5541f;
+  --color-danger: #9e2f3d;
+  --color-accent: #b8862e;
+  --color-accent-txt: #14120e;
 }
