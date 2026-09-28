@@ -102,6 +102,27 @@
      the mockup's actual popover/dropdown/modal shadows). */
   --shadow-dropdown: 0px 8px 5px -5px rgba(0, 0, 0, 0.4);
   --shadow-modal: 0px 8px 5px -5px rgba(0, 0, 0, 0.5);
+
+  /*
+   * Elevation ladder, low to high — each rung says "this matters more than
+   * what's under it," so it's used for meaning, not decoration:
+   *   (none)          structural chrome: the rail, the sticky header, nav
+   *                   rows — flush with the page, never shadowed
+   *   --shadow-card   resting content: cards, chips, form controls, the
+   *                   one-card auth/warning screens — sits a level above
+   *                   the page
+   *   --shadow-raised the single most relevant actionable/focal thing in
+   *                   its context (a primary CTA, the sign-in card) — one
+   *                   step above -card, reserved for what should draw the
+   *                   eye first
+   *   --shadow-dropdown / --shadow-modal
+   *                   overlays things below them (menus, dialogs, the
+   *                   floating selection bar) — already defined above
+   */
+  --shadow-card:
+    0px 1px 3px rgba(0, 0, 0, 0.35), 0px 1px 1px rgba(0, 0, 0, 0.2);
+  --shadow-raised:
+    0px 3px 8px rgba(0, 0, 0, 0.45), 0px 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 /*
