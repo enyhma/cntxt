@@ -1,17 +1,798 @@
 ---
+// Live Creem products (public checkout links, safe to embed client-side —
+// no API key involved). Created via `creem products create`; see
+// `creem products get <id>` to inspect or `creem products list` for both.
+const CREEM_MONTHLY_URL =
+  "https://www.creem.io/product/prod_1vEVfh4WUKbCPlPaoFLpS5";
+const CREEM_YEARLY_URL =
+  "https://www.creem.io/product/prod_7i6mdEk2fz7x5pdo3ZwHC3";
 
+const FEATURES = [
+  {
+    color: "var(--accent)",
+    title: "Every window is a workspace",
+    body: "Open a window, name it, and cntxt remembers it. No separate save step — it's just how a window works now.",
+  },
+  {
+    color: "var(--success)",
+    title: "Close it, restore it later",
+    body: "Done with a project for now? Close the window. Restore brings every tab back exactly as you left it.",
+  },
+  {
+    color: "var(--info)",
+    title: "Live sync, always",
+    body: "Open a tab, close a tab, move one around — the workspace updates in the background. Nothing to remember to save.",
+  },
+  {
+    color: "var(--warning)",
+    title: "Jump with ⌘K",
+    body: "A command palette searches every workspace and every tab in it, so switching context never means hunting through windows.",
+  },
+  {
+    color: "var(--danger)",
+    title: "Color and icon per workspace",
+    body: "Give each workspace a dot color and an icon. Glance at a window and know which one it is.",
+  },
+  {
+    color: "var(--accent)",
+    title: "Move tabs between workspaces",
+    body: "Select a batch of tabs in one workspace and send them to another — no drag, drop, and hope.",
+  },
+];
+
+const STEPS = [
+  {
+    n: "01",
+    title: "Open a window",
+    body: "cntxt names it an untitled workspace the moment it sees tabs in it.",
+  },
+  {
+    n: "02",
+    title: "Work like you normally do",
+    body: "Every tab you open, close, or move is synced to that workspace automatically.",
+  },
+  {
+    n: "03",
+    title: "Close it. Restore it whenever.",
+    body: "The window goes away; the workspace doesn't. Pick it up again in one click, in any window.",
+  },
+];
 ---
 
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta
+      name="description"
+      content="cntxt turns every browser window into a named workspace you can close and restore later — no more fifty pinned tabs across six windows."
+    />
+    <title>cntxt — a workspace for every window</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script is:inline>
+      window.$ujq = window.$ujq || [];
+      window.uj =
+        window.uj ||
+        new Proxy(
+          {},
+          {
+            get:
+              (_, p) =>
+              (...a) =>
+                window.$ujq.push([p, ...a]),
+          },
+        );
+      document.head.appendChild(
+        Object.assign(document.createElement("script"), {
+          src: "https://cdn.userjot.com/sdk/v2/uj.js",
+          type: "module",
+          async: true,
+        }),
+      );
+      window.uj.init("cmulrcfq8009h0jnurgitgtvv", { widget: true });
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/" class="brand">
+        <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true">
+          <path
+            d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85"
+            fill="none"
+            stroke="var(--accent)"
+            stroke-width="14"
+            stroke-linecap="round"></path>
+          <rect x="74" y="40" width="8" height="20" rx="4" fill="var(--accent)"
+          ></rect>
+        </svg>
+        cntxt
+      </a>
+      <nav class="site-nav">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#pricing" class="btn btn-ghost">Pricing</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="eyebrow">A browser extension</p>
+        <h1>Every window is a workspace.</h1>
+        <p class="lede">
+          Save a window's tabs under a name, close it without losing it, and
+          restore it whenever you come back — so "reopen closed window"
+          doesn't have to be a memory game.
+        </p>
+        <div class="hero-actions">
+          <a href="#pricing" class="btn btn-primary">See pricing</a>
+        </div>
+
+        <div class="mock" aria-hidden="true">
+          <div class="mock-rail">
+            <p class="mock-rail-label">WORKSPACES</p>
+            <div class="mock-row is-active">
+              <span class="dot" style="background:var(--accent)"></span>
+              Design review
+              <span class="count">7</span>
+            </div>
+            <div class="mock-row">
+              <span class="dot" style="background:var(--success)"></span>
+              Research
+              <span class="count">12</span>
+            </div>
+            <div class="mock-row">
+              <span class="dot" style="background:var(--warning)"></span>
+              Q3 planning
+              <span class="count">4</span>
+            </div>
+            <div class="mock-row">
+              <span class="dot" style="background:var(--info)"></span>
+              Reading list
+              <span class="count">19</span>
+            </div>
+          </div>
+          <div class="mock-main">
+            <div class="mock-topbar">
+              <span class="dot" style="background:var(--accent)"></span>
+              <strong>Design review</strong>
+              <span class="count">7 tabs</span>
+              <span class="mock-kbd">⌘K</span>
+            </div>
+            <div class="mock-tabs">
+              {
+                [
+                  ["Figma — component audit", "figma.com"],
+                  ["Design tokens PR #214", "github.com"],
+                  ["Spacing scale notes", "notion.so"],
+                ].map(([title, domain]) => (
+                  <div class="mock-tab">
+                    <span class="favicon">{domain[0].toUpperCase()}</span>
+                    <span class="tab-title">{title}</span>
+                    <span class="tab-domain">{domain}</span>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="features">
+        <h2>Built around one idea</h2>
+        <p class="section-lede">
+          A window is already the unit of "a project" or "a train of
+          thought." cntxt just gives that unit a name and lets you put it
+          away.
+        </p>
+        <div class="feature-grid">
+          {
+            FEATURES.map((f) => (
+              <div class="feature-card">
+                <span class="feature-dot" style={`background:${f.color}`} />
+                <h3>{f.title}</h3>
+                <p>{f.body}</p>
+              </div>
+            ))
+          }
+        </div>
+      </section>
+
+      <section id="how-it-works" class="how">
+        <h2>How it works</h2>
+        <div class="steps">
+          {
+            STEPS.map((s) => (
+              <div class="step">
+                <span class="step-n">{s.n}</span>
+                <h3>{s.title}</h3>
+                <p>{s.body}</p>
+              </div>
+            ))
+          }
+        </div>
+      </section>
+
+      <section id="pricing" class="pricing">
+        <h2>Simple pricing</h2>
+        <p class="section-lede">
+          Start free. Upgrade whenever a handful of workspaces stops being
+          enough.
+        </p>
+
+        <div class="price-toggle">
+          <input
+            type="radio"
+            name="billing"
+            id="billing-monthly"
+            checked
+          />
+          <label for="billing-monthly">Monthly</label>
+          <input type="radio" name="billing" id="billing-yearly" />
+          <label for="billing-yearly">
+            Yearly <span class="save-badge">save 25%</span>
+          </label>
+        </div>
+
+        <div class="plans">
+          <div class="plan-card">
+            <h3>Free</h3>
+            <p class="plan-price">
+              <span class="price-amount">€0</span>
+              <span class="price-period">/forever</span>
+            </p>
+            <ul class="plan-features">
+              <li>Up to 3 workspaces</li>
+              <li>Up to 25 tabs per workspace</li>
+              <li>Save, close, and restore windows</li>
+            </ul>
+            <span class="btn btn-ghost" aria-disabled="true">
+              Included with the extension
+            </span>
+          </div>
+
+          <div class="plan-card is-pro">
+            <span class="plan-badge">Pro</span>
+            <h3>Pro</h3>
+            <p class="plan-price">
+              <span class="price-amount price-monthly">€4</span>
+              <span class="price-amount price-yearly">€3</span>
+              <span class="price-period">/month</span>
+            </p>
+            <p class="price-note price-yearly">billed €36 per year</p>
+            <ul class="plan-features">
+              <li>Unlimited workspaces</li>
+              <li>Unlimited tabs per workspace</li>
+              <li>Everything in Free</li>
+            </ul>
+            <a href={CREEM_MONTHLY_URL} class="btn btn-primary price-monthly">
+              Subscribe monthly
+            </a>
+            <a href={CREEM_YEARLY_URL} class="btn btn-primary price-yearly">
+              Subscribe yearly
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta">
+        <h2>Stop losing tabs to closed windows.</h2>
+        <a href="#pricing" class="btn btn-primary">See pricing</a>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>cntxt</span>
+    </footer>
+  </body>
 </html>
+
+<style>
+  :root {
+    --surface: #12151c;
+    --surface-alt1: #171a21;
+    --surface-alt2: #21242c;
+    --surface-alt3: #2c2f38;
+    --surface-txt: #ebebeb;
+    --surface-txt-hint: rgb(235 235 235 / 65%);
+    --accent: #1055c9;
+    --accent-alt1: #2c6bd6;
+    --success: #3f7860;
+    --warning: #a8623c;
+    --info: #5b7396;
+    --danger: #9c4a52;
+    --radius: 10px;
+    --shadow-card:
+      0px 1px 3px rgba(0, 0, 0, 0.35), 0px 1px 1px rgba(0, 0, 0, 0.2);
+    --shadow-raised:
+      0px 3px 8px rgba(0, 0, 0, 0.45), 0px 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--surface);
+    color: var(--surface-txt);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    line-height: 1.5;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.1rem;
+    border-radius: var(--radius);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: var(--shadow-raised);
+  }
+  .btn-primary:hover {
+    background: var(--accent-alt1);
+  }
+  .btn-ghost {
+    border: 1px solid var(--surface-alt3);
+  }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.5rem;
+    background: color-mix(in srgb, var(--surface), transparent 8%);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--surface-alt2);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 500;
+    font-size: 1.05rem;
+    text-decoration: none;
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    font-size: 0.9rem;
+  }
+  .site-nav a:not(.btn) {
+    color: var(--surface-txt-hint);
+    text-decoration: none;
+  }
+  .site-nav a:not(.btn):hover {
+    color: var(--surface-txt);
+  }
+
+  main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  .hero {
+    text-align: center;
+    padding: 5rem 0 3rem;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--surface-txt-hint);
+    margin: 0 0 1rem;
+  }
+  .hero h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    max-width: 18ch;
+    margin: 0 auto;
+  }
+  .lede {
+    max-width: 52ch;
+    margin: 1.25rem auto 0;
+    color: var(--surface-txt-hint);
+    font-size: 1.05rem;
+  }
+  .hero-actions {
+    margin-top: 2rem;
+  }
+
+  .mock {
+    margin: 3.5rem auto 0;
+    max-width: 720px;
+    display: flex;
+    border: 1px solid var(--surface-alt3);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-raised);
+    text-align: left;
+    background: var(--surface);
+  }
+  .mock-rail {
+    width: 180px;
+    flex-shrink: 0;
+    background: var(--surface-alt1);
+    border-right: 1px solid var(--surface-alt2);
+    padding: 0.6rem;
+  }
+  .mock-rail-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    color: var(--surface-txt-hint);
+    margin: 0.3rem 0.4rem 0.6rem;
+  }
+  .mock-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: var(--surface-txt-hint);
+  }
+  .mock-row.is-active {
+    background: var(--surface-alt3);
+    color: var(--surface-txt);
+    font-weight: 500;
+  }
+  .mock-row .count {
+    margin-left: auto;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.65rem;
+    color: var(--surface-txt-hint);
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .mock-main {
+    flex: 1;
+    min-width: 0;
+  }
+  .mock-topbar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--surface-alt2);
+    font-size: 0.85rem;
+  }
+  .mock-topbar .count {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: var(--surface-txt-hint);
+  }
+  .mock-kbd {
+    margin-left: auto;
+    border: 1px solid var(--surface-alt3);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.65rem;
+    color: var(--surface-txt-hint);
+  }
+  .mock-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.9rem;
+    border-bottom: 1px solid var(--surface-alt2);
+    font-size: 0.8rem;
+  }
+  .mock-tab:last-child {
+    border-bottom: none;
+  }
+  .favicon {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    background: var(--surface-alt3);
+    font-size: 0.6rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .tab-title {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tab-domain {
+    color: var(--surface-txt-hint);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+  }
+
+  section {
+    padding: 4.5rem 0;
+  }
+  .features,
+  .how {
+    text-align: center;
+  }
+  .features h2,
+  .how h2,
+  .cta h2 {
+    font-size: 1.9rem;
+  }
+  .section-lede {
+    max-width: 50ch;
+    margin: 0.75rem auto 0;
+    color: var(--surface-txt-hint);
+  }
+
+  .feature-grid {
+    margin-top: 2.5rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    text-align: left;
+  }
+  .feature-card {
+    background: var(--surface-alt1);
+    border: 1px solid var(--surface-alt2);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-card);
+  }
+  .feature-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    margin-bottom: 0.75rem;
+  }
+  .feature-card h3 {
+    font-size: 1rem;
+    margin-bottom: 0.4rem;
+  }
+  .feature-card p {
+    margin: 0;
+    color: var(--surface-txt-hint);
+    font-size: 0.9rem;
+  }
+
+  .steps {
+    margin-top: 2.5rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    text-align: left;
+  }
+  .step-n {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    color: var(--accent-alt1);
+    font-size: 0.85rem;
+  }
+  .step h3 {
+    margin-top: 0.5rem;
+    font-size: 1.05rem;
+  }
+  .step p {
+    margin: 0.4rem 0 0;
+    color: var(--surface-txt-hint);
+    font-size: 0.9rem;
+  }
+
+  .cta {
+    text-align: center;
+  }
+  .cta .btn {
+    margin-top: 1.5rem;
+  }
+
+  .pricing {
+    text-align: center;
+  }
+
+  .price-toggle {
+    margin: 2rem auto 0;
+    display: inline-flex;
+    padding: 0.25rem;
+    border: 1px solid var(--surface-alt3);
+    border-radius: var(--radius);
+    background: var(--surface-alt1);
+  }
+  .price-toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .price-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border-radius: calc(var(--radius) - 4px);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--surface-txt-hint);
+    cursor: pointer;
+  }
+  .price-toggle input:checked + label {
+    background: var(--surface-alt3);
+    color: var(--surface-txt);
+  }
+  .save-badge {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.65rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--success), transparent 70%);
+    color: var(--surface-txt);
+  }
+
+  .plans {
+    margin-top: 2.5rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 320px));
+    justify-content: center;
+    gap: 1.25rem;
+    text-align: left;
+  }
+  .plan-card {
+    position: relative;
+    background: var(--surface-alt1);
+    border: 1px solid var(--surface-alt2);
+    border-radius: var(--radius);
+    padding: 1.75rem;
+    box-shadow: var(--shadow-card);
+  }
+  .plan-card.is-pro {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-raised);
+  }
+  .plan-badge {
+    position: absolute;
+    top: -0.7rem;
+    right: 1.5rem;
+    background: var(--accent);
+    color: #fff;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+  }
+  .plan-card h3 {
+    font-size: 1.1rem;
+  }
+  .plan-price {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin: 0.75rem 0 0;
+  }
+  .price-amount {
+    font-size: 2.2rem;
+    font-weight: 600;
+  }
+  .price-period {
+    color: var(--surface-txt-hint);
+    font-size: 0.9rem;
+  }
+  .price-note {
+    margin: 0.15rem 0 0;
+    color: var(--surface-txt-hint);
+    font-size: 0.8rem;
+  }
+  .price-yearly {
+    display: none;
+  }
+  .pricing:has(#billing-yearly:checked) .price-monthly {
+    display: none;
+  }
+  .pricing:has(#billing-yearly:checked) .price-yearly {
+    display: inline-flex;
+  }
+  .pricing:has(#billing-yearly:checked) span.price-yearly,
+  .pricing:has(#billing-yearly:checked) p.price-yearly {
+    display: block;
+  }
+  .plan-features {
+    list-style: none;
+    margin: 1.5rem 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    font-size: 0.9rem;
+    color: var(--surface-txt-hint);
+  }
+  .plan-features li {
+    padding-left: 1.1rem;
+    position: relative;
+  }
+  .plan-features li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.5em;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+  .plan-card .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .plan-card .btn[aria-disabled="true"] {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .site-footer {
+    text-align: center;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+    color: var(--surface-txt-hint);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--surface-alt2);
+  }
+
+  @media (max-width: 720px) {
+    .feature-grid,
+    .steps,
+    .plans {
+      grid-template-columns: 1fr;
+    }
+    .mock {
+      flex-direction: column;
+    }
+    .mock-rail {
+      width: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--surface-alt2);
+    }
+    .site-nav a:not(.btn) {
+      display: none;
+    }
+  }
+</style>
