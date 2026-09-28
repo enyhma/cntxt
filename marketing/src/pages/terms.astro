@@ -1,4 +1,6 @@
 ---
+import SEO from "../components/SEO.astro";
+
 const LAST_UPDATED = "September 28, 2026";
 ---
 
@@ -8,11 +10,11 @@ const LAST_UPDATED = "September 28, 2026";
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
-    <meta
-      name="description"
-      content="cntxt's terms of service: the rules for using the browser extension and its paid plans."
+    <SEO
+      title="Terms of Service — cntxt"
+      description="cntxt's terms of service: the rules for using the browser extension and its paid plans."
+      path="/terms"
     />
-    <title>Terms of Service — cntxt</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

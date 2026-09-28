@@ -1,4 +1,6 @@
 ---
+import SEO from "../components/SEO.astro";
+
 // Live Creem products (public checkout links, safe to embed client-side —
 // no API key involved). Created via `creem products create`; see
 // `creem products get <id>` to inspect or `creem products list` for both.
@@ -65,11 +67,20 @@ const STEPS = [
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
-    <meta
-      name="description"
-      content="cntxt turns every browser window into a named workspace you can close and restore later — no more fifty pinned tabs across six windows."
+    <SEO
+      title="cntxt — a workspace for every window"
+      description="cntxt turns every browser window into a named workspace you can close and restore later — no more fifty pinned tabs across six windows."
+      path="/"
     />
-    <title>cntxt — a workspace for every window</title>
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "cntxt",
+      applicationCategory: "BrowserApplication",
+      operatingSystem: "Chrome",
+      description:
+        "cntxt turns every browser window into a named workspace you can close and restore later.",
+    })} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
