@@ -1309,13 +1309,28 @@ function App() {
   const hasExpiredWorkspace = () =>
     workspaces().some((w) => w.syncStatus === "expired");
 
-  // The dismissible usage banner reappears whenever blockedCount changes —
-  // e.g. dismissing it while at the limit, then hitting a *new* rejection
-  // later, or upgrading and having it resolve, shouldn't stay stuck on
-  // whatever was true the moment it was dismissed.
+  // blockedCount only catches a workspace that actually *failed* a
+  // create_workspace call — but pullRemoteWorkspaces (utils/workspaces.ts)
+  // marks anything with a real server row "synced" regardless of the
+  // account's *current* entitlement, and create_workspace only enforces
+  // the limit at insert time, never retroactively. So an account can sit
+  // at, say, 11 synced workspaces against a 3-workspace plan — nothing
+  // "failed", so blockedCount stays 0 — with no signal anywhere that
+  // new workspaces won't sync from here. This fills that gap.
+  const overLimitCount = () => {
+    const max = entitlements()?.maxWorkspaces;
+    return max !== undefined && syncedCount() > max ? syncedCount() - max : 0;
+  };
+  const hasSyncIssue = () => blockedCount() > 0 || overLimitCount() > 0;
+
+  // The dismissible usage banner reappears whenever the underlying issue
+  // changes — e.g. dismissing it while at the limit, then hitting a *new*
+  // rejection later, or upgrading and having it resolve, shouldn't stay
+  // stuck on whatever was true the moment it was dismissed.
   const [bannerDismissed, setBannerDismissed] = createSignal(false);
   createEffect(() => {
     blockedCount();
+    overLimitCount();
     setBannerDismissed(false);
   });
 
@@ -1651,9 +1666,9 @@ function App() {
               <details class="dropdown dropdown-end">
                 <summary class="btn btn-sm h-8 list-none gap-1.75 border-none bg-transparent font-normal text-surface-txt-hint hover:text-surface-txt">
                   <span class="whitespace-nowrap">{session()?.user.email}</span>
-                  <Show when={blockedCount() > 0}>
+                  <Show when={hasSyncIssue()}>
                     <span class="grid h-3.5 min-w-3.5 place-items-center rounded-full bg-warning px-0.5 font-mono text-[9px] text-warning-txt">
-                      {blockedCount()}
+                      {blockedCount() > 0 ? blockedCount() : overLimitCount()}
                     </span>
                   </Show>
                   <ChevronDown size={12} class="opacity-70" />
@@ -1663,7 +1678,7 @@ function App() {
                     <li class="px-2 py-1 text-xs">
                       <span
                         class={
-                          blockedCount() > 0
+                          hasSyncIssue()
                             ? "text-warning"
                             : "text-surface-txt-hint"
                         }
@@ -1733,6 +1748,33 @@ function App() {
                   {blockedCount() === 1 ? "isn't" : "aren't"} syncing.{" "}
                   {hasExpiredWorkspace() ? "Renew" : "Upgrade"} to keep
                   everything backed up.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setBannerDismissed(true)}
+                  class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </Show>
+
+            <Show
+              when={
+                blockedCount() === 0 &&
+                overLimitCount() > 0 &&
+                !bannerDismissed()
+              }
+            >
+              <div class="mx-3.5 mt-3 flex items-start gap-2.5 rounded border border-warning/30 border-l-2 border-l-warning bg-warning/10 p-3 text-sm">
+                <TriangleAlert size={14} class="mt-0.5 shrink-0 text-warning" />
+                <p class="flex-1 text-surface-txt">
+                  <span class="font-medium">
+                    You're over your plan's limit.
+                  </span>{" "}
+                  {syncedCount()} workspaces are synced, but your plan covers{" "}
+                  {entitlements()?.maxWorkspaces}. New workspaces won't sync
+                  until you're back under the limit or you upgrade.
                 </p>
                 <button
                   type="button"
