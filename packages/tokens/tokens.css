@@ -15,20 +15,29 @@
   --radius-DEFAULT: 5px;
   --radius-lg: 15px;
 
-  /* Cool ink-navy rather than a hue-less gray, so the ground reads as
-     chosen rather than the default every dark tool starts from — picked
-     to sit with the blue accent below instead of fighting it. */
-  --color-surface: #12151c;
-  --color-surface-alt1: color-mix(in srgb, var(--color-surface), white 2%);
-  --color-surface-alt2: color-mix(in srgb, var(--color-surface), white 7%);
-  --color-surface-alt3: color-mix(in srgb, var(--color-surface), white 12%);
-  --color-surface-alt4: color-mix(in srgb, var(--color-surface), white 14%);
-  --color-surface-alt5: color-mix(in srgb, var(--color-surface), white 16%);
-  --color-surface-txt: #ebebeb;
+  /* Deep, cool near-black rather than the lighter ink-navy this used to
+     be — closer to the calm, premium dark panels in the Creem/PocketBase
+     references, and dark enough that accent is the only saturated thing
+     in the room instead of competing with a mid-toned ground. */
+  --color-surface: #0e1013;
+  --color-surface-alt1: color-mix(in srgb, var(--color-surface), white 4%);
+  --color-surface-alt2: color-mix(in srgb, var(--color-surface), white 9%);
+  --color-surface-alt3: color-mix(in srgb, var(--color-surface), white 14%);
+  --color-surface-alt4: color-mix(in srgb, var(--color-surface), white 19%);
+  --color-surface-txt: #eceef0;
   --color-surface-txt-hint: color-mix(
     in srgb,
     var(--color-surface-txt),
-    transparent 35%
+    transparent 42%
+  );
+  /* A third, dimmer tier for things that should recede further than a
+     hint — tab counts, timestamps — so the most numerous text in the UI
+     (every row has one) doesn't compete for attention with labels and
+     hover states that actually need to be read. */
+  --color-surface-txt-faint: color-mix(
+    in srgb,
+    var(--color-surface-txt),
+    transparent 58%
   );
   --color-surface-txt-disabled: color-mix(
     in srgb,
@@ -54,25 +63,28 @@
   --color-info-alt2: color-mix(in srgb, var(--color-info), black 15%);
   --color-info-txt: #fff;
 
-  --color-success: #3f7860;
+  --color-success: #3f8767;
   --color-success-alt1: color-mix(in srgb, var(--color-success), black 10%);
   --color-success-alt2: color-mix(in srgb, var(--color-success), black 15%);
   --color-success-txt: #fff;
 
-  --color-warning: #a8623c;
+  --color-warning: #b07a3f;
   --color-warning-alt1: color-mix(in srgb, var(--color-warning), black 10%);
   --color-warning-alt2: color-mix(in srgb, var(--color-warning), black 15%);
   --color-warning-txt: #fff;
 
-  --color-danger: #9c4a52;
+  --color-danger: #a6525a;
   --color-danger-alt1: color-mix(in srgb, var(--color-danger), black 10%);
   --color-danger-alt2: color-mix(in srgb, var(--color-danger), black 15%);
   --color-danger-txt: #fff;
 
-  /* Accent lightens on hover/active (mix toward white), unlike the other
-     semantic colors which darken — matches the header/primary-button blue
-     in both the PB light-theme table and the mockup's hover states. */
-  --color-accent: #1055c9;
+  /* The one fully-saturated hue, and deliberately calmer than it used to
+     be (#1055c9): it no longer has to read as a full-bleed chrome fill,
+     only as small, deliberate targets — a button, a focus ring, an
+     active-tab underline — so it doesn't need the same intensity to
+     register as "the accent". Lightens on hover/active (mix toward
+     white), unlike the other semantic colors which darken. */
+  --color-accent: #4169d6;
   --color-accent-alt1: color-mix(in srgb, var(--color-accent), white 10%);
   --color-accent-alt2: color-mix(in srgb, var(--color-accent), white 15%);
   --color-accent-txt: #fff;
@@ -100,8 +112,8 @@
      light-theme rgba(34,36,36,...) numbers and says dark "swaps for
      rgba(0,0,0,...) at higher opacity" without giving them — these are
      the mockup's actual popover/dropdown/modal shadows). */
-  --shadow-dropdown: 0px 8px 5px -5px rgba(0, 0, 0, 0.4);
-  --shadow-modal: 0px 8px 5px -5px rgba(0, 0, 0, 0.5);
+  --shadow-dropdown: 0px 10px 24px -5px rgba(0, 0, 0, 0.45);
+  --shadow-modal: 0px 10px 24px -5px rgba(0, 0, 0, 0.55);
 
   /*
    * Elevation ladder, low to high — each rung says "this matters more than
@@ -119,10 +131,9 @@
    *                   overlays things below them (menus, dialogs, the
    *                   floating selection bar) — already defined above
    */
-  --shadow-card:
-    0px 1px 3px rgba(0, 0, 0, 0.35), 0px 1px 1px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0px 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-raised:
-    0px 3px 8px rgba(0, 0, 0, 0.45), 0px 1px 2px rgba(0, 0, 0, 0.3);
+    0px 4px 14px rgba(0, 0, 0, 0.4), 0px 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 /*
@@ -138,7 +149,7 @@
      matched to its own accent, not a neutral gray borrowed from
      baseline — one desaturated indigo accent leads, same logic as
      baseline's blue. */
-  --color-surface: #15131f;
+  --color-surface: #100e18;
   --color-info: #57699b;
   --color-success: #3c7862;
   --color-warning: #a97b46;
@@ -153,7 +164,7 @@
      was already a deliberate warm tone, so it's untouched; warning shifts
      redder than the other themes' so it doesn't compete with the gold
      accent's own warmth. */
-  --color-surface: #14120e;
+  --color-surface: #100e0a;
   --color-info: #5c7089;
   --color-success: #4a7a5e;
   --color-warning: #a85f35;

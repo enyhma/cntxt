@@ -369,10 +369,10 @@ function WorkspaceRow(props: {
     <div
       onClick={props.onView}
       class={
-        "flex cursor-pointer items-center gap-2 rounded px-2 py-1.5" +
+        "group flex cursor-pointer items-center gap-2.5 rounded border-l-2 px-2.5 py-2" +
         (props.isViewed
-          ? " bg-surface-alt3 font-medium"
-          : " text-surface-txt-hint")
+          ? " border-l-accent bg-surface-alt1 font-medium"
+          : " border-l-transparent text-surface-txt-hint")
       }
     >
       <WorkspaceDot
@@ -383,7 +383,7 @@ function WorkspaceRow(props: {
       <span class="min-w-0 flex-1 truncate text-sm">
         {props.workspace.name}
       </span>
-      <span class="font-mono text-[11px] text-surface-txt-hint">
+      <span class="font-mono text-[11px] text-surface-txt-faint">
         {props.count}
       </span>
       <SyncBadge status={props.workspace.syncStatus} />
@@ -396,7 +396,7 @@ function WorkspaceRow(props: {
             e.stopPropagation();
             props.onDisconnect();
           }}
-          class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint hover:text-warning disabled:opacity-40"
+          class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-warning disabled:opacity-40"
         >
           <Unplug size={10} />
         </button>
@@ -406,7 +406,7 @@ function WorkspaceRow(props: {
           when={!props.openElsewhere}
           fallback={
             <span title="Open elsewhere" class="shrink-0">
-              <AppWindow size={10} class="text-surface-txt-hint" />
+              <AppWindow size={10} class="text-surface-txt-faint" />
             </span>
           }
         >
@@ -418,7 +418,7 @@ function WorkspaceRow(props: {
               e.stopPropagation();
               props.onOpenAll();
             }}
-            class="btn btn-square btn-ghost btn-xs shrink-0 text-accent disabled:opacity-40"
+            class="btn btn-square btn-ghost btn-xs shrink-0 text-accent opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-40"
           >
             <Show when={props.anyActive} fallback={<Plug size={10} />}>
               <ArrowRightLeft size={10} />
@@ -443,7 +443,7 @@ function TabRow(props: {
     <div
       onClick={props.selectable ? props.onToggle : props.onOpen}
       class={
-        "flex cursor-pointer items-center gap-2.5 border-b border-surface-alt2 px-3 py-1.75 last:border-b-0" +
+        "flex cursor-pointer items-center gap-2.75 border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0 hover:bg-surface-alt2" +
         (props.selected ? " bg-accent/20" : "")
       }
     >
@@ -469,7 +469,7 @@ function TabRow(props: {
       <span class="min-w-0 flex-1 truncate text-sm">
         {props.tab.title || props.tab.url}
       </span>
-      <span class="max-w-[38%] shrink-0 truncate font-mono text-[11px] text-surface-txt-hint">
+      <span class="max-w-[38%] shrink-0 truncate font-mono text-[11px] text-surface-txt-faint">
         {domain()}
       </span>
     </div>
@@ -759,7 +759,7 @@ function Dashboard(props: {
         <Show when={railOpen()}>
           <nav class="flex w-60 shrink-0 flex-col border-r border-surface-alt2 bg-surface-alt1">
             <div class="flex h-11 shrink-0 items-center gap-2 border-b border-surface-alt2 pr-2.5 pl-3.5">
-              <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-hint">
+              <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
                 WORKSPACES
               </span>
               <button
@@ -822,7 +822,7 @@ function Dashboard(props: {
                 <summary class="btn h-8 list-none gap-2 rounded-full border border-surface-alt3 bg-surface-alt1 px-2.75 font-normal shadow-[var(--shadow-card)]">
                   <WorkspaceDot workspace={viewed()} />
                   <span class="text-sm font-bold">{viewed()?.name}</span>
-                  <span class="font-mono text-[11px] text-surface-txt-hint">
+                  <span class="font-mono text-[11px] text-surface-txt-faint">
                     {viewed()?.tabs.length ?? 0}
                   </span>
                   <ChevronDown size={11} class="text-surface-txt-hint" />
@@ -874,7 +874,7 @@ function Dashboard(props: {
                     {viewed()?.name}
                   </span>
                 </Show>
-                <span class="min-w-0 overflow-hidden truncate font-mono text-[11px] text-surface-txt-hint">
+                <span class="min-w-0 overflow-hidden truncate font-mono text-[11px] text-surface-txt-faint">
                   {(viewed()?.tabs.length ?? 0) + " tabs"}
                 </span>
               </div>
@@ -1009,7 +1009,7 @@ function Dashboard(props: {
           <aside class="flex w-80 shrink-0 flex-col border-l border-surface-alt2 bg-surface-alt1 shadow-[-6px_0_16px_rgba(0,0,0,0.35)]">
             <div class="flex h-13 shrink-0 items-center gap-2 border-b border-surface-alt2 px-3">
               <span class="text-sm font-semibold">Current window</span>
-              <span class="font-mono text-[11px] text-surface-txt-hint">
+              <span class="font-mono text-[11px] text-surface-txt-faint">
                 {current()?.tabs.length ?? 0} open
               </span>
               <span class="flex-1" />
@@ -1107,7 +1107,7 @@ function Dashboard(props: {
               >
                 <span class="badge badge-sm shrink-0 font-mono">{r.kind}</span>
                 <span class="min-w-0 flex-1 truncate text-sm">{r.title}</span>
-                <span class="shrink-0 font-mono text-[11px] text-surface-txt-hint">
+                <span class="shrink-0 font-mono text-[11px] text-surface-txt-faint">
                   {r.meta}
                 </span>
               </div>
@@ -1139,7 +1139,7 @@ function Dashboard(props: {
           </button>
         </div>
 
-        <p class="mt-3.5 mb-1.5 font-mono text-[11px] tracking-wider text-surface-txt-hint">
+        <p class="mt-3.5 mb-1.5 font-mono text-[11px] tracking-wider text-surface-txt-faint">
           COLOR
         </p>
         <div class="flex gap-2">
@@ -1161,7 +1161,7 @@ function Dashboard(props: {
           </For>
         </div>
 
-        <p class="mt-3.5 mb-1.5 font-mono text-[11px] tracking-wider text-surface-txt-hint">
+        <p class="mt-3.5 mb-1.5 font-mono text-[11px] tracking-wider text-surface-txt-faint">
           ICON
         </p>
         <div class="grid grid-cols-6 gap-1.5">
@@ -1537,12 +1537,13 @@ function App() {
           }
         >
           <div class="flex min-h-screen flex-col bg-surface font-sans text-surface-txt">
-            <header class="sticky top-0 z-40 flex h-13 shrink-0 items-center gap-2 bg-accent px-3.5 text-accent-txt">
+            <header class="sticky top-0 z-40 flex h-13 shrink-0 items-center gap-1 border-b border-surface-alt2 bg-surface-alt1 px-3.5">
               <svg
                 viewBox="0 0 100 100"
-                width="22"
-                height="22"
+                width="20"
+                height="20"
                 aria-hidden="true"
+                class="mr-2.5 shrink-0"
               >
                 <path
                   d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85"
@@ -1560,40 +1561,44 @@ function App() {
                   fill="currentColor"
                 />
               </svg>
-              <For each={NAV_ITEMS}>
-                {(n) => (
-                  <button
-                    type="button"
-                    onClick={() => setNav(n.key)}
-                    class={
-                      "btn btn-sm h-8 gap-1.75 border-none text-accent-txt " +
-                      (nav() === n.key
-                        ? "bg-accent-txt/18 font-bold"
-                        : "bg-transparent font-medium")
-                    }
-                  >
-                    <n.icon size={14} class="opacity-90" />
-                    <span class="whitespace-nowrap">{n.label}</span>
-                  </button>
-                )}
-              </For>
+              <div class="flex h-full items-stretch gap-0.5">
+                <For each={NAV_ITEMS}>
+                  {(n) => (
+                    <button
+                      type="button"
+                      onClick={() => setNav(n.key)}
+                      class={
+                        "-mb-px flex items-center gap-1.75 border-b-2 px-2.5 text-sm " +
+                        (nav() === n.key
+                          ? "border-accent font-semibold text-surface-txt"
+                          : "border-transparent font-medium text-surface-txt-hint hover:text-surface-txt")
+                      }
+                    >
+                      <n.icon size={14} class="opacity-90" />
+                      <span class="whitespace-nowrap">{n.label}</span>
+                    </button>
+                  )}
+                </For>
+              </div>
               <span class="flex-1" />
               <button
                 type="button"
                 onClick={() => setPopupOpen(!popupOpen())}
                 class={
-                  "btn btn-sm h-8 gap-1.75 border-none font-medium text-accent-txt " +
-                  (popupOpen() ? "bg-accent-txt/18" : "bg-accent-txt/8")
+                  "btn btn-sm h-8 gap-1.75 font-medium " +
+                  (popupOpen()
+                    ? "border border-accent bg-accent/10 text-surface-txt"
+                    : "border border-surface-alt3 bg-surface-alt2 text-surface-txt-hint hover:text-surface-txt")
                 }
               >
                 <AppWindow size={14} />
                 <span class="whitespace-nowrap">Current window</span>
-                <span class="rounded bg-accent-txt/20 px-1.25 font-mono text-[11px]">
+                <span class="rounded bg-surface-alt3 px-1.25 font-mono text-[11px] text-surface-txt-faint">
                   {current()?.tabs.length ?? 0}
                 </span>
               </button>
               <details class="dropdown dropdown-end">
-                <summary class="btn btn-sm h-8 list-none gap-1.75 border-none bg-transparent font-normal text-accent-txt/92">
+                <summary class="btn btn-sm h-8 list-none gap-1.75 border-none bg-transparent font-normal text-surface-txt-hint hover:text-surface-txt">
                   <span class="whitespace-nowrap">{session()?.user.email}</span>
                   <Show when={blockedCount() > 0}>
                     <span class="grid h-3.5 min-w-3.5 place-items-center rounded-full bg-warning px-0.5 font-mono text-[9px] text-warning-txt">
@@ -1645,10 +1650,10 @@ function App() {
             </header>
 
             <Show when={blockedCount() > 0 && !bannerDismissed()}>
-              <div class="mx-3.5 mt-3 flex items-start gap-2 rounded border border-warning bg-warning/10 p-3 text-sm">
-                <TriangleAlert size={16} class="mt-0.5 shrink-0 text-warning" />
-                <p class="flex-1">
-                  <span class="font-medium">
+              <div class="mx-3.5 mt-3 flex items-start gap-2.5 rounded border border-surface-alt3 border-l-2 border-l-warning bg-surface-alt1 p-3 text-sm">
+                <TriangleAlert size={14} class="mt-0.5 shrink-0 text-warning" />
+                <p class="flex-1 text-surface-txt-hint">
+                  <span class="font-medium text-surface-txt">
                     {hasExpiredWorkspace()
                       ? "Your plan has expired."
                       : "You've hit your plan's limit."}
