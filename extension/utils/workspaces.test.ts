@@ -60,7 +60,7 @@ it("pullRemoteWorkspaces adds a remote workspace missing from local storage", as
     ],
     error: null,
   });
-  await pullRemoteWorkspaces();
+  expect(await pullRemoteWorkspaces()).toBe(1);
   const workspaces = await getWorkspaces();
   expect(workspaces).toEqual([
     {
@@ -89,7 +89,7 @@ it("pullRemoteWorkspaces never overwrites a workspace that already exists locall
     ],
     error: null,
   });
-  await pullRemoteWorkspaces();
+  expect(await pullRemoteWorkspaces()).toBe(0);
   const workspaces = await getWorkspaces();
   expect(workspaces).toHaveLength(1);
   expect(workspaces[0]?.name).toBe("Local edit");
@@ -97,6 +97,6 @@ it("pullRemoteWorkspaces never overwrites a workspace that already exists locall
 
 it("pullRemoteWorkspaces leaves local storage untouched on a fetch error", async () => {
   select.mockResolvedValue({ data: null, error: { message: "network" } });
-  await pullRemoteWorkspaces();
+  expect(await pullRemoteWorkspaces()).toBe(0);
   expect(await getWorkspaces()).toEqual([]);
 });

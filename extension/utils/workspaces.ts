@@ -116,13 +116,15 @@ export async function reconcileSyncStatus() {
 // of M6's pull (docs/architecture-sync.md → "Pull + conflict resolution",
 // comparing updated_at) isn't built yet, so an existing local edit always
 // wins over its own server row. Call once per sign-in, alongside
-// reconcileSyncStatus (see docs/implementation-plan-sync.md M6).
-export async function pullRemoteWorkspaces() {
-  if (!supabase) return;
+// reconcileSyncStatus (see docs/implementation-plan-sync.md M6). Returns
+// how many workspaces it added, so a manual "Pull now" trigger (App.tsx)
+// can report something more useful than silence.
+export async function pullRemoteWorkspaces(): Promise<number> {
+  if (!supabase) return 0;
   const { data, error } = await supabase
     .from("workspaces")
     .select("id, name, tabs, created_at, updated_at");
-  if (error || !data) return;
+  if (error || !data) return 0;
 
   const local = await getWorkspaces();
   const localIds = new Set(local.map((w) => w.id));
@@ -138,6 +140,7 @@ export async function pullRemoteWorkspaces() {
     }));
 
   if (missing.length > 0) await setWorkspaces([...local, ...missing]);
+  return missing.length;
 }
 
 export async function updateWorkspace(

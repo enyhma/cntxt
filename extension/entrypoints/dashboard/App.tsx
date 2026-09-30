@@ -1207,6 +1207,8 @@ function SettingsPanel(props: {
   onStartupBehaviorChange: (v: StartupBehavior) => void;
   theme: Accessor<Theme>;
   onThemeChange: (v: Theme) => void;
+  manualPullEnabled: Accessor<boolean>;
+  onManualPullEnabledChange: (v: boolean) => void;
 }) {
   return (
     <div class="flex-1 overflow-y-auto p-6">
@@ -1241,6 +1243,24 @@ function SettingsPanel(props: {
             <option value="brass">Brass on Obsidian</option>
           </select>
         </label>
+        <label class="flex items-start gap-2.5 text-sm">
+          <input
+            type="checkbox"
+            class="checkbox checkbox-sm mt-0.5"
+            checked={props.manualPullEnabled()}
+            onChange={(e) =>
+              props.onManualPullEnabledChange(e.currentTarget.checked)
+            }
+          />
+          <span class="flex flex-col gap-0.5">
+            <span>Manual sync pull (experimental)</span>
+            <span class="text-xs text-surface-txt-hint">
+              Adds a "Pull workspaces now" option to the account menu, to fetch
+              from your account on demand instead of waiting for sign-in or a
+              token refresh.
+            </span>
+          </span>
+        </label>
       </div>
     </div>
   );
@@ -1253,6 +1273,9 @@ function App() {
   const [startupBehavior, setStartupBehavior] =
     createSignal<StartupBehavior>("none");
   const [theme, setTheme] = createSignal<Theme>("baseline");
+  const [manualPullEnabled, setManualPullEnabled] = createSignal(false);
+  const [pulling, setPulling] = createSignal(false);
+  const [pullMessage, setPullMessage] = createSignal("");
   const [nav, setNav] = createSignal<"workspaces" | "settings">("workspaces");
   const [popupOpen, setPopupOpen] = createSignal(false);
   const [state, send] = useMachine(restoreMachine);
@@ -1337,6 +1360,7 @@ function App() {
     const settings: Settings = await getSettings();
     setStartupBehavior(settings.startupBehavior);
     setTheme(settings.theme);
+    setManualPullEnabled(settings.manualPullEnabled);
 
     const handleStorageChange = () => refresh();
     browser.storage.onChanged.addListener(handleStorageChange);
@@ -1428,6 +1452,30 @@ function App() {
   async function handleThemeChange(value: Theme) {
     setTheme(value);
     await updateSettings({ theme: value });
+  }
+
+  async function handleManualPullEnabledChange(value: boolean) {
+    setManualPullEnabled(value);
+    await updateSettings({ manualPullEnabled: value });
+  }
+
+  // Forces the same pull + reconcile this app already runs on sign-in/token
+  // refresh (see onMount above), on demand — the escape hatch the "Manual
+  // sync pull" setting exists for. Reports a count rather than nothing, so
+  // clicking it is itself an answer to "is this workspace actually synced":
+  // if it were, pulling again would add zero.
+  async function handlePullNow() {
+    setPulling(true);
+    setPullMessage("");
+    const added = await pullRemoteWorkspaces();
+    await reconcileSyncStatus();
+    await refresh();
+    setPulling(false);
+    setPullMessage(
+      added > 0
+        ? `Pulled ${added} workspace${added === 1 ? "" : "s"}`
+        : "Already up to date",
+    );
   }
 
   // tokens.css keys every non-baseline theme off data-theme on the root
@@ -1625,6 +1673,26 @@ function App() {
                       </span>
                     </li>
                   </Show>
+                  <Show when={manualPullEnabled()}>
+                    <li>
+                      <button
+                        type="button"
+                        disabled={pulling()}
+                        onClick={handlePullNow}
+                      >
+                        <RefreshCw
+                          size={12}
+                          class={pulling() ? "animate-spin" : undefined}
+                        />
+                        Pull workspaces now
+                      </button>
+                    </li>
+                    <Show when={pullMessage()}>
+                      <li class="px-2 py-0.5 text-xs text-surface-txt-hint">
+                        {pullMessage()}
+                      </li>
+                    </Show>
+                  </Show>
                   <li>
                     <a
                       href={creemMonthlyCheckoutUrl(session()!.user.id)}
@@ -1685,6 +1753,8 @@ function App() {
                     onStartupBehaviorChange={handleStartupBehaviorChange}
                     theme={theme}
                     onThemeChange={handleThemeChange}
+                    manualPullEnabled={manualPullEnabled}
+                    onManualPullEnabledChange={handleManualPullEnabledChange}
                   />
                 </div>
               }
