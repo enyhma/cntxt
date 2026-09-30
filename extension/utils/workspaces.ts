@@ -108,6 +108,38 @@ export async function reconcileSyncStatus() {
   }
 }
 
+// Fetches this account's workspaces from Supabase and adds any that aren't
+// already in storage.local — covers a fresh/empty local profile (reinstall,
+// new device, or storage cleared) where the account already has workspaces
+// synced from another session. Additive only: never overwrites or removes a
+// local workspace, even if the server's copy has since changed — that half
+// of M6's pull (docs/architecture-sync.md → "Pull + conflict resolution",
+// comparing updated_at) isn't built yet, so an existing local edit always
+// wins over its own server row. Call once per sign-in, alongside
+// reconcileSyncStatus (see docs/implementation-plan-sync.md M6).
+export async function pullRemoteWorkspaces() {
+  if (!supabase) return;
+  const { data, error } = await supabase
+    .from("workspaces")
+    .select("id, name, tabs, created_at, updated_at");
+  if (error || !data) return;
+
+  const local = await getWorkspaces();
+  const localIds = new Set(local.map((w) => w.id));
+  const missing: Workspace[] = data
+    .filter((row) => !localIds.has(row.id))
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      tabs: (row.tabs as WorkspaceTab[] | null) ?? [],
+      createdAt: Date.parse(row.created_at),
+      updatedAt: Date.parse(row.updated_at),
+      syncStatus: "synced",
+    }));
+
+  if (missing.length > 0) await setWorkspaces([...local, ...missing]);
+}
+
 export async function updateWorkspace(
   id: string,
   patch: Partial<Pick<Workspace, "name" | "tabs" | "color" | "icon">>,

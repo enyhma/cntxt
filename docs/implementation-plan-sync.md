@@ -218,15 +218,31 @@ window-opening itself while offline or at-limit. Built instead:
 
 ## M6 — Sync engine: push and pull
 
+- [x] **Pull half only, additive merge** — `pullRemoteWorkspaces`
+      (`utils/workspaces.ts`): a plain `select` of the caller's own
+      `workspaces` rows (RLS-scoped, no RPC), adding any row whose id isn't
+      already in `storage.local`. Called on sign-in and on every
+      `TOKEN_REFRESHED`, alongside `reconcileSyncStatus` — piggybacking on
+      the same timer as M4's entitlements refresh, so this doubles as the
+      periodic pull tick below until a real one exists. Fixes the concrete
+      symptom (a fresh/empty local profile can't see workspaces the account
+      already has server-side, with no error surfaced) without the rest of
+      M6's risk surface.
 - [ ] `utils/sync.ts`, listening to `storage.onChanged`: debounce, then
       `upsert` to the `workspaces` table via a plain `supabase-js` call.
       Not an RPC — updates to an existing, already-owned workspace aren't
-      entitlement-gated.
-- [ ] Pull tick on dashboard mount and on a periodic interval (no realtime
-      — that's Phase 3 per `ROADMAP.md`).
+      entitlement-gated. **Still not built** — today, only workspace
+      _creation_ ever reaches Supabase; renames and tab-sync edits don't
+      sync at all yet.
+- [ ] A true periodic pull tick independent of token refresh, and pull on
+      dashboard mount specifically (today it only runs on sign-in/refresh
+      events, not every mount of an already-signed-in session).
 - [ ] Conflict resolution exactly as diagrammed in
       `architecture-sync.md` → "Pull + conflict resolution": compare the
-      server's `updated_at`, server wins ties.
+      server's `updated_at`, server wins ties. **Not built** — the current
+      pull is deliberately additive-only (never overwrites an id that
+      already exists locally), so it can't yet reconcile a workspace that
+      changed on both a local device and the server.
 
 ## M7 — Delete propagation
 

@@ -53,6 +53,7 @@ import {
   createWorkspace,
   deleteWorkspace,
   getWorkspaces,
+  pullRemoteWorkspaces,
   reconcileSyncStatus,
   updateWorkspace,
 } from "@/utils/workspaces";
@@ -1306,17 +1307,19 @@ function App() {
       setSession(data.session);
       if (data.session) {
         refreshEntitlements().then(setEntitlements);
-        reconcileSyncStatus().then(refresh);
+        pullRemoteWorkspaces().then(reconcileSyncStatus).then(refresh);
       }
 
       // Piggyback on the token refresh supabase-js already does on a timer
-      // — no separate polling loop, per docs/architecture-sync.md.
+      // — no separate polling loop, per docs/architecture-sync.md. Also
+      // doubles as the closest thing to M6's "periodic pull tick" until a
+      // real one exists, since this fires every few hours on its own.
       const { data: authListener } = supabase!.auth.onAuthStateChange(
         (event, newSession) => {
           setSession(newSession);
           if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
             refreshEntitlements().then(setEntitlements);
-            reconcileSyncStatus().then(refresh);
+            pullRemoteWorkspaces().then(reconcileSyncStatus).then(refresh);
           }
         },
       );
