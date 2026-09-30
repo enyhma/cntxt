@@ -148,13 +148,15 @@
   /* Graphite Indigo: near-black ground with a cool-violet undertone
      matched to its own accent, not a neutral gray borrowed from
      baseline — one desaturated indigo accent leads, same logic as
-     baseline's blue. */
+     baseline's blue. Lightened the same way baseline's accent was
+     (color-mix toward white) now that neither has to survive being a
+     full-bleed chrome fill — see baseline's --color-accent comment. */
   --color-surface: #100e18;
   --color-info: #57699b;
   --color-success: #3c7862;
   --color-warning: #a97b46;
   --color-danger: #a14a5f;
-  --color-accent: #5b56e0;
+  --color-accent: color-mix(in srgb, #5b56e0, white 8%);
 }
 
 :root[data-theme="brass"] {
