@@ -24,17 +24,21 @@ import {
 } from "@/utils/settings";
 import { parseTokensFromRedirectUrl } from "@/utils/oauthRedirect";
 import { supabase, supabaseConfigured } from "@/utils/supabase";
+import { creemMonthlyCheckoutUrl, creemYearlyCheckoutUrl } from "@/utils/creem";
+import { type Entitlements, refreshEntitlements } from "@/utils/entitlements";
 import {
   AppWindow,
   ArrowRight,
   ArrowRightLeft,
   ChevronDown,
+  CloudOff,
   type LucideProps,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
   Plus,
+  RefreshCw,
   Search,
   LayoutGrid as SectionsIcon,
   Settings as SettingsIcon,
@@ -43,11 +47,13 @@ import {
   X,
 } from "lucide-solid";
 import {
+  type SyncStatus,
   type Workspace,
   type WorkspaceTab,
   createWorkspace,
   deleteWorkspace,
   getWorkspaces,
+  reconcileSyncStatus,
   updateWorkspace,
 } from "@/utils/workspaces";
 
@@ -313,6 +319,40 @@ const NAV_ITEMS: Array<{
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
+// See docs/workspace-sync-semantics.md — the fixed vocabulary this draws
+// from. "synced" and legacy-undefined both render nothing, matching the
+// activation table's "Dormant" baseline: only the exceptional cases draw
+// the eye.
+const SYNC_COPY: Partial<Record<SyncStatus, string>> = {
+  syncing: "Syncing…",
+  offline: "Not synced — offline",
+  "signed-out": "Not synced — sign in to sync",
+  "limit-reached": "Not synced — plan limit reached",
+  expired: "Not synced — plan expired",
+};
+
+function SyncBadge(props: { status: SyncStatus | undefined }) {
+  const warn = () =>
+    props.status === "limit-reached" || props.status === "expired";
+  return (
+    <Show when={props.status && props.status !== "synced"}>
+      <span
+        title={SYNC_COPY[props.status!]}
+        class={
+          "shrink-0 " + (warn() ? "text-warning" : "text-surface-txt-hint")
+        }
+      >
+        <Show
+          when={props.status === "syncing"}
+          fallback={<CloudOff size={10} />}
+        >
+          <RefreshCw size={10} class="animate-spin" />
+        </Show>
+      </span>
+    </Show>
+  );
+}
+
 function WorkspaceRow(props: {
   workspace: Workspace;
   count: number;
@@ -346,6 +386,7 @@ function WorkspaceRow(props: {
       <span class="font-mono text-[11px] text-surface-txt-hint">
         {props.count}
       </span>
+      <SyncBadge status={props.workspace.syncStatus} />
       <Show when={props.isCurrent}>
         <button
           type="button"
@@ -441,6 +482,7 @@ function Dashboard(props: {
   current: Accessor<Workspace | undefined>;
   openIds: Accessor<Set<string>>;
   myWindowId: Accessor<number | undefined>;
+  entitlements: Accessor<Entitlements | undefined>;
   refresh: () => Promise<void>;
   restoreState: ReturnType<typeof useMachine<typeof restoreMachine>>[0];
   restoreSend: ReturnType<typeof useMachine<typeof restoreMachine>>[1];
@@ -453,10 +495,19 @@ function Dashboard(props: {
     current,
     openIds,
     myWindowId,
+    entitlements,
     refresh,
     restoreState,
     restoreSend,
   } = props;
+
+  // Advisory only — a stale or missing cache never blocks anything by
+  // itself, it just gates whether this button offers to try. See
+  // docs/architecture-sync.md → "Entitlements".
+  const atWorkspaceLimit = () => {
+    const max = entitlements()?.maxWorkspaces;
+    return max !== undefined && workspaces().length >= max;
+  };
 
   const [railOpen, setRailOpen] = createSignal(true);
   const [viewedId, setViewedId] = createSignal<string>();
@@ -713,8 +764,16 @@ function Dashboard(props: {
               </span>
               <button
                 type="button"
+                title={
+                  atWorkspaceLimit()
+                    ? "You've hit your plan's limit — this workspace won't sync until you upgrade"
+                    : undefined
+                }
                 onClick={handleAddWorkspace}
-                class="btn btn-square btn-ghost btn-xs"
+                class={
+                  "btn btn-square btn-ghost btn-xs" +
+                  (atWorkspaceLimit() ? " text-warning" : "")
+                }
               >
                 <Plus size={14} />
               </button>
@@ -1199,6 +1258,7 @@ function App() {
 
   const [session, setSession] = createSignal<Session | null>(null);
   const [authLoading, setAuthLoading] = createSignal(true);
+  const [entitlements, setEntitlements] = createSignal<Entitlements>();
   const [email, setEmail] = createSignal("");
   const [otpSent, setOtpSent] = createSignal(false);
   const [otpCode, setOtpCode] = createSignal("");
@@ -1211,6 +1271,30 @@ function App() {
   };
   const current = () => workspaces().find((w) => w.id === currentId());
 
+  // Account-level usage, driven by actual per-workspace sync status (see
+  // docs/workspace-sync-semantics.md) rather than re-deriving "at limit"
+  // from entitlements — a workspace only counts here once it's actually
+  // failed to sync for a plan reason, not just because a count crossed a
+  // threshold with nothing having been rejected yet.
+  const syncedCount = () =>
+    workspaces().filter((w) => w.syncStatus === "synced").length;
+  const blockedCount = () =>
+    workspaces().filter(
+      (w) => w.syncStatus === "limit-reached" || w.syncStatus === "expired",
+    ).length;
+  const hasExpiredWorkspace = () =>
+    workspaces().some((w) => w.syncStatus === "expired");
+
+  // The dismissible usage banner reappears whenever blockedCount changes —
+  // e.g. dismissing it while at the limit, then hitting a *new* rejection
+  // later, or upgrading and having it resolve, shouldn't stay stuck on
+  // whatever was true the moment it was dismissed.
+  const [bannerDismissed, setBannerDismissed] = createSignal(false);
+  createEffect(() => {
+    blockedCount();
+    setBannerDismissed(false);
+  });
+
   async function refresh() {
     setWorkspaces(await getWorkspaces());
     setWindowMap(await getWindowWorkspaceMap());
@@ -1220,9 +1304,21 @@ function App() {
     if (supabaseConfigured) {
       const { data } = await supabase!.auth.getSession();
       setSession(data.session);
+      if (data.session) {
+        refreshEntitlements().then(setEntitlements);
+        reconcileSyncStatus().then(refresh);
+      }
 
+      // Piggyback on the token refresh supabase-js already does on a timer
+      // — no separate polling loop, per docs/architecture-sync.md.
       const { data: authListener } = supabase!.auth.onAuthStateChange(
-        (_event, newSession) => setSession(newSession),
+        (event, newSession) => {
+          setSession(newSession);
+          if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+            refreshEntitlements().then(setEntitlements);
+            reconcileSyncStatus().then(refresh);
+          }
+        },
       );
       onCleanup(() => authListener.subscription.unsubscribe());
     }
@@ -1499,9 +1595,46 @@ function App() {
               <details class="dropdown dropdown-end">
                 <summary class="btn btn-sm h-8 list-none gap-1.75 border-none bg-transparent font-normal text-accent-txt/92">
                   <span class="whitespace-nowrap">{session()?.user.email}</span>
+                  <Show when={blockedCount() > 0}>
+                    <span class="grid h-3.5 min-w-3.5 place-items-center rounded-full bg-warning px-0.5 font-mono text-[9px] text-warning-txt">
+                      {blockedCount()}
+                    </span>
+                  </Show>
                   <ChevronDown size={12} class="opacity-70" />
                 </summary>
-                <ul class="dropdown-content menu z-50 mt-1 w-40 gap-0.5 rounded bg-surface-alt2 p-1.5 text-surface-txt shadow-[var(--shadow-dropdown)]">
+                <ul class="dropdown-content menu z-50 mt-1 w-52 gap-0.5 rounded bg-surface-alt2 p-1.5 text-surface-txt shadow-[var(--shadow-dropdown)]">
+                  <Show when={entitlements()}>
+                    <li class="px-2 py-1 text-xs">
+                      <span
+                        class={
+                          blockedCount() > 0
+                            ? "text-warning"
+                            : "text-surface-txt-hint"
+                        }
+                      >
+                        {syncedCount()} of {entitlements()!.maxWorkspaces}{" "}
+                        workspaces synced
+                      </span>
+                    </li>
+                  </Show>
+                  <li>
+                    <a
+                      href={creemMonthlyCheckoutUrl(session()!.user.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Upgrade — Monthly
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href={creemYearlyCheckoutUrl(session()!.user.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Upgrade — Yearly
+                    </a>
+                  </li>
                   <li>
                     <button type="button" onClick={handleSignOut}>
                       Sign out
@@ -1510,6 +1643,30 @@ function App() {
                 </ul>
               </details>
             </header>
+
+            <Show when={blockedCount() > 0 && !bannerDismissed()}>
+              <div class="mx-3.5 mt-3 flex items-start gap-2 rounded border border-warning bg-warning/10 p-3 text-sm">
+                <TriangleAlert size={16} class="mt-0.5 shrink-0 text-warning" />
+                <p class="flex-1">
+                  <span class="font-medium">
+                    {hasExpiredWorkspace()
+                      ? "Your plan has expired."
+                      : "You've hit your plan's limit."}
+                  </span>{" "}
+                  {blockedCount()} workspace{blockedCount() === 1 ? "" : "s"}{" "}
+                  {blockedCount() === 1 ? "isn't" : "aren't"} syncing.{" "}
+                  {hasExpiredWorkspace() ? "Renew" : "Upgrade"} to keep
+                  everything backed up.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setBannerDismissed(true)}
+                  class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </Show>
 
             <Show
               when={nav() === "workspaces"}
@@ -1530,6 +1687,7 @@ function App() {
                 current={current}
                 openIds={openIds}
                 myWindowId={myWindowId}
+                entitlements={entitlements}
                 refresh={refresh}
                 restoreState={state}
                 restoreSend={send}

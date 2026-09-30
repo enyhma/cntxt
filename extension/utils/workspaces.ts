@@ -1,4 +1,12 @@
+import { supabase } from "./supabase";
+
 export type WorkspaceTab = { url: string; title: string };
+
+// See docs/workspace-sync-semantics.md for what each state means and how
+// the dashboard should render it. Undefined (legacy workspaces predating
+// this field) is treated the same as "syncing" — unknown, pending a check.
+export type SyncStatus =
+  "synced" | "syncing" | "offline" | "signed-out" | "limit-reached" | "expired";
 
 export type Workspace = {
   id: string;
@@ -11,6 +19,7 @@ export type Workspace = {
   // cntxt mark (see App.tsx's colorFor/faviconHrefFor).
   color?: string;
   icon?: string;
+  syncStatus?: SyncStatus;
 };
 
 const STORAGE_KEY = "workspaces";
@@ -37,7 +46,66 @@ export async function createWorkspace(
   };
   const workspaces = await getWorkspaces();
   await setWorkspaces([...workspaces, workspace]);
+  registerWorkspace(workspace);
   return workspace;
+}
+
+async function setSyncStatus(id: string, syncStatus: SyncStatus) {
+  const workspaces = await getWorkspaces();
+  await setWorkspaces(
+    workspaces.map((w) => (w.id === id ? { ...w, syncStatus } : w)),
+  );
+}
+
+// Best-effort: registers the workspace under the account's entitlement
+// limit so it counts as synced. Never awaited by callers and never blocks
+// or fails loudly — offline, signed out, or already at the plan's limit
+// all just mean this workspace stays local-only, exactly as it does today,
+// so opening a browser window (ensureWorkspaceForWindow calls this too)
+// can never break because of an entitlement or network check. See
+// docs/architecture-sync.md's "open question" about entitlement checks
+// with no click to intercept. The result is recorded as `syncStatus` (see
+// docs/workspace-sync-semantics.md) purely so the dashboard can show it —
+// it's still never awaited or surfaced as an error by callers.
+async function registerWorkspace(workspace: Workspace) {
+  if (!supabase) return;
+  await setSyncStatus(workspace.id, "syncing");
+  const { error } = await supabase.rpc("create_workspace", {
+    p_name: workspace.name,
+    p_tabs: workspace.tabs,
+    p_id: workspace.id,
+  });
+  if (!error) {
+    await setSyncStatus(workspace.id, "synced");
+    return;
+  }
+  console.debug("workspace not synced:", error.message);
+  // 23505 = unique_violation: this id already made it to the server from an
+  // earlier call whose response was never seen (e.g. the extension closed
+  // mid-request) — that's a success, not a failure.
+  if (error.code === "23505") {
+    await setSyncStatus(workspace.id, "synced");
+  } else if (error.message === "not authenticated") {
+    await setSyncStatus(workspace.id, "signed-out");
+  } else if (error.message === "access expired") {
+    await setSyncStatus(workspace.id, "expired");
+  } else if (error.message === "workspace limit reached") {
+    await setSyncStatus(workspace.id, "limit-reached");
+  } else {
+    await setSyncStatus(workspace.id, "offline");
+  }
+}
+
+// Re-checks every workspace that isn't confirmed `synced` — turns a
+// stuck "syncing" (extension closed mid-request) or a stale "limit-reached"
+// (user just upgraded) into an accurate status, and backfills a real status
+// onto workspaces created before this field existed. Call on dashboard
+// mount and whenever the session refreshes, alongside refreshEntitlements.
+export async function reconcileSyncStatus() {
+  const workspaces = await getWorkspaces();
+  for (const w of workspaces) {
+    if (w.syncStatus !== "synced") await registerWorkspace(w);
+  }
 }
 
 export async function updateWorkspace(
