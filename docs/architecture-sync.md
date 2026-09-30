@@ -258,43 +258,52 @@ sequenceDiagram
 > round-trip just to render that state. A stale or tampered local cache must
 > never be what actually allows or blocks a write.
 
-### The write-time check — the general pattern
+### The write-time check — resolved for workspace creation: local-first wins, sync is what's gated
+
+An earlier draft of this doc had the entitlement check block workspace
+creation itself — reject the write, and the workspace simply doesn't exist
+yet. That's wrong for this product specifically:
+`ensureWorkspaceForWindow` creates a workspace automatically every time a
+browser window opens (see `CLAUDE.md`), with no click to intercept and no
+UI in `background.ts` to show a rejection. Blocking that on a server
+round-trip means opening a window while offline, or while already at your
+plan's limit, would silently fail to create that window's workspace —
+breaking the "every window is a workspace" guarantee the whole product is
+built on. Resolved: creation is **local-first, unconditionally** — it never
+fails, online or off, at-limit or not. What the entitlement actually gates
+is whether that workspace gets a server-side counterpart at all.
 
 ```mermaid
 sequenceDiagram
     actor User
     participant Dashboard
-    participant PG as Supabase
     participant Local as storage.local
+    participant PG as Supabase
 
-    User->>Dashboard: an entitlement-gated action (e.g. "New workspace")
-    Dashboard->>Dashboard: check cached entitlements — fast, optimistic
-    alt cache says already at the limit
-        Dashboard-->>User: block immediately, no round-trip
-    else cache says room available (or the cache is stale/missing)
-        Dashboard->>PG: server-side function — count + limit check + write, one transaction
-        alt still under the limit (the server's count, not the client's)
-            PG-->>Dashboard: success
-            Dashboard->>Local: commit locally — local-first from here on
-        else actually at the limit
-            PG-->>Dashboard: rejected
-            Dashboard-->>User: "You've hit your plan's limit"<br/>(and refresh the entitlements cache — it was stale)
-        end
+    User->>Dashboard: a new workspace (explicit click, or a window just opened)
+    Dashboard->>Local: create it — always succeeds, no check first
+    Note over Dashboard,Local: same commit as every other local-first write;<br/>the UI never waits on this
+    Dashboard-->>PG: create_workspace RPC, fire-and-forget (same local id, so no remapping)
+    alt under the limit and access not expired
+        PG-->>Dashboard: row created — this workspace now has a synced counterpart
+    else at the limit, expired, or offline
+        PG-->>Dashboard: rejected or unreachable — silently ignored
+        Note over Dashboard: the workspace stays exactly as usable, just unsynced —<br/>no error surfaced, no retry
     end
 ```
 
-`create_workspace(...)` against `maxWorkspaces` is one instance of this
-shape; a future tab-count or size check would follow the same one, not a
-bespoke mechanism each time. Two rules don't change per-entitlement:
+`extension/utils/workspaces.ts`'s `registerWorkspace` is this — a
+non-blocking `.rpc('create_workspace', ...)` call whose result nobody
+awaits or reports. The dashboard's cached entitlements (`utils/entitlements.ts`)
+still gray out the "New workspace" button's tooltip as an early warning
+("this won't sync"), but that's advisory framing only — clicking through
+anyway still works, it just stays local-only, which is the whole point of
+this design.
 
-- **The cache check is a fast path only.** It can be stale — another device
-  changed usage, or the plan changed — and that's fine, because it only
-  ever short-circuits a request early. It never authorizes one the server
-  would reject.
-- **The server-side check-and-write is one atomic transaction.** A plain
-  client-side "read the count, then insert if under" reopens the exact race
-  (two devices both see room at once, both write) that the RPC exists to
-  close.
+This resolves the offline question below for workspace creation
+specifically; the equivalent question for a tab-count entitlement (no
+click to intercept at all, not even an implicit one) is still open — see
+below.
 
 ### Open problem: an entitlement with no click to intercept
 
@@ -312,51 +321,59 @@ call rather than an architectural default:
   in agreement, but means cntxt visibly stops tracking tabs the user is
   still actively using.
 
-## Payments (Polar.sh)
+## Payments (Creem)
 
-Polar is the source of truth that _writes_ entitlements, not a separate
+Creem is the source of truth that _writes_ entitlements, not a separate
 system alongside them: a purchase's only architectural job is to set
-`entitlements.access_expires_at` for a user. Everything else in this
-document — the cache, the write-time check, RLS — is unaware Polar exists;
-it only ever reads that one column.
+`entitlements.access_expires_at` (and, on this single-tier plan,
+`max_workspaces`) for a user. Everything else in this document — the cache,
+the write-time check, RLS — is unaware Creem exists; it only ever reads
+those columns.
 
-Two Polar event shapes feed the same field, from different products:
+There's only one product shape, unlike the one-time-pass-plus-subscription
+split an earlier draft of this doc assumed for Polar: Monthly and Yearly are
+both plain recurring subscriptions. `subscription.paid` (not
+`subscription.active`, which Creem's docs describe as "only for
+synchronization") is the one event that grants access — extend
+`access_expires_at` to the subscription's `current_period_end_date` on every
+payment, and _don't_ retract it early on `subscription.canceled` (cancelling
+stops future renewals, it doesn't claw back time already paid for).
 
-- **One-time passes** (3-year "Supporter," 5-year "Believer"): a single
-  `order` event, `access_expires_at = purchased_at + duration`.
-- **Recurring plans** (monthly, annual): `subscription` lifecycle events —
-  extend `access_expires_at` to the next renewal on payment, and _don't_
-  retract it early on cancellation (per Polar's own model, cancellation
-  stops future renewals, it doesn't claw back time already paid for).
+Attaching our internal `user_id` to a purchase doesn't need a server-side
+"create checkout session" API call at all: Creem's hosted checkout links
+accept `metadata[key]=value` as a plain query parameter, and that metadata
+round-trips onto the webhook payload untouched
+(`extension/utils/creem.ts` builds this URL; see
+`marketing/src/pages/index.astro` for the same product links used
+unauthenticated on the marketing site).
 
 ```mermaid
 sequenceDiagram
     actor User
     participant Dashboard
-    participant Polar
+    participant Creem
     participant Hook as Edge Function<br/>(webhook receiver)
     participant PG as Supabase (entitlements)
 
-    User->>Dashboard: "Get a Believer Pass"
-    Dashboard->>Polar: redirect to checkout, metadata: { user_id }
-    User->>Polar: completes payment
-    Polar-->>Hook: webhook (order.created / subscription.*), signed
-    Hook->>Hook: verify Polar signature
-    Hook->>Hook: map product id -> duration (small hardcoded table)
-    Hook->>PG: update entitlements set access_expires_at = ... where user_id = metadata.user_id
+    User->>Dashboard: "Upgrade to Pro"
+    Dashboard->>Creem: open hosted checkout link, ?metadata[userId]=...
+    User->>Creem: completes payment
+    Creem-->>Hook: webhook (subscription.paid), signed
+    Hook->>Hook: verify creem-signature header (HMAC-SHA256)
+    Hook->>PG: update entitlements set access_expires_at = object.current_period_end_date, max_workspaces = ... where user_id = object.metadata.userId
     Note over Dashboard,PG: user sees the new expiry next time<br/>the entitlements cache refreshes (session refresh, or a manual "refresh" after checkout)
 ```
 
-**Why the webhook needs an Edge Function, not just a table write.** Polar
+**Why the webhook needs an Edge Function, not just a table write.** Creem
 calls _our_ server — there's no user session attached to that request, so
 it can't go through `supabase-js`/RLS as a normal authenticated write the
 way every other table access in this document does. Something has to sit at
-a public HTTPS endpoint, verify the payload actually came from Polar
+a public HTTPS endpoint, verify the payload actually came from Creem
 (signature check), and only then write. Postgres has no notion of an
 inbound HTTP endpoint, so this is unavoidably a second exception to "the
 server is just tables and RLS" — alongside `create_workspace`, and for the
 same underlying reason: an operation exists that a bare client-side insert
-cannot safely perform.
+cannot safely perform. Implemented: `supabase/functions/creem-webhook/`.
 
 **Enforcement has to live in RLS, not the entitlements cache.** Everywhere
 else in this document, the client-side entitlements cache is explicitly
@@ -394,13 +411,13 @@ math assumes an answer to but doesn't supply one.
 - **Resources sync is blocked**, not just unbuilt: the local `Workspace`
   type has nowhere to put a resource yet, so this is a schema dependency,
   not a sync-layer task.
-- **What happens offline at the point of an entitlement-gated write?** The
-  write-time check in "Entitlements" needs the server, so no connectivity
-  means no new workspace (or whatever else ends up gated), full stop.
-  Queuing the request instead would reopen the over-limit race the design
-  exists to avoid, so failing loudly is the likely answer — but it's a real
-  UX regression from Phase 1's fully-offline "just open a window," and
-  should be a deliberate product choice, not a side effect of this design.
+- **What happens offline at the point of an entitlement-gated write?**
+  Resolved for workspace creation — see "The write-time check" above:
+  creation always succeeds locally, offline or not; the entitlement check
+  only gates whether it gets a synced server-side counterpart. Still open
+  for any future entitlement that isn't tied to a creation event at all
+  (e.g. a tabs-per-workspace or size cap) — see the tab-count problem
+  below.
 - **The tab-count entitlement problem has no chosen answer** — see
   "Entitlements → Open problem" above.
 

@@ -22,7 +22,7 @@ Concretely, this plan never adds:
 
 - A standalone API server (Node, or anything else) sitting in front of
   Supabase.
-- Supabase Edge Functions, beyond the one M9 needs to receive Polar
+- Supabase Edge Functions, beyond the one M9 needs to receive Creem
   webhooks (Postgres has no notion of an inbound HTTP endpoint — this one
   isn't optional, unlike a "just in case" Edge Function would be).
 - A "rules engine" or generalized entitlement-evaluation service — each
@@ -162,26 +162,59 @@ FOR UPDATE` checks the UPDATE policy's `USING` clause, not just
 
 ## M4 — Extension: entitlements cache
 
-- [ ] `utils/entitlements.ts`: a plain `select` of the caller's own
+**Status: done.** `utils/entitlements.ts`.
+
+- [x] `utils/entitlements.ts`: a plain `select` of the caller's own
       `entitlements` row (a normal RLS-protected read, not an RPC — reading
       isn't the operation that needs atomicity), cached into
       `storage.local`.
-- [ ] Trigger the fetch from `supabase.auth.onAuthStateChange` on
-      `SIGNED_IN` and `TOKEN_REFRESHED` — no separate polling timer, per
-      architecture-sync.md.
-- [ ] Dashboard reads the cache to gray out "New workspace" when at the
-      limit. Advisory only — M5 still goes through the real check.
+- [x] Triggered from `supabase.auth.onAuthStateChange` on `SIGNED_IN` and
+      `TOKEN_REFRESHED` (plus once eagerly if a session already exists on
+      mount) — no separate polling timer, per architecture-sync.md.
+- [x] Dashboard reads the cache to warn on "New workspace" when at the
+      limit — a tooltip, not a disabled button (see M5: creation itself is
+      never blocked).
 
-## M5 — Workspace creation goes through the RPC
+## M5 — Workspace creation: local-first always, sync is what's gated
 
-- [ ] `createWorkspace` (`utils/workspaces.ts`) and
-      `ensureWorkspaceForWindow` (`utils/attach.ts`) call
-      `supabase.rpc('create_workspace', ...)` first; write to
-      `storage.local` only on success.
-- [ ] On rejection (at the limit) or a network error (offline), fail
-      loudly — no local-only fallback creation. Matches the decision
-      flagged as needed in `architecture-sync.md`'s open questions; revisit
-      here if that decision changes.
+**Status: done, resolved differently than originally planned** — see
+`architecture-sync.md` → "The write-time check — resolved for workspace
+creation". The original plan below (RPC-gates-creation, fail loudly
+offline) was never implemented: `ensureWorkspaceForWindow` creates a
+workspace on every window open with no click to intercept and no UI in
+`background.ts` to show a rejection, so gating it on the server would break
+window-opening itself while offline or at-limit. Built instead:
+
+- [x] `createWorkspace` (`utils/workspaces.ts`) writes to `storage.local`
+      first and unconditionally, exactly as before this milestone, then
+      fires `registerWorkspace` — a non-blocking `create_workspace` RPC call
+      (passing the local `p_id`) whose result nobody awaits or surfaces.
+      `ensureWorkspaceForWindow` (`utils/attach.ts`) gets this for free,
+      since it calls the same `createWorkspace`.
+- [x] `create_workspace`'s SQL signature grew an optional `p_id uuid`
+      (migration `20260928163000_create_workspace_client_id_and_expiry.sql`)
+      so the server row lands under the same id the extension already
+      generated — no id remapping needed once M6 exists to read it back.
+      Backward compatible: existing 2-arg calls still work.
+- [x] Same migration adds the `access_expires_at` check flagged as missing
+      in M9 below: `create_workspace` now rejects once a caller's access has
+      lapsed, _even though_ `max_workspaces` was left inflated (the Creem
+      webhook only ever touches `access_expires_at` on expiry, never claws
+      back `max_workspaces`). Free-tier accounts have a permanently-null
+      `access_expires_at` and are unaffected — this deliberately corrects
+      the original M9 text, which would have blocked free-tier accounts
+      outright by requiring `access_expires_at > now()` unconditionally.
+- [x] pgTAP coverage added to `create_workspace_test.sql`: caller-supplied
+      id round-trips; a lapsed `access_expires_at` throws `'access expired'`
+      regardless of `max_workspaces`. **Not yet run** — this sandbox has no
+      Docker/Podman, so `supabase test db --local` couldn't actually be
+      executed; treat these as reviewed-by-hand, not verified, until that
+      run happens.
+- [ ] This only updates the `create_workspace` RPC's own check — the
+      broader "should `workspaces` RLS itself freeze reads/writes past
+      expiry" question from `architecture-sync.md` → "Payments" is
+      untouched and still open (creation is gated; nothing about existing
+      synced rows is).
 
 ## M6 — Sync engine: push and pull
 
@@ -204,46 +237,66 @@ FOR UPDATE` checks the UPDATE policy's `USING` clause, not just
 - [ ] Every existing read of the `workspaces` table adds
       `.is("deleted_at", null)` — a query filter, not new server logic.
 
-## M8 — Polar product setup
+## M8 — Creem product setup
 
-Infra only, no product code.
+Infra only, no product code. **Status: done**, pre-existing — the Monthly
+(`prod_1vEVfh4WUKbCPlPaoFLpS5`) and Yearly (`prod_7i6mdEk2fz7x5pdo3ZwHC3`)
+products already exist in Creem and their hosted checkout links are live on
+the marketing site (`marketing/src/pages/index.astro`). No one-time passes
+(Supporter/Believer) — Creem's plan replaced those with a plain
+monthly/yearly subscription, so M9 below only ever deals with subscription
+events, not one-time orders.
 
-- [ ] Create the Monthly, Annual, Supporter (3-year), and Believer (5-year)
-      products in Polar as designed — the two passes as **one-time
-      purchases**, per the pricing plan.
-- [ ] Confirm Polar's checkout supports attaching our internal `user_id` as
-      metadata on the session, and that the metadata round-trips onto the
-      webhook payload — this is what M9 uses to know which row to update.
-      If it doesn't round-trip cleanly, this milestone blocks M9.
-- [ ] Note the exact event names Polar sends for a completed one-time order
-      vs. a subscription renewal/cancellation — M9's mapping depends on
-      getting these right, not guessing at them.
+- [x] Monthly + Yearly recurring products created in Creem.
+- [x] Creem's hosted checkout link accepts `metadata[key]=value` as a query
+      param directly — no API call (and no secret key on the client) needed
+      to attach our internal `user_id`, unlike the API-driven checkout
+      session this milestone originally assumed for Polar. See
+      `extension/utils/creem.ts`.
+- [x] Confirmed exact webhook event/field names from
+      https://docs.creem.io/code/webhooks — `subscription.paid` (not
+      `.active`, which the docs say is "only for synchronization") is what
+      grants access; metadata round-trips onto `object.metadata` on the
+      subscription payload; the renewal date is `object.current_period_end_date`.
 
-## M9 — The second exception: Polar webhook receiver
+## M9 — The second exception: Creem webhook receiver
 
-- [ ] One Supabase Edge Function, registered as the webhook URL in Polar's
-      dashboard. Verifies the Polar signature header before touching
-      anything else — an unverified payload is not a trusted input.
-- [ ] A small hardcoded map, `polar_product_id -> duration`, inside the
-      function — _(ponytail: four products, a literal object is simpler
-      than a lookup table; promote it to a Postgres table only once there
-      are enough SKUs that shipping a new one without a code change
-      actually matters.)_
-- [ ] On a one-time order event: `access_expires_at = purchased_at +
-duration` (or `greatest(current access_expires_at, ...) + duration`
-      if stacking multiple passes should extend rather than overwrite —
-      product decision, not resolved here).
-- [ ] On a subscription renewal: extend to the next renewal date. On
-      cancellation: do nothing to `access_expires_at` — per
-      `architecture-sync.md`, already-paid-for time isn't clawed back.
-- [ ] Update the `workspaces` (and any other user-scoped) RLS policies to
-      require `access_expires_at > now()` for writes. Without this step,
-      M9 updates a column nothing else reads, and expiry has no actual
-      effect — see `architecture-sync.md` → "Payments" for why the cache
-      alone isn't enough here.
+**Status: done.** `supabase/functions/creem-webhook/`.
+
+- [x] One Supabase Edge Function, registered as the webhook URL in Creem's
+      dashboard (Developers > Webhooks). Verifies the `creem-signature`
+      HMAC-SHA256 header (`verify.ts`, tested via `deno test`) before
+      touching anything else — an unverified payload is not a trusted
+      input.
+- [x] No product-to-duration map needed: Creem's plan is a plain recurring
+      subscription (not Polar's one-time passes), so there's only one event
+      that matters (`subscription.paid`) and one thing it does — extend
+      `access_expires_at` to `object.current_period_end_date` and bump
+      `max_workspaces` for the plan. _(ponytail: one tier, so "pro" is a
+      hardcoded ceiling on the existing column — promote to a real plans
+      table once there's a second paid SKU.)_
+- [x] `subscription.canceled` is a deliberate no-op — per
+      `architecture-sync.md`, already-paid-for time isn't clawed back;
+      `access_expires_at` just lapses on its own at the end of the current
+      period. `subscription.expired`/`.paused`/`.unpaid`, by contrast, mean
+      the _current_ period is no longer paid up — all three immediately set
+      `access_expires_at = now()`, revoking access right away rather than
+      waiting for a timestamp that may already be stale.
+- [x] `create_workspace` now checks `access_expires_at` (M5,
+      `20260928163000_create_workspace_client_id_and_expiry.sql`) — the one
+      write path that existed to gate. Expiry has a real effect: a lapsed
+      account can no longer create new workspaces (locally it still can —
+      see M5 — but they won't sync).
+- [ ] The broader ask — `workspaces` (and any other user-scoped) RLS
+      requiring `access_expires_at > now()` on every read/write, not just
+      creation — is still open. That's a different, bigger question than
+      M5 answered: it's the "what happens to data at expiry" product
+      decision below (freeze writes? drop to local-only? delete after a
+      grace period?), and applies to a general sync engine (M6) that
+      doesn't exist yet, not to `create_workspace` alone.
 - [ ] The "what happens to data at expiry" open question
       (`architecture-sync.md` → "Payments") needs an answer before this
-      milestone can be called done, not after.
+      milestone can be called fully done, not after.
 
 ## Deliberately not in this plan
 
