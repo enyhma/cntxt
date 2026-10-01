@@ -495,8 +495,6 @@ function Dashboard(props: {
   refresh: () => Promise<void>;
   restoreState: ReturnType<typeof useMachine<typeof restoreMachine>>[0];
   restoreSend: ReturnType<typeof useMachine<typeof restoreMachine>>[1];
-  popupOpen: Accessor<boolean>;
-  setPopupOpen: (v: boolean) => void;
 }) {
   const {
     workspaces,
@@ -584,14 +582,6 @@ function Dashboard(props: {
       await browser.tabs.update(tab.id, { active: true });
       await browser.windows.update(windowId, { focused: true });
     }
-  }
-
-  async function closeRealTab(url: string) {
-    const windowId = myWindowId();
-    if (windowId === undefined) return;
-    const tabs = await browser.tabs.query({ windowId });
-    const tab = tabs.find((t) => t.url === url);
-    if (tab?.id !== undefined) await browser.tabs.remove(tab.id);
   }
 
   function toggleSelected(index: number) {
@@ -1013,53 +1003,6 @@ function Dashboard(props: {
             </Show>
           </div>
         </main>
-
-        <Show when={props.popupOpen()}>
-          <aside class="flex w-80 shrink-0 flex-col border-l border-surface-alt2 bg-surface-alt1 shadow-[-6px_0_16px_rgba(0,0,0,0.35)]">
-            <div class="flex h-13 shrink-0 items-center gap-2 border-b border-surface-alt2 px-3">
-              <span class="text-sm font-semibold">Current window</span>
-              <span class="font-mono text-[11px] text-surface-txt-faint">
-                {current()?.tabs.length ?? 0} open
-              </span>
-              <span class="flex-1" />
-              <button
-                type="button"
-                onClick={() => props.setPopupOpen(false)}
-                class="btn btn-square btn-ghost btn-xs"
-              >
-                <X size={13} />
-              </button>
-            </div>
-            <div class="flex-1 overflow-y-auto">
-              <For each={current()?.tabs ?? []}>
-                {(tab) => (
-                  <div class="flex items-center gap-2.25 border-b border-surface-alt2 px-3 py-2.25">
-                    <span
-                      class={
-                        "grid h-4.5 w-4.5 shrink-0 place-items-center rounded text-[10px] font-bold " +
-                        colorFor(tab.url) +
-                        " " +
-                        textColorFor(tab.url)
-                      }
-                    >
-                      {domainOf(tab.url)[0]?.toUpperCase()}
-                    </span>
-                    <span class="min-w-0 flex-1 truncate text-[13px]">
-                      {tab.title || tab.url}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => closeRealTab(tab.url)}
-                      class="btn btn-xs shrink-0 border border-surface-alt3 bg-surface-alt2"
-                    >
-                      Close
-                    </button>
-                  </div>
-                )}
-              </For>
-            </div>
-          </aside>
-        </Show>
       </div>
 
       <Show when={selected().size > 0}>
@@ -1348,7 +1291,6 @@ function App() {
   const [nav, setNav] = createSignal<"workspaces" | "trash" | "settings">(
     "workspaces",
   );
-  const [popupOpen, setPopupOpen] = createSignal(false);
   const [state, send] = useMachine(restoreMachine);
   const [syncState, syncSend] = useMachine(syncMachine);
 
@@ -1758,22 +1700,6 @@ function App() {
                 </For>
               </div>
               <span class="flex-1" />
-              <button
-                type="button"
-                onClick={() => setPopupOpen(!popupOpen())}
-                class={
-                  "btn btn-sm h-8 gap-1.75 font-medium " +
-                  (popupOpen()
-                    ? "border border-accent bg-accent/10 text-surface-txt"
-                    : "border border-surface-alt3 bg-surface-alt2 text-surface-txt-hint hover:text-surface-txt")
-                }
-              >
-                <AppWindow size={14} />
-                <span class="whitespace-nowrap">Current window</span>
-                <span class="rounded bg-surface-alt3 px-1.25 font-mono text-[11px] text-surface-txt-faint">
-                  {current()?.tabs.length ?? 0}
-                </span>
-              </button>
               <details class="dropdown dropdown-end">
                 <summary class="btn btn-sm h-8 list-none gap-1.75 border-none bg-transparent font-normal text-surface-txt-hint hover:text-surface-txt">
                   <span class="whitespace-nowrap">{session()?.user.email}</span>
@@ -1929,8 +1855,6 @@ function App() {
                   refresh={refresh}
                   restoreState={state}
                   restoreSend={send}
-                  popupOpen={popupOpen}
-                  setPopupOpen={setPopupOpen}
                 />
               </Match>
             </Switch>
