@@ -118,13 +118,18 @@ export async function reconcileSyncStatus() {
 // wins over its own server row. Call once per sign-in, alongside
 // reconcileSyncStatus (see docs/implementation-plan-sync.md M6). Returns
 // how many workspaces it added, so a manual "Pull now" trigger (App.tsx)
-// can report something more useful than silence.
+// can report something more useful than silence. Throws on a fetch error
+// instead of swallowing it — a caller that only sees "0 added" otherwise
+// can't tell "already up to date" from "the request failed," which is
+// exactly the ambiguity that made a real RLS/network failure look like a
+// no-op during testing.
 export async function pullRemoteWorkspaces(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
     .from("workspaces")
     .select("id, name, tabs, created_at, updated_at");
-  if (error || !data) return 0;
+  if (error) throw new Error(error.message);
+  if (!data) return 0;
 
   const local = await getWorkspaces();
   const localIds = new Set(local.map((w) => w.id));

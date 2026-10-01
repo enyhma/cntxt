@@ -95,8 +95,8 @@ it("pullRemoteWorkspaces never overwrites a workspace that already exists locall
   expect(workspaces[0]?.name).toBe("Local edit");
 });
 
-it("pullRemoteWorkspaces leaves local storage untouched on a fetch error", async () => {
+it("pullRemoteWorkspaces throws on a fetch error instead of silently returning 0", async () => {
   select.mockResolvedValue({ data: null, error: { message: "network" } });
-  expect(await pullRemoteWorkspaces()).toBe(0);
+  await expect(pullRemoteWorkspaces()).rejects.toThrow("network");
   expect(await getWorkspaces()).toEqual([]);
 });

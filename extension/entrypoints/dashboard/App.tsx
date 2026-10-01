@@ -1345,7 +1345,10 @@ function App() {
       setSession(data.session);
       if (data.session) {
         refreshEntitlements().then(setEntitlements);
-        pullRemoteWorkspaces().then(reconcileSyncStatus).then(refresh);
+        pullRemoteWorkspaces()
+          .then(reconcileSyncStatus)
+          .then(refresh)
+          .catch((e) => console.debug("pullRemoteWorkspaces failed:", e));
       }
 
       // Piggyback on the token refresh supabase-js already does on a timer
@@ -1357,7 +1360,10 @@ function App() {
           setSession(newSession);
           if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
             refreshEntitlements().then(setEntitlements);
-            pullRemoteWorkspaces().then(reconcileSyncStatus).then(refresh);
+            pullRemoteWorkspaces()
+              .then(reconcileSyncStatus)
+              .then(refresh)
+              .catch((e) => console.debug("pullRemoteWorkspaces failed:", e));
           }
         },
       );
@@ -1482,15 +1488,22 @@ function App() {
   async function handlePullNow() {
     setPulling(true);
     setPullMessage("");
-    const added = await pullRemoteWorkspaces();
-    await reconcileSyncStatus();
-    await refresh();
-    setPulling(false);
-    setPullMessage(
-      added > 0
-        ? `Pulled ${added} workspace${added === 1 ? "" : "s"}`
-        : "Already up to date",
-    );
+    try {
+      const added = await pullRemoteWorkspaces();
+      await reconcileSyncStatus();
+      await refresh();
+      setPullMessage(
+        added > 0
+          ? `Pulled ${added} workspace${added === 1 ? "" : "s"}`
+          : "Already up to date",
+      );
+    } catch (e) {
+      setPullMessage(
+        `Pull failed: ${e instanceof Error ? e.message : "unknown error"}`,
+      );
+    } finally {
+      setPulling(false);
+    }
   }
 
   // tokens.css keys every non-baseline theme off data-theme on the root
@@ -1736,10 +1749,10 @@ function App() {
             </header>
 
             <Show when={blockedCount() > 0 && !bannerDismissed()}>
-              <div class="mx-3.5 mt-3 flex items-start gap-2.5 rounded border border-warning/30 border-l-2 border-l-warning bg-warning/10 p-3 text-sm">
+              <div class="mx-3.5 mt-3 flex items-start gap-2.5 rounded border border-surface-alt3 border-l-2 border-l-warning bg-surface-alt1 p-3 text-sm">
                 <TriangleAlert size={14} class="mt-0.5 shrink-0 text-warning" />
-                <p class="flex-1 text-surface-txt">
-                  <span class="font-medium">
+                <p class="flex-1 text-surface-txt-hint">
+                  <span class="font-medium text-surface-txt">
                     {hasExpiredWorkspace()
                       ? "Your plan has expired."
                       : "You've hit your plan's limit."}
@@ -1760,10 +1773,10 @@ function App() {
             </Show>
 
             <Show when={overLimitCount() > 0 && !bannerDismissed()}>
-              <div class="mx-3.5 mt-3 flex items-start gap-2.5 rounded border border-warning/30 border-l-2 border-l-warning bg-warning/10 p-3 text-sm">
+              <div class="mx-3.5 mt-3 flex items-start gap-2.5 rounded border border-surface-alt3 border-l-2 border-l-warning bg-surface-alt1 p-3 text-sm">
                 <TriangleAlert size={14} class="mt-0.5 shrink-0 text-warning" />
-                <p class="flex-1 text-surface-txt">
-                  <span class="font-medium">
+                <p class="flex-1 text-surface-txt-hint">
+                  <span class="font-medium text-surface-txt">
                     You're over your plan's limit.
                   </span>{" "}
                   {syncedCount()} workspaces are synced, but your plan covers{" "}
