@@ -247,14 +247,36 @@ window-opening itself while offline or at-limit. Built instead:
       `idle` rather than through a separate "Retrying" state (there's
       nothing distinct to do there beyond immediately retrying).
 
-## M7 — Delete propagation
+## M7 — Delete propagation (Trash, with retention)
 
-- [ ] Resolve `architecture-sync.md`'s open question up front, since M6
-      needs an answer to be correct: add `deleted_at timestamptz` to
-      `workspaces` (soft delete). `deleteWorkspace` becomes an `update`,
-      not a `delete`.
-- [ ] Every existing read of the `workspaces` table adds
-      `.is("deleted_at", null)` — a query filter, not new server logic.
+Resolved differently than originally scoped: rather than an invisible
+soft-delete (every read filtering `.is("deleted_at", null)`), deleted
+workspaces are user-visible in a Trash view for a retention window — 7
+days free, 30 days paid — before being purged for good.
+
+- [x] `deleted_at timestamptz` added to `workspaces`
+      (`supabase/migrations/20260930200000_trash_and_purge.sql`).
+      `deleteWorkspace` (`utils/workspaces.ts`) sets it (soft delete,
+      local-first, propagated by the existing push path) instead of
+      removing the row; `restoreWorkspace` clears it; the Trash view's
+      explicit "Delete forever" (`permanentlyDeleteWorkspace`) is the one
+      path that still does a real `delete`.
+- [x] Reads are **not** filtered to active-only server-side — the client
+      pulls trashed rows too (so trash state itself syncs across
+      devices) and filters active-vs-trashed locally
+      (`App.tsx`'s `activeWorkspaces`/`trashedWorkspaces`).
+- [x] Scheduled purge: a `pg_cron` job (hourly) calls
+      `purge_trashed_workspaces()`, which hard-deletes rows past their
+      retention window — 30 days if `entitlements.access_expires_at` is
+      set and in the future (paid), 7 days otherwise. Deliberately a real
+      server-side job rather than lazy/client-triggered cleanup, so
+      retention is enforced even if no device ever reconnects.
+      `purgeExpiredLocalTrash` mirrors the same rule client-side so a
+      workspace's countdown hitting zero removes it from the dashboard
+      immediately rather than lagging behind the next hourly tick.
+- [x] `create_workspace`'s limit check now excludes `deleted_at is not null`
+      rows — trashing a workspace frees its quota slot instead of holding
+      it until purge.
 
 ## M8 — Creem product setup
 
