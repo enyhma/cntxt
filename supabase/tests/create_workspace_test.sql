@@ -1,5 +1,5 @@
 begin;
-select plan(7);
+select plan(8);
 
 insert into auth.users (id, email)
 values ('33333333-3333-3333-3333-333333333333', 'carol@example.com');
@@ -77,6 +77,28 @@ select throws_ok(
   $$ select create_workspace('Too late', '[]'::jsonb) $$,
   'access expired',
   'create_workspace rejects a call once access_expires_at has lapsed, regardless of max_workspaces'
+);
+
+-- An account with no entitlements row at all (e.g. one that predates the
+-- on_auth_user_created trigger, see
+-- 20260930180000_backfill_missing_entitlements_and_fail_closed.sql) must
+-- fail loudly, not silently skip the limit check — `select ... into
+-- v_limit` leaves it null on no match, and `v_count >= null` is null
+-- (falsy) in plpgsql's `if`, which is exactly the bug this guards against.
+reset role;
+
+insert into auth.users (id, email)
+values ('66666666-6666-6666-6666-666666666666', 'erin@example.com');
+delete from public.entitlements
+where user_id = '66666666-6666-6666-6666-666666666666';
+
+set local role authenticated;
+set local "request.jwt.claim.sub" to '66666666-6666-6666-6666-666666666666';
+
+select throws_ok(
+  $$ select create_workspace('Should fail', '[]'::jsonb) $$,
+  'no entitlements row',
+  'create_workspace rejects a caller with no entitlements row instead of silently skipping the limit check'
 );
 
 select * from finish();
