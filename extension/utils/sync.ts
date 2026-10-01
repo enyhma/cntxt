@@ -1,5 +1,17 @@
 import { assign, fromPromise, setup } from "xstate";
-import { pullRemoteWorkspaces, pushDirtyWorkspaces } from "./workspaces";
+import { getCachedEntitlements } from "./entitlements";
+import {
+  pullRemoteWorkspaces,
+  purgeExpiredLocalTrash,
+  pushDirtyWorkspaces,
+} from "./workspaces";
+
+async function pullAndPurgeTrash(): Promise<number> {
+  const applied = await pullRemoteWorkspaces();
+  const entitlements = await getCachedEntitlements();
+  await purgeExpiredLocalTrash(entitlements?.accessExpiresAt);
+  return applied;
+}
 
 type Context = {
   lastPushedAt: Record<string, number>;
@@ -35,7 +47,7 @@ const PULL_INTERVAL_MS = 5 * 60 * 1000;
 export const syncMachine = setup({
   types: {} as { context: Context; events: Event },
   actors: {
-    pull: fromPromise(() => pullRemoteWorkspaces()),
+    pull: fromPromise(() => pullAndPurgeTrash()),
     push: fromPromise(({ input }: { input: Record<string, number> }) =>
       pushDirtyWorkspaces(input),
     ),

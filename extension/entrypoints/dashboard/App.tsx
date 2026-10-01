@@ -6,7 +6,9 @@ import {
   createEffect,
   createSignal,
   For,
+  Match,
   Show,
+  Switch,
   onCleanup,
   onMount,
   untrack,
@@ -40,9 +42,11 @@ import {
   Plug,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   LayoutGrid as SectionsIcon,
   Settings as SettingsIcon,
+  Trash2,
   TriangleAlert,
   Unplug,
   X,
@@ -54,7 +58,10 @@ import {
   createWorkspace,
   deleteWorkspace,
   getWorkspaces,
+  permanentlyDeleteWorkspace,
   reconcileSyncStatus,
+  restoreWorkspace,
+  trashRetentionDays,
   updateWorkspace,
 } from "@/utils/workspaces";
 
@@ -312,11 +319,12 @@ function closeOpenDropdowns() {
 }
 
 const NAV_ITEMS: Array<{
-  key: "workspaces" | "settings";
+  key: "workspaces" | "trash" | "settings";
   label: string;
   icon: (props: LucideProps) => JSX.Element;
 }> = [
   { key: "workspaces", label: "Workspaces", icon: SectionsIcon },
+  { key: "trash", label: "Trash", icon: Trash2 },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -958,7 +966,7 @@ function Dashboard(props: {
                       class="text-danger"
                       onClick={handleDeleteViewed}
                     >
-                      Delete workspace
+                      Move to Trash
                     </button>
                   </li>
                 </Show>
@@ -1266,6 +1274,69 @@ function SettingsPanel(props: {
   );
 }
 
+// Days left before purge_trashed_workspaces (supabase/migrations) removes
+// this for good. Floored, not rounded, so "0 days left" means "could be
+// gone any time now" rather than implying a few more hours of safety.
+function daysRemaining(workspace: Workspace, retentionDays: number): number {
+  const elapsedMs = Date.now() - (workspace.deletedAt ?? Date.now());
+  return Math.max(0, retentionDays - Math.floor(elapsedMs / 86_400_000));
+}
+
+function TrashPanel(props: {
+  workspaces: Accessor<Workspace[]>;
+  retentionDays: Accessor<number>;
+  onRestore: (id: string) => void;
+  onDeleteForever: (id: string) => void;
+}) {
+  return (
+    <div class="flex-1 overflow-y-auto p-6">
+      <div class="flex max-w-md flex-col gap-3">
+        <h2 class="text-base font-semibold">Trash</h2>
+        <Show
+          when={props.workspaces().length > 0}
+          fallback={
+            <p class="text-sm text-surface-txt-hint">Trash is empty.</p>
+          }
+        >
+          <For each={props.workspaces()}>
+            {(w) => (
+              <div class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 shadow-[var(--shadow-card)]">
+                <WorkspaceDot workspace={w} />
+                <div class="flex min-w-0 flex-1 flex-col">
+                  <span class="truncate text-sm font-medium">{w.name}</span>
+                  <span class="text-xs text-surface-txt-hint">
+                    {daysRemaining(w, props.retentionDays())} day
+                    {daysRemaining(w, props.retentionDays()) === 1
+                      ? ""
+                      : "s"}{" "}
+                    left
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  title="Restore"
+                  onClick={() => props.onRestore(w.id)}
+                  class="btn btn-square btn-sm border border-surface-alt3 bg-surface-alt2"
+                >
+                  <RotateCcw size={13} />
+                </button>
+                <button
+                  type="button"
+                  title="Delete forever"
+                  onClick={() => props.onDeleteForever(w.id)}
+                  class="btn btn-square btn-sm border border-surface-alt3 text-danger"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            )}
+          </For>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [workspaces, setWorkspaces] = createSignal<Workspace[]>([]);
   const [windowMap, setWindowMap] = createSignal<Record<number, string>>({});
@@ -1274,7 +1345,9 @@ function App() {
     createSignal<StartupBehavior>("none");
   const [theme, setTheme] = createSignal<Theme>("baseline");
   const [manualPullEnabled, setManualPullEnabled] = createSignal(false);
-  const [nav, setNav] = createSignal<"workspaces" | "settings">("workspaces");
+  const [nav, setNav] = createSignal<"workspaces" | "trash" | "settings">(
+    "workspaces",
+  );
   const [popupOpen, setPopupOpen] = createSignal(false);
   const [state, send] = useMachine(restoreMachine);
   const [syncState, syncSend] = useMachine(syncMachine);
@@ -1310,19 +1383,30 @@ function App() {
   };
   const current = () => workspaces().find((w) => w.id === currentId());
 
+  // A trashed workspace is still in storage.local (and still has whatever
+  // syncStatus it had before deletion) but shouldn't appear in the normal
+  // workspace list, count against the plan limit display, or trigger sync
+  // issue banners — create_workspace's own count already excludes it
+  // server-side (supabase/migrations' trash_and_purge migration), so this
+  // keeps the dashboard's numbers matching what the server actually counts.
+  const activeWorkspaces = () => workspaces().filter((w) => !w.deletedAt);
+  const trashedWorkspaces = () => workspaces().filter((w) => !!w.deletedAt);
+  const trashRetention = () =>
+    trashRetentionDays(entitlements()?.accessExpiresAt);
+
   // Account-level usage, driven by actual per-workspace sync status (see
   // docs/workspace-sync-semantics.md) rather than re-deriving "at limit"
   // from entitlements — a workspace only counts here once it's actually
   // failed to sync for a plan reason, not just because a count crossed a
   // threshold with nothing having been rejected yet.
   const syncedCount = () =>
-    workspaces().filter((w) => w.syncStatus === "synced").length;
+    activeWorkspaces().filter((w) => w.syncStatus === "synced").length;
   const blockedCount = () =>
-    workspaces().filter(
+    activeWorkspaces().filter(
       (w) => w.syncStatus === "limit-reached" || w.syncStatus === "expired",
     ).length;
   const hasExpiredWorkspace = () =>
-    workspaces().some((w) => w.syncStatus === "expired");
+    activeWorkspaces().some((w) => w.syncStatus === "expired");
 
   // blockedCount only catches a workspace that actually *failed* a
   // create_workspace call — but pullRemoteWorkspaces (utils/workspaces.ts)
@@ -1508,6 +1592,16 @@ function App() {
   function handlePullNow() {
     syncSend({ type: "PULL" });
     reconcileSyncStatus().then(refresh);
+  }
+
+  async function handleRestoreWorkspace(id: string) {
+    await restoreWorkspace(id);
+    await refresh();
+  }
+
+  async function handlePermanentlyDeleteWorkspace(id: string) {
+    await permanentlyDeleteWorkspace(id);
+    await refresh();
   }
 
   // tokens.css keys every non-baseline theme off data-theme on the root
@@ -1801,9 +1895,18 @@ function App() {
               </div>
             </Show>
 
-            <Show
-              when={nav() === "workspaces"}
-              fallback={
+            <Switch>
+              <Match when={nav() === "trash"}>
+                <div class="flex flex-1 items-stretch overflow-hidden">
+                  <TrashPanel
+                    workspaces={trashedWorkspaces}
+                    retentionDays={trashRetention}
+                    onRestore={handleRestoreWorkspace}
+                    onDeleteForever={handlePermanentlyDeleteWorkspace}
+                  />
+                </div>
+              </Match>
+              <Match when={nav() === "settings"}>
                 <div class="flex flex-1 items-stretch overflow-hidden">
                   <SettingsPanel
                     startupBehavior={startupBehavior}
@@ -1814,22 +1917,23 @@ function App() {
                     onManualPullEnabledChange={handleManualPullEnabledChange}
                   />
                 </div>
-              }
-            >
-              <Dashboard
-                workspaces={workspaces}
-                currentId={currentId}
-                current={current}
-                openIds={openIds}
-                myWindowId={myWindowId}
-                entitlements={entitlements}
-                refresh={refresh}
-                restoreState={state}
-                restoreSend={send}
-                popupOpen={popupOpen}
-                setPopupOpen={setPopupOpen}
-              />
-            </Show>
+              </Match>
+              <Match when={nav() === "workspaces"}>
+                <Dashboard
+                  workspaces={activeWorkspaces}
+                  currentId={currentId}
+                  current={current}
+                  openIds={openIds}
+                  myWindowId={myWindowId}
+                  entitlements={entitlements}
+                  refresh={refresh}
+                  restoreState={state}
+                  restoreSend={send}
+                  popupOpen={popupOpen}
+                  setPopupOpen={setPopupOpen}
+                />
+              </Match>
+            </Switch>
           </div>
         </Show>
       </Show>

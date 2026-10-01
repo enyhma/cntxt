@@ -3,7 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const pullRemoteWorkspaces = vi.fn();
 const pushDirtyWorkspaces = vi.fn();
-vi.mock("./workspaces", () => ({ pullRemoteWorkspaces, pushDirtyWorkspaces }));
+const purgeExpiredLocalTrash = vi.fn();
+vi.mock("./workspaces", () => ({
+  pullRemoteWorkspaces,
+  pushDirtyWorkspaces,
+  purgeExpiredLocalTrash,
+}));
+vi.mock("./entitlements", () => ({
+  getCachedEntitlements: vi.fn().mockResolvedValue(undefined),
+}));
 
 const { syncMachine } = await import("./sync");
 
@@ -11,14 +19,18 @@ beforeEach(() => {
   vi.useFakeTimers();
   pullRemoteWorkspaces.mockReset().mockResolvedValue(0);
   pushDirtyWorkspaces.mockReset().mockImplementation((input) => input);
+  purgeExpiredLocalTrash.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
+// pullAndPurgeTrash chains three awaits (pull, getCachedEntitlements,
+// purge) — a single microtask tick isn't enough to drain it, so flush
+// several.
 async function flush() {
-  await vi.waitFor(() => {});
+  for (let i = 0; i < 10; i++) await Promise.resolve();
 }
 
 describe("syncMachine", () => {

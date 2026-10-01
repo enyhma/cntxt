@@ -20,7 +20,27 @@ export type Workspace = {
   color?: string;
   icon?: string;
   syncStatus?: SyncStatus;
+  // Set by deleteWorkspace, cleared by restoreWorkspace — a workspace in
+  // the trash, not actually removed from storage.local yet. Kept so the
+  // dashboard can show a Trash view and so this soft-delete propagates
+  // through the same push/pull path as any other edit (see
+  // supabase/migrations' trash_and_purge migration and
+  // purgeExpiredLocalTrash below).
+  deletedAt?: number;
 };
+
+// Mirrors purge_trashed_workspaces()'s retention window in the trash_and_purge
+// migration — keep both in sync if either changes. "Paid" is the same
+// access_expires_at-in-the-future check create_workspace's RPC uses.
+const FREE_TRASH_RETENTION_DAYS = 7;
+const PAID_TRASH_RETENTION_DAYS = 30;
+
+export function trashRetentionDays(
+  accessExpiresAt: string | null | undefined,
+): number {
+  const isPaid = !!accessExpiresAt && Date.parse(accessExpiresAt) > Date.now();
+  return isPaid ? PAID_TRASH_RETENTION_DAYS : FREE_TRASH_RETENTION_DAYS;
+}
 
 const STORAGE_KEY = "workspaces";
 
@@ -123,7 +143,7 @@ export async function pullRemoteWorkspaces(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
     .from("workspaces")
-    .select("id, name, tabs, created_at, updated_at");
+    .select("id, name, tabs, created_at, updated_at, deleted_at");
   if (error) throw new Error(error.message);
   if (!data) return 0;
 
@@ -140,6 +160,7 @@ export async function pullRemoteWorkspaces(): Promise<number> {
       tabs: (row.tabs as WorkspaceTab[] | null) ?? [],
       createdAt: Date.parse(row.created_at),
       updatedAt: Date.parse(row.updated_at),
+      deletedAt: row.deleted_at ? Date.parse(row.deleted_at) : undefined,
       syncStatus: "synced",
     };
     if (!existing) {
@@ -154,6 +175,24 @@ export async function pullRemoteWorkspaces(): Promise<number> {
 
   if (applied > 0) await setWorkspaces(next);
   return applied;
+}
+
+// Mirrors the server's purge_trashed_workspaces() locally, so a trashed
+// workspace's countdown hitting zero removes it from the dashboard
+// immediately rather than lagging behind the next hourly cron tick. Purely
+// a local-storage cleanup — the actual server row (and the guarantee that
+// it's gone even if this device never reconnects) is the migration's job,
+// not this function's. Call after every pull (see utils/sync.ts), since
+// that's also when the entitlements cache this depends on is freshest.
+export async function purgeExpiredLocalTrash(
+  accessExpiresAt: string | null | undefined,
+): Promise<void> {
+  const cutoffMs = trashRetentionDays(accessExpiresAt) * 24 * 60 * 60 * 1000;
+  const local = await getWorkspaces();
+  const kept = local.filter(
+    (w) => !w.deletedAt || Date.now() - w.deletedAt < cutoffMs,
+  );
+  if (kept.length !== local.length) await setWorkspaces(kept);
 }
 
 // Pushes every locally-edited, already-synced workspace up to Supabase —
@@ -182,7 +221,11 @@ export async function pushDirtyWorkspaces(
 
     const { data, error } = await supabase
       .from("workspaces")
-      .update({ name: w.name, tabs: w.tabs })
+      .update({
+        name: w.name,
+        tabs: w.tabs,
+        deleted_at: w.deletedAt ? new Date(w.deletedAt).toISOString() : null,
+      })
       .eq("id", w.id)
       .select("updated_at")
       .single();
@@ -213,7 +256,35 @@ export async function updateWorkspace(
   );
 }
 
+// Soft delete: moves the workspace to the Trash instead of removing it,
+// local-first like every other write here — it never blocks on a server
+// round-trip. `updatedAt` bumps too, so pushDirtyWorkspaces picks this up
+// like any other edit and propagates deletedAt to the server.
 export async function deleteWorkspace(id: string) {
   const workspaces = await getWorkspaces();
+  await setWorkspaces(
+    workspaces.map((w) =>
+      w.id === id ? { ...w, deletedAt: Date.now(), updatedAt: Date.now() } : w,
+    ),
+  );
+}
+
+export async function restoreWorkspace(id: string) {
+  const workspaces = await getWorkspaces();
+  await setWorkspaces(
+    workspaces.map((w) =>
+      w.id === id ? { ...w, deletedAt: undefined, updatedAt: Date.now() } : w,
+    ),
+  );
+}
+
+// The Trash view's explicit, irreversible "Delete forever" — unlike every
+// other mutation here, this doesn't wait for the next push cycle: it fires
+// a real delete at Supabase immediately (best-effort, same fire-and-forget
+// style as registerWorkspace — offline or signed out just means the
+// server-side row is left for purge_trashed_workspaces to catch later).
+export async function permanentlyDeleteWorkspace(id: string) {
+  const workspaces = await getWorkspaces();
   await setWorkspaces(workspaces.filter((w) => w.id !== id));
+  await supabase?.from("workspaces").delete().eq("id", id);
 }
