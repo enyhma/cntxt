@@ -1759,13 +1759,7 @@ function App() {
               </div>
             </Show>
 
-            <Show
-              when={
-                blockedCount() === 0 &&
-                overLimitCount() > 0 &&
-                !bannerDismissed()
-              }
-            >
+            <Show when={overLimitCount() > 0 && !bannerDismissed()}>
               <div class="mx-3.5 mt-3 flex items-start gap-2.5 rounded border border-warning/30 border-l-2 border-l-warning bg-warning/10 p-3 text-sm">
                 <TriangleAlert size={14} class="mt-0.5 shrink-0 text-warning" />
                 <p class="flex-1 text-surface-txt">
