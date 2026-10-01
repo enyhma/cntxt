@@ -218,31 +218,34 @@ window-opening itself while offline or at-limit. Built instead:
 
 ## M6 — Sync engine: push and pull
 
-- [x] **Pull half only, additive merge** — `pullRemoteWorkspaces`
+- [x] **Pull, with conflict resolution** — `pullRemoteWorkspaces`
       (`utils/workspaces.ts`): a plain `select` of the caller's own
-      `workspaces` rows (RLS-scoped, no RPC), adding any row whose id isn't
-      already in `storage.local`. Called on sign-in and on every
-      `TOKEN_REFRESHED`, alongside `reconcileSyncStatus` — piggybacking on
-      the same timer as M4's entitlements refresh, so this doubles as the
-      periodic pull tick below until a real one exists. Fixes the concrete
-      symptom (a fresh/empty local profile can't see workspaces the account
-      already has server-side, with no error surfaced) without the rest of
-      M6's risk surface.
-- [ ] `utils/sync.ts`, listening to `storage.onChanged`: debounce, then
-      `upsert` to the `workspaces` table via a plain `supabase-js` call.
-      Not an RPC — updates to an existing, already-owned workspace aren't
-      entitlement-gated. **Still not built** — today, only workspace
-      _creation_ ever reaches Supabase; renames and tab-sync edits don't
-      sync at all yet.
-- [ ] A true periodic pull tick independent of token refresh, and pull on
-      dashboard mount specifically (today it only runs on sign-in/refresh
-      events, not every mount of an already-signed-in session).
-- [ ] Conflict resolution exactly as diagrammed in
-      `architecture-sync.md` → "Pull + conflict resolution": compare the
-      server's `updated_at`, server wins ties. **Not built** — the current
-      pull is deliberately additive-only (never overwrites an id that
-      already exists locally), so it can't yet reconcile a workspace that
-      changed on both a local device and the server.
+      `workspaces` rows (RLS-scoped, no RPC). A row missing locally is
+      added; a row that exists locally is overwritten only when the
+      server's `updated_at` is strictly newer than the local copy's —
+      last-write-wins exactly as diagrammed in `architecture-sync.md` →
+      "Pull + conflict resolution". An unpushed local edit always has a
+      newer local `updatedAt` than its still-stale server row, so it's
+      left alone rather than clobbered.
+- [x] **Push** — `pushDirtyWorkspaces` (`utils/workspaces.ts`), driven by
+      `utils/sync.ts`'s `syncMachine` listening to `storage.onChanged`:
+      debounce, then `update` (not `upsert` — `workspaces.user_id` has no
+      column default, so upsert's insert branch would fail a not-null
+      check on a row that already exists) the `workspaces` table via a
+      plain `supabase-js` call for every `syncStatus === "synced"`
+      workspace whose local `updatedAt` has moved. Not an RPC — updates to
+      an existing, already-owned workspace aren't entitlement-gated.
+      Renames and tab-sync edits now sync, not just creation.
+- [x] **A true periodic pull tick independent of token refresh, and pull
+      on dashboard mount** — `syncMachine`'s initial state is `pulling`,
+      and its `idle` state re-pulls on a 5-minute `after` timer. Sign-in
+      and `TOKEN_REFRESHED` still additionally send it a `PULL` event (see
+      App.tsx), so a session refresh doesn't have to wait for the timer.
+- [x] **Offline/retry** — `syncMachine` has an `offline` state (a pull or
+      push failure lands there); App.tsx listens for the browser's
+      `online` event and sends `ONLINE`, which goes straight back to
+      `idle` rather than through a separate "Retrying" state (there's
+      nothing distinct to do there beyond immediately retrying).
 
 ## M7 — Delete propagation
 
