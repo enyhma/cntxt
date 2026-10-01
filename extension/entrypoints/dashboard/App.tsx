@@ -14,6 +14,7 @@ import {
 import { Dynamic } from "solid-js/web";
 import { ensureWorkspaceForWindow } from "@/utils/attach";
 import { restoreMachine } from "@/utils/restoreMachine";
+import { syncMachine } from "@/utils/sync";
 import { getWindowWorkspaceMap } from "@/utils/session";
 import {
   type Settings,
@@ -53,7 +54,6 @@ import {
   createWorkspace,
   deleteWorkspace,
   getWorkspaces,
-  pullRemoteWorkspaces,
   reconcileSyncStatus,
   updateWorkspace,
 } from "@/utils/workspaces";
@@ -1274,11 +1274,26 @@ function App() {
     createSignal<StartupBehavior>("none");
   const [theme, setTheme] = createSignal<Theme>("baseline");
   const [manualPullEnabled, setManualPullEnabled] = createSignal(false);
-  const [pulling, setPulling] = createSignal(false);
-  const [pullMessage, setPullMessage] = createSignal("");
   const [nav, setNav] = createSignal<"workspaces" | "settings">("workspaces");
   const [popupOpen, setPopupOpen] = createSignal(false);
   const [state, send] = useMachine(restoreMachine);
+  const [syncState, syncSend] = useMachine(syncMachine);
+
+  // See docs/implementation-plan-sync.md M6: syncMachine owns pull/push
+  // timing, this just renders its current snapshot. A pull/push failure and
+  // a stale "pulling" spinner share the same message slot — there's only
+  // ever one sync engine running, so there's only ever one status to show.
+  function syncMessage() {
+    if (syncState.matches("pulling")) return "Pulling…";
+    if (syncState.matches("offline")) {
+      return `Sync failed: ${syncState.context.lastError ?? "unknown error"}`;
+    }
+    const count = syncState.context.lastPullCount;
+    if (count === undefined) return "";
+    return count > 0
+      ? `Pulled ${count} workspace${count === 1 ? "" : "s"}`
+      : "Already up to date";
+  }
 
   const [session, setSession] = createSignal<Session | null>(null);
   const [authLoading, setAuthLoading] = createSignal(true);
@@ -1345,25 +1360,20 @@ function App() {
       setSession(data.session);
       if (data.session) {
         refreshEntitlements().then(setEntitlements);
-        pullRemoteWorkspaces()
-          .then(reconcileSyncStatus)
-          .then(refresh)
-          .catch((e) => console.debug("pullRemoteWorkspaces failed:", e));
+        syncSend({ type: "PULL" });
+        reconcileSyncStatus().then(refresh);
       }
 
       // Piggyback on the token refresh supabase-js already does on a timer
-      // — no separate polling loop, per docs/architecture-sync.md. Also
-      // doubles as the closest thing to M6's "periodic pull tick" until a
-      // real one exists, since this fires every few hours on its own.
+      // — no separate polling loop, per docs/architecture-sync.md.
+      // syncMachine has its own periodic pull tick independent of this.
       const { data: authListener } = supabase!.auth.onAuthStateChange(
         (event, newSession) => {
           setSession(newSession);
           if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
             refreshEntitlements().then(setEntitlements);
-            pullRemoteWorkspaces()
-              .then(reconcileSyncStatus)
-              .then(refresh)
-              .catch((e) => console.debug("pullRemoteWorkspaces failed:", e));
+            syncSend({ type: "PULL" });
+            reconcileSyncStatus().then(refresh);
           }
         },
       );
@@ -1383,11 +1393,23 @@ function App() {
     setTheme(settings.theme);
     setManualPullEnabled(settings.manualPullEnabled);
 
-    const handleStorageChange = () => refresh();
+    // A "workspaces" write also notifies syncMachine, so a local rename or
+    // the background script's live tab-sync gets pushed — see
+    // docs/architecture-sync.md's "Push: local change → Supabase".
+    const handleStorageChange = (changes: Record<string, unknown>) => {
+      refresh();
+      if ("workspaces" in changes) syncSend({ type: "LOCAL_CHANGE" });
+    };
     browser.storage.onChanged.addListener(handleStorageChange);
     onCleanup(() =>
       browser.storage.onChanged.removeListener(handleStorageChange),
     );
+
+    // docs/architecture-sync.md's offline diagram: "Offline -> Retrying:
+    // browser reports online again".
+    const handleOnline = () => syncSend({ type: "ONLINE" });
+    window.addEventListener("online", handleOnline);
+    onCleanup(() => window.removeEventListener("online", handleOnline));
   });
 
   // Email OTP as a typed code, not a clicked link: a link can't reliably
@@ -1480,30 +1502,12 @@ function App() {
     await updateSettings({ manualPullEnabled: value });
   }
 
-  // Forces the same pull + reconcile this app already runs on sign-in/token
-  // refresh (see onMount above), on demand — the escape hatch the "Manual
-  // sync pull" setting exists for. Reports a count rather than nothing, so
-  // clicking it is itself an answer to "is this workspace actually synced":
-  // if it were, pulling again would add zero.
-  async function handlePullNow() {
-    setPulling(true);
-    setPullMessage("");
-    try {
-      const added = await pullRemoteWorkspaces();
-      await reconcileSyncStatus();
-      await refresh();
-      setPullMessage(
-        added > 0
-          ? `Pulled ${added} workspace${added === 1 ? "" : "s"}`
-          : "Already up to date",
-      );
-    } catch (e) {
-      setPullMessage(
-        `Pull failed: ${e instanceof Error ? e.message : "unknown error"}`,
-      );
-    } finally {
-      setPulling(false);
-    }
+  // Forces the same pull syncMachine already runs on sign-in/token refresh
+  // and on its own periodic tick (see onMount above and utils/sync.ts), on
+  // demand — the escape hatch the "Manual sync pull" setting exists for.
+  function handlePullNow() {
+    syncSend({ type: "PULL" });
+    reconcileSyncStatus().then(refresh);
   }
 
   // tokens.css keys every non-baseline theme off data-theme on the root
@@ -1705,19 +1709,23 @@ function App() {
                     <li>
                       <button
                         type="button"
-                        disabled={pulling()}
+                        disabled={syncState.matches("pulling")}
                         onClick={handlePullNow}
                       >
                         <RefreshCw
                           size={12}
-                          class={pulling() ? "animate-spin" : undefined}
+                          class={
+                            syncState.matches("pulling")
+                              ? "animate-spin"
+                              : undefined
+                          }
                         />
                         Pull workspaces now
                       </button>
                     </li>
-                    <Show when={pullMessage()}>
+                    <Show when={syncMessage()}>
                       <li class="px-2 py-0.5 text-xs text-surface-txt-hint">
-                        {pullMessage()}
+                        {syncMessage()}
                       </li>
                     </Show>
                   </Show>

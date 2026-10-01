@@ -108,21 +108,17 @@ export async function reconcileSyncStatus() {
   }
 }
 
-// Fetches this account's workspaces from Supabase and adds any that aren't
-// already in storage.local — covers a fresh/empty local profile (reinstall,
-// new device, or storage cleared) where the account already has workspaces
-// synced from another session. Additive only: never overwrites or removes a
-// local workspace, even if the server's copy has since changed — that half
-// of M6's pull (docs/architecture-sync.md → "Pull + conflict resolution",
-// comparing updated_at) isn't built yet, so an existing local edit always
-// wins over its own server row. Call once per sign-in, alongside
-// reconcileSyncStatus (see docs/implementation-plan-sync.md M6). Returns
-// how many workspaces it added, so a manual "Pull now" trigger (App.tsx)
-// can report something more useful than silence. Throws on a fetch error
-// instead of swallowing it — a caller that only sees "0 added" otherwise
-// can't tell "already up to date" from "the request failed," which is
-// exactly the ambiguity that made a real RLS/network failure look like a
-// no-op during testing.
+// Fetches this account's workspaces from Supabase and merges them into
+// storage.local: a row missing locally (fresh/empty profile, new device) is
+// added; a row that exists locally is overwritten only if the server's
+// updated_at is strictly newer than the local copy's — last-write-wins per
+// docs/architecture-sync.md → "Pull + conflict resolution". A local edit
+// that hasn't been pushed yet necessarily has a newer local updatedAt than
+// its still-stale server row, so it survives untouched here and reaches the
+// server on the next push instead of being clobbered. Call on sign-in,
+// token refresh, and periodically (see utils/sync.ts). Throws on a fetch
+// error instead of swallowing it — a caller that only sees "0 applied"
+// otherwise can't tell "already up to date" from "the request failed."
 export async function pullRemoteWorkspaces(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
@@ -132,20 +128,77 @@ export async function pullRemoteWorkspaces(): Promise<number> {
   if (!data) return 0;
 
   const local = await getWorkspaces();
-  const localIds = new Set(local.map((w) => w.id));
-  const missing: Workspace[] = data
-    .filter((row) => !localIds.has(row.id))
-    .map((row) => ({
+  const localById = new Map(local.map((w) => [w.id, w]));
+  let applied = 0;
+  const next = [...local];
+
+  for (const row of data) {
+    const existing = localById.get(row.id);
+    const remote: Workspace = {
       id: row.id,
       name: row.name,
       tabs: (row.tabs as WorkspaceTab[] | null) ?? [],
       createdAt: Date.parse(row.created_at),
       updatedAt: Date.parse(row.updated_at),
       syncStatus: "synced",
-    }));
+    };
+    if (!existing) {
+      next.push(remote);
+      applied++;
+    } else if (remote.updatedAt > existing.updatedAt) {
+      const idx = next.findIndex((w) => w.id === row.id);
+      next[idx] = { ...remote, color: existing.color, icon: existing.icon };
+      applied++;
+    }
+  }
 
-  if (missing.length > 0) await setWorkspaces([...local, ...missing]);
-  return missing.length;
+  if (applied > 0) await setWorkspaces(next);
+  return applied;
+}
+
+// Pushes every locally-edited, already-synced workspace up to Supabase —
+// M6's push half (docs/architecture-sync.md → "Push: local change →
+// Supabase"). Only `syncStatus === "synced"` workspaces are eligible: a
+// brand-new workspace reaches the server via create_workspace
+// (registerWorkspace above), not this path, since that RPC is what enforces
+// the entitlement limit; this only ever runs `update`, never `insert`.
+// `lastPushedAt` (kept in utils/sync.ts's machine context, not persisted) is
+// how a caller avoids re-pushing a workspace whose local updatedAt hasn't
+// moved since the last successful push — without it, the "write the
+// server's updatedAt back to local storage" step below would itself trigger
+// another storage.onChanged, pushing the same content forever. Uses
+// `.update().eq("id", ...)` rather than `.upsert()`: workspaces.user_id has
+// no column default, so an upsert's (unused but still validated) insert
+// branch would fail a not-null check on a row that already exists.
+export async function pushDirtyWorkspaces(
+  lastPushedAt: Record<string, number>,
+): Promise<Record<string, number>> {
+  if (!supabase) return lastPushedAt;
+  const next = { ...lastPushedAt };
+
+  for (const w of await getWorkspaces()) {
+    if (w.syncStatus !== "synced") continue;
+    if (w.updatedAt <= (next[w.id] ?? 0)) continue;
+
+    const { data, error } = await supabase
+      .from("workspaces")
+      .update({ name: w.name, tabs: w.tabs })
+      .eq("id", w.id)
+      .select("updated_at")
+      .single();
+    if (error) throw new Error(error.message);
+
+    const serverUpdatedAt = Date.parse(data.updated_at);
+    next[w.id] = serverUpdatedAt;
+    const fresh = await getWorkspaces();
+    await setWorkspaces(
+      fresh.map((x) =>
+        x.id === w.id ? { ...x, updatedAt: serverUpdatedAt } : x,
+      ),
+    );
+  }
+
+  return next;
 }
 
 export async function updateWorkspace(
