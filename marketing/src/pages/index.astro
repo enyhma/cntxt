@@ -9,6 +9,10 @@ const CREEM_MONTHLY_URL =
 const CREEM_YEARLY_URL =
   "https://www.creem.io/product/prod_7i6mdEk2fz7x5pdo3ZwHC3";
 
+const DASHBOARD_URL = "https://dash.cntxt.work";
+const CHROME_URL =
+  "https://chromewebstore.google.com/detail/cntxt/ehnhkcnmbkboaljolbndgdgfmjkgipih";
+
 const FEATURES = [
   {
     color: "var(--accent)",
@@ -128,7 +132,8 @@ const STEPS = [
       <nav class="site-nav">
         <a href="#features">Features</a>
         <a href="#how-it-works">How it works</a>
-        <a href="#pricing" class="btn btn-ghost">Pricing</a>
+        <a href="#pricing">Pricing</a>
+        <a href={DASHBOARD_URL} class="btn btn-ghost">Dashboard</a>
       </nav>
     </header>
 
@@ -142,8 +147,13 @@ const STEPS = [
           doesn't have to be a memory game.
         </p>
         <div class="hero-actions">
-          <a href="#pricing" class="btn btn-primary">See pricing</a>
+          <a href={CHROME_URL} class="btn btn-primary">Add to Chrome</a>
+          <span class="btn btn-ghost" aria-disabled="true">Firefox — coming soon</span>
+          <span class="btn btn-ghost" aria-disabled="true">Edge — coming soon</span>
         </div>
+        <p class="hero-subaction">
+          <a href="#pricing">See pricing</a>
+        </p>
 
         <div class="mock" aria-hidden="true">
           <div class="mock-rail">
@@ -448,6 +458,22 @@ const STEPS = [
   }
   .hero-actions {
     margin-top: 2rem;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .hero-actions .btn[aria-disabled="true"] {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .hero-subaction {
+    margin: 0.9rem 0 0;
+    font-size: 0.85rem;
+  }
+  .hero-subaction a {
+    color: var(--surface-txt-hint);
+    text-decoration: underline;
   }
 
   .mock {
