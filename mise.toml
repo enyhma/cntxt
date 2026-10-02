@@ -1,4 +1,5 @@
 [tools]
+just = "latest"
 lefthook = "latest"
 node = "latest"
 pnpm = "latest"

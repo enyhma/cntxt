@@ -6,9 +6,6 @@
 # stores (see extension/package.json's zip scripts), not Fly, and
 # marketing/'s deploy isn't wired here — ask if that's wanted too.
 
-set dotenv-filename := ".env.production"
-set dotenv-load := true
-
 # List available commands.
 default:
     @just --list
@@ -17,12 +14,22 @@ default:
 build-web:
     pnpm --filter web build
 
-# Deploy web/ to Fly.io. Build context is the repo root, not web/ itself
-# (web/ depends on workspace:* packages that only resolve from the root
-# lockfile/workspace graph — see web/Dockerfile). Vite inlines VITE_*
-# vars at build time, not runtime, so these have to be --build-arg, not
-# Fly runtime secrets.
-deploy-web:
+# Deploy web/ to Fly.io against the named environment's .env.<env> file
+# (e.g. `just deploy-web production` reads .env.production; add a
+# .env.staging and run `just deploy-web staging` the same way — no
+# justfile change needed for a new environment). `env` is required, no
+# default — just errors out if it's omitted rather than silently picking
+# one environment over another.
+# Build context is the repo root, not web/ itself (web/ depends on
+# workspace:* packages that only resolve from the root lockfile/workspace
+# graph — see web/Dockerfile). Vite inlines VITE_* vars at build time,
+# not runtime, so these have to be --build-arg, not Fly runtime secrets.
+deploy-web env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    set -a
+    source ".env.{{env}}"
+    set +a
     fly deploy --config web/fly.toml --dockerfile web/Dockerfile \
       --build-arg VITE_SUPABASE_URL="$SUPABASE_URL" \
       --build-arg VITE_SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY" \
