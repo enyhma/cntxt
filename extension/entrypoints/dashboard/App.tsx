@@ -13,7 +13,6 @@ import {
   onMount,
   untrack,
 } from "solid-js";
-import { Dynamic } from "solid-js/web";
 import { ensureWorkspaceForWindow } from "@/utils/attach";
 import { restoreMachine } from "@/utils/restoreMachine";
 import { syncMachine } from "@/utils/sync";
@@ -30,11 +29,9 @@ import { supabase, supabaseConfigured } from "@/utils/supabase";
 import { creemMonthlyCheckoutUrl, creemYearlyCheckoutUrl } from "@/utils/creem";
 import { type Entitlements, refreshEntitlements } from "@/utils/entitlements";
 import {
-  AppWindow,
   ArrowRight,
   ArrowRightLeft,
   ChevronDown,
-  CloudOff,
   type LucideProps,
   MoreHorizontal,
   PanelLeftClose,
@@ -42,7 +39,6 @@ import {
   Plug,
   Plus,
   RefreshCw,
-  RotateCcw,
   Search,
   LayoutGrid as SectionsIcon,
   Settings as SettingsIcon,
@@ -52,9 +48,7 @@ import {
   X,
 } from "lucide-solid";
 import {
-  type SyncStatus,
   type Workspace,
-  type WorkspaceTab,
   createWorkspace,
   deleteWorkspace,
   getWorkspaces,
@@ -64,188 +58,23 @@ import {
   trashRetentionDays,
   updateWorkspace,
 } from "@/utils/workspaces";
-
-// Dot/avatar colors are derived from a hash of a stable id rather than
-// stored, so tabs (and workspaces without an explicit color) get a
-// consistent color without a schema migration — same trick the design
-// mockup used for tab favicons. A workspace can also pick one of these
-// five explicitly via the customize dialog, stored as its `color` field.
-// Paired with a matching *-txt role (not always white — a light accent
-// theme like Brass on Obsidian needs dark ink on its own hue) so a color
-// that happens to land on the active theme's accent color stays legible.
-const COLOR_KEYS = ["accent", "success", "warning", "info", "danger"] as const;
-type ColorKey = (typeof COLOR_KEYS)[number];
-const COLOR_CLASS: Record<ColorKey, string> = {
-  accent: "bg-accent",
-  success: "bg-success",
-  warning: "bg-warning",
-  info: "bg-info",
-  danger: "bg-danger",
-};
-const COLOR_TXT_CLASS: Record<ColorKey, string> = {
-  accent: "text-accent-txt",
-  success: "text-success-txt",
-  warning: "text-warning-txt",
-  info: "text-info-txt",
-  danger: "text-danger-txt",
-};
-function hashColorKey(seed: string): ColorKey {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++)
-    hash = (hash * 31 + seed.charCodeAt(i)) % 997;
-  return COLOR_KEYS[hash % COLOR_KEYS.length]!;
-}
-function colorFor(seed: string): string {
-  return COLOR_CLASS[hashColorKey(seed)];
-}
-function textColorFor(seed: string): string {
-  return COLOR_TXT_CLASS[hashColorKey(seed)];
-}
-function workspaceColorKey(w: Workspace | undefined): ColorKey {
-  return (w?.color as ColorKey | undefined) ?? hashColorKey(w?.id ?? "cntxt");
-}
-function workspaceDotClass(w: Workspace | undefined): string {
-  return COLOR_CLASS[workspaceColorKey(w)];
-}
-function workspaceTxtClass(w: Workspace | undefined): string {
-  return COLOR_TXT_CLASS[workspaceColorKey(w)];
-}
-function domainOf(url: string): string {
-  return url.replace(/^https?:\/\//, "").split("/")[0] || url;
-}
-
-// A small curated subset of Lucide's path data (see lucide-solid's
-// dist/source/icons/*.jsx — there's no typed way to import __iconNode
-// directly, only the wrapped component), inlined so the exact same
-// geometry can be drawn both by a SolidJS <Icon> in the picker/UI and as a
-// raw string in the pinned tab's favicon data URI, which can't render
-// components.
-type IconNode = ReadonlyArray<
-  readonly [string, Record<string, string | number>]
->;
-const ICONS = {
-  folder: [
-    [
-      "path",
-      {
-        d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z",
-      },
-    ],
-  ],
-  star: [
-    [
-      "path",
-      {
-        d: "M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z",
-      },
-    ],
-  ],
-  rocket: [
-    ["path", { d: "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" }],
-    [
-      "path",
-      {
-        d: "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09",
-      },
-    ],
-    [
-      "path",
-      {
-        d: "M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z",
-      },
-    ],
-    ["path", { d: "M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05" }],
-  ],
-  zap: [
-    [
-      "path",
-      {
-        d: "M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z",
-      },
-    ],
-  ],
-  heart: [
-    [
-      "path",
-      {
-        d: "M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5",
-      },
-    ],
-  ],
-  bookmark: [
-    [
-      "path",
-      {
-        d: "M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z",
-      },
-    ],
-  ],
-  briefcase: [
-    ["path", { d: "M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" }],
-    ["rect", { width: "20", height: "14", x: "2", y: "6", rx: "2" }],
-  ],
-  globe: [
-    ["circle", { cx: "12", cy: "12", r: "10" }],
-    ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" }],
-    ["path", { d: "M2 12h20" }],
-  ],
-  flag: [
-    [
-      "path",
-      {
-        d: "M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528",
-      },
-    ],
-  ],
-  coffee: [
-    ["path", { d: "M10 2v2" }],
-    ["path", { d: "M14 2v2" }],
-    [
-      "path",
-      {
-        d: "M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1",
-      },
-    ],
-    ["path", { d: "M6 2v2" }],
-  ],
-  sparkles: [
-    [
-      "path",
-      {
-        d: "M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z",
-      },
-    ],
-    ["path", { d: "M20 2v4" }],
-    ["path", { d: "M22 4h-4" }],
-    ["circle", { cx: "4", cy: "20", r: "2" }],
-  ],
-  code: [
-    ["path", { d: "m16 18 6-6-6-6" }],
-    ["path", { d: "m8 6-6 6 6 6" }],
-  ],
-} satisfies Record<string, IconNode>;
-type IconName = keyof typeof ICONS;
-const ICON_NAMES = Object.keys(ICONS) as IconName[];
-
-function Icon(props: { name: IconName; size?: number; class?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={props.size ?? 14}
-      height={props.size ?? 14}
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class={props.class}
-    >
-      <For each={ICONS[props.name]}>
-        {([tag, attrs]) => <Dynamic component={tag} {...attrs} />}
-      </For>
-    </svg>
-  );
-}
+import {
+  type ColorKey,
+  COLOR_CLASS,
+  COLOR_KEYS,
+  ICON_NAMES,
+  ICONS,
+  Icon,
+  type IconName,
+  type IconNode,
+  SettingsPanel,
+  TabRow,
+  TrashPanel,
+  WorkspaceDot,
+  WorkspaceRow,
+  workspaceColorKey,
+  workspaceDotClass,
+} from "@cntxt/ui";
 
 function iconNodeToSvgString(node: IconNode, color: string): string {
   return node
@@ -256,32 +85,6 @@ function iconNodeToSvgString(node: IconNode, color: string): string {
       return `<${tag} ${attrStr} stroke="${color}"/>`;
     })
     .join("");
-}
-
-function WorkspaceDot(props: {
-  workspace: Workspace | undefined;
-  ring?: boolean;
-  title?: string;
-}) {
-  const icon = () => props.workspace?.icon as IconName | undefined;
-  return (
-    <span
-      title={props.title}
-      class={
-        "grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full " +
-        workspaceDotClass(props.workspace) +
-        (props.ring ? " ring-2 ring-accent" : "")
-      }
-    >
-      <Show when={icon()}>
-        <Icon
-          name={icon()!}
-          size={9}
-          class={workspaceTxtClass(props.workspace)}
-        />
-      </Show>
-    </span>
-  );
 }
 
 // Resolves a `bg-*` utility class to its actual computed color so the
@@ -327,163 +130,6 @@ const NAV_ITEMS: Array<{
   { key: "trash", label: "Trash", icon: Trash2 },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
-
-// See docs/workspace-sync-semantics.md — the fixed vocabulary this draws
-// from. "synced" and legacy-undefined both render nothing, matching the
-// activation table's "Dormant" baseline: only the exceptional cases draw
-// the eye.
-const SYNC_COPY: Partial<Record<SyncStatus, string>> = {
-  syncing: "Syncing…",
-  offline: "Not synced — offline",
-  "signed-out": "Not synced — sign in to sync",
-  "limit-reached": "Not synced — plan limit reached",
-  expired: "Not synced — plan expired",
-};
-
-function SyncBadge(props: { status: SyncStatus | undefined }) {
-  const warn = () =>
-    props.status === "limit-reached" || props.status === "expired";
-  return (
-    <Show when={props.status && props.status !== "synced"}>
-      <span
-        title={SYNC_COPY[props.status!]}
-        class={
-          "shrink-0 " + (warn() ? "text-warning" : "text-surface-txt-hint")
-        }
-      >
-        <Show
-          when={props.status === "syncing"}
-          fallback={<CloudOff size={10} />}
-        >
-          <RefreshCw size={10} class="animate-spin" />
-        </Show>
-      </span>
-    </Show>
-  );
-}
-
-function WorkspaceRow(props: {
-  workspace: Workspace;
-  count: number;
-  isViewed: boolean;
-  isCurrent: boolean;
-  openElsewhere: boolean;
-  anyActive: boolean;
-  busy: boolean;
-  onView: () => void;
-  onOpenAll: () => void;
-  onDisconnect: () => void;
-}) {
-  return (
-    <div
-      onClick={props.onView}
-      class={
-        "group flex cursor-pointer items-center gap-2.5 rounded border-l-2 px-2.5 py-2" +
-        (props.isViewed
-          ? " border-l-accent bg-surface-alt1 font-medium"
-          : " border-l-transparent text-surface-txt-hint")
-      }
-    >
-      <WorkspaceDot
-        workspace={props.workspace}
-        ring={props.isCurrent}
-        title={props.isCurrent ? "Active" : undefined}
-      />
-      <span class="min-w-0 flex-1 truncate text-sm">
-        {props.workspace.name}
-      </span>
-      <span class="font-mono text-[11px] text-surface-txt-faint">
-        {props.count}
-      </span>
-      <SyncBadge status={props.workspace.syncStatus} />
-      <Show when={props.isCurrent}>
-        <button
-          type="button"
-          title="Disconnect"
-          disabled={props.busy}
-          onClick={(e) => {
-            e.stopPropagation();
-            props.onDisconnect();
-          }}
-          class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-warning disabled:opacity-40"
-        >
-          <Unplug size={10} />
-        </button>
-      </Show>
-      <Show when={!props.isCurrent}>
-        <Show
-          when={!props.openElsewhere}
-          fallback={
-            <span title="Open elsewhere" class="shrink-0">
-              <AppWindow size={10} class="text-surface-txt-faint" />
-            </span>
-          }
-        >
-          <button
-            type="button"
-            title={props.anyActive ? "Switch here" : "Connect here"}
-            disabled={props.busy}
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onOpenAll();
-            }}
-            class="btn btn-square btn-ghost btn-xs shrink-0 text-accent opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-40"
-          >
-            <Show when={props.anyActive} fallback={<Plug size={10} />}>
-              <ArrowRightLeft size={10} />
-            </Show>
-          </button>
-        </Show>
-      </Show>
-    </div>
-  );
-}
-
-function TabRow(props: {
-  tab: WorkspaceTab;
-  index: number;
-  selected: boolean;
-  selectable: boolean;
-  onToggle: () => void;
-  onOpen: () => void;
-}) {
-  const domain = () => domainOf(props.tab.url);
-  return (
-    <div
-      onClick={props.selectable ? props.onToggle : props.onOpen}
-      class={
-        "flex cursor-pointer items-center gap-2.75 border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0 hover:bg-surface-alt2" +
-        (props.selected ? " bg-accent/20" : "")
-      }
-    >
-      <Show when={props.selectable}>
-        <input
-          type="checkbox"
-          class="checkbox checkbox-xs"
-          checked={props.selected}
-          onClick={(e) => e.stopPropagation()}
-          onChange={props.onToggle}
-        />
-      </Show>
-      <span
-        class={
-          "grid h-4.5 w-4.5 shrink-0 place-items-center rounded text-[10px] font-bold " +
-          colorFor(props.tab.url) +
-          " " +
-          textColorFor(props.tab.url)
-        }
-      >
-        {domain()[0]?.toUpperCase()}
-      </span>
-      <span class="min-w-0 flex-1 truncate text-sm">
-        {props.tab.title || props.tab.url}
-      </span>
-      <span class="max-w-[38%] shrink-0 truncate font-mono text-[11px] text-surface-txt-faint">
-        {domain()}
-      </span>
-    </div>
-  );
-}
 
 function Dashboard(props: {
   workspaces: Accessor<Workspace[]>;
@@ -1153,133 +799,6 @@ function Dashboard(props: {
   );
 }
 
-function SettingsPanel(props: {
-  startupBehavior: Accessor<StartupBehavior>;
-  onStartupBehaviorChange: (v: StartupBehavior) => void;
-  theme: Accessor<Theme>;
-  onThemeChange: (v: Theme) => void;
-  manualPullEnabled: Accessor<boolean>;
-  onManualPullEnabledChange: (v: boolean) => void;
-}) {
-  return (
-    <div class="flex-1 overflow-y-auto p-6">
-      <div class="flex max-w-md flex-col gap-5">
-        <h2 class="text-base font-semibold">Settings</h2>
-        <label class="flex flex-col gap-1.5 text-sm">
-          <span class="text-surface-txt-hint">On browser start</span>
-          <select
-            class="select bg-surface-alt1 shadow-[var(--shadow-card)]"
-            value={props.startupBehavior()}
-            onChange={(e) =>
-              props.onStartupBehaviorChange(
-                e.currentTarget.value as StartupBehavior,
-              )
-            }
-          >
-            <option value="none">Start fresh</option>
-            <option value="lastUsed">Resume last used workspace</option>
-          </select>
-        </label>
-        <label class="flex flex-col gap-1.5 text-sm">
-          <span class="text-surface-txt-hint">Color theme</span>
-          <select
-            class="select bg-surface-alt1 shadow-[var(--shadow-card)]"
-            value={props.theme()}
-            onChange={(e) =>
-              props.onThemeChange(e.currentTarget.value as Theme)
-            }
-          >
-            <option value="baseline">Baseline</option>
-            <option value="indigo">Graphite Indigo</option>
-            <option value="brass">Brass on Obsidian</option>
-          </select>
-        </label>
-        <label class="flex items-start gap-2.5 text-sm">
-          <input
-            type="checkbox"
-            class="checkbox checkbox-sm mt-0.5"
-            checked={props.manualPullEnabled()}
-            onChange={(e) =>
-              props.onManualPullEnabledChange(e.currentTarget.checked)
-            }
-          />
-          <span class="flex flex-col gap-0.5">
-            <span>Manual sync pull (experimental)</span>
-            <span class="text-xs text-surface-txt-hint">
-              Adds a "Pull workspaces now" option to the account menu, to fetch
-              from your account on demand instead of waiting for sign-in or a
-              token refresh.
-            </span>
-          </span>
-        </label>
-      </div>
-    </div>
-  );
-}
-
-// Days left before purge_trashed_workspaces (supabase/migrations) removes
-// this for good. Floored, not rounded, so "0 days left" means "could be
-// gone any time now" rather than implying a few more hours of safety.
-function daysRemaining(workspace: Workspace, retentionDays: number): number {
-  const elapsedMs = Date.now() - (workspace.deletedAt ?? Date.now());
-  return Math.max(0, retentionDays - Math.floor(elapsedMs / 86_400_000));
-}
-
-function TrashPanel(props: {
-  workspaces: Accessor<Workspace[]>;
-  retentionDays: Accessor<number>;
-  onRestore: (id: string) => void;
-  onDeleteForever: (id: string) => void;
-}) {
-  return (
-    <div class="flex-1 overflow-y-auto p-6">
-      <div class="flex max-w-md flex-col gap-3">
-        <h2 class="text-base font-semibold">Trash</h2>
-        <Show
-          when={props.workspaces().length > 0}
-          fallback={
-            <p class="text-sm text-surface-txt-hint">Trash is empty.</p>
-          }
-        >
-          <For each={props.workspaces()}>
-            {(w) => (
-              <div class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 shadow-[var(--shadow-card)]">
-                <WorkspaceDot workspace={w} />
-                <div class="flex min-w-0 flex-1 flex-col">
-                  <span class="truncate text-sm font-medium">{w.name}</span>
-                  <span class="text-xs text-surface-txt-hint">
-                    {daysRemaining(w, props.retentionDays())} day
-                    {daysRemaining(w, props.retentionDays()) === 1
-                      ? ""
-                      : "s"}{" "}
-                    left
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  title="Restore"
-                  onClick={() => props.onRestore(w.id)}
-                  class="btn btn-square btn-sm border border-surface-alt3 bg-surface-alt2"
-                >
-                  <RotateCcw size={13} />
-                </button>
-                <button
-                  type="button"
-                  title="Delete forever"
-                  onClick={() => props.onDeleteForever(w.id)}
-                  class="btn btn-square btn-sm border border-surface-alt3 text-danger"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            )}
-          </For>
-        </Show>
-      </div>
-    </div>
-  );
-}
-
 function App() {
   const [workspaces, setWorkspaces] = createSignal<Workspace[]>([]);
   const [windowMap, setWindowMap] = createSignal<Record<number, string>>({});
@@ -1578,7 +1097,7 @@ function App() {
               Copy <code>extension/.env.example</code> to{" "}
               <code>extension/.env</code> and fill in
               <code> WXT_SUPABASE_URL</code> /{" "}
-              <code> WXT_SUPABASE_ANON_KEY</code>, then restart{" "}
+              <code> WXT_SUPABASE_PUBLISHABLE_KEY</code>, then restart{" "}
               <code>pnpm dev</code>. Local dev values come from{" "}
               <code>npx supabase status</code> (run <code>supabase start</code>{" "}
               from the repo root first).

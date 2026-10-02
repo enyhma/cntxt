@@ -3,4 +3,5 @@ extension/.output
 extension/.wxt
 marketing/.astro
 marketing/dist
+web/dist
 pnpm-lock.yaml

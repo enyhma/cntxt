@@ -21,6 +21,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",
     "@cntxt/tokens": "workspace:*",
+    "@cntxt/ui": "workspace:*",
     "@xstate/solid": "^2.0.0",
     "lucide-solid": "^1.48.0",
     "solid-js": "^1.9.11",
