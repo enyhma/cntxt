@@ -1,0 +1,59 @@
+# Runs semantic-release on every push to main: bumps extension/package.json
+# per Conventional Commits, tags, publishes a GitHub Release, and — via
+# semantic-release-chrome in .releaserc.json — uploads and publishes the
+# built extension to the Chrome Web Store. The release commit includes
+# "[skip ci]", which GitHub Actions honors natively, so it doesn't retrigger
+# this workflow.
+#
+# Required repo secrets (Settings > Secrets and variables > Actions):
+#   CHROME_CLIENT_ID, CHROME_CLIENT_SECRET, CHROME_REFRESH_TOKEN
+#     — Google Cloud OAuth credentials for the Chrome Web Store API, scoped
+#       to the cntxt listing. See extension/.../Authentication docs for
+#       semantic-release-chrome, or node_modules/semantic-release-chrome/Authentication.md
+#       once installed, for how to generate them.
+# GITHUB_TOKEN is provided automatically by Actions; no setup needed.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm --filter extension compile
+      - run: pnpm --filter extension test
+
+      # Unpacked build only — semantic-release-chrome's prepare step patches
+      # the version into this dist and zips it itself (see .releaserc.json).
+      - run: pnpm --filter extension build
+
+      - run: pnpm release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOOGLE_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
