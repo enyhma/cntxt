@@ -37,4 +37,4 @@ deploy-web env:
 # deps) and has no VITE_*-style build-time secrets, so the build
 # context is marketing/ itself and there's no env to pick.
 deploy-marketing:
-    fly deploy --config marketing/fly.toml --dockerfile marketing/Dockerfile marketing/
+    cd marketing && fly deploy --config fly.toml --dockerfile Dockerfile .
