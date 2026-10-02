@@ -107,7 +107,7 @@ FOR UPDATE` checks the UPDATE policy's `USING` clause, not just
       removal, and that it's actually `browser.storage.local` underneath,
       not some other store) — green after the ~15-line implementation.
 - [x] `utils/supabase.ts`: one client instance, reading
-      `WXT_SUPABASE_URL`/`WXT_SUPABASE_ANON_KEY` from the environment
+      `WXT_SUPABASE_URL`/`WXT_SUPABASE_PUBLISHABLE_KEY` from the environment
       (`.env.example` added) rather than hardcoding a project — throws
       clearly at load time if they're missing instead of failing silently
       later.
