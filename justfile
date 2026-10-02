@@ -1,18 +1,15 @@
-# Deployment commands for the standalone web dashboard (web/). Run from
-# the repo root — `just` isn't available in this sandbox to test these,
-# so treat them as reviewed-by-hand, not verified, until run for real.
+# Deployment commands for the standalone web dashboard (web/) and the
+# marketing site (marketing/). Run from the repo root — `just` isn't
+# available in this sandbox to test these, so treat them as
+# reviewed-by-hand, not verified, until run for real.
 #
-# Scope: web/ only. extension/ ships through the Chrome/Firefox/Edge
-# stores (see extension/package.json's zip scripts), not Fly, and
-# marketing/'s deploy isn't wired here — ask if that's wanted too.
+# Scope: web/ and marketing/ only. extension/ ships through the
+# Chrome/Firefox/Edge stores (see extension/package.json's zip scripts),
+# not Fly.
 
 # List available commands.
 default:
     @just --list
-
-# Build web/ locally — a sanity check before deploying.
-build-web:
-    pnpm --filter web build
 
 # Deploy web/ to Fly.io against the named environment's .env.<env> file
 # (e.g. `just deploy-web production` reads .env.production; add a
@@ -35,13 +32,9 @@ deploy-web env:
       --build-arg VITE_SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY" \
       .
 
-# One-time setup, run once before the first deploy-web.
-create-web-app:
-    fly apps create cntxt-production-dashboard
-
-# One-time setup — provisions the app.cntxt.work TLS cert. Still requires
-# adding the DNS record Fly prints, and adding https://app.cntxt.work to
-# Supabase Auth's redirect allowlist, by hand (dashboard config, not
-# something this recipe can do).
-certs-web:
-    fly certs add app.cntxt.work --app cntxt-production-dashboard
+# Deploy marketing/ to Fly.io. Unlike web/, marketing/ is fully
+# self-contained (own pnpm-workspace.yaml/lockfile, no workspace:*
+# deps) and has no VITE_*-style build-time secrets, so the build
+# context is marketing/ itself and there's no env to pick.
+deploy-marketing:
+    fly deploy --config marketing/fly.toml --dockerfile marketing/Dockerfile marketing/
