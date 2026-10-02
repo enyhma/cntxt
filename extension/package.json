@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",
+    "@cntxt/supabase": "workspace:*",
     "@cntxt/tokens": "workspace:*",
     "@cntxt/ui": "workspace:*",
     "@xstate/solid": "^2.0.0",

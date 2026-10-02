@@ -10,6 +10,7 @@
     "compile": "tsc --noEmit"
   },
   "dependencies": {
+    "@cntxt/supabase": "workspace:*",
     "@cntxt/tokens": "workspace:*",
     "@cntxt/ui": "workspace:*",
     "@supabase/supabase-js": "^2.116.0",

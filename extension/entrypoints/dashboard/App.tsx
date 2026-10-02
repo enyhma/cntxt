@@ -1,5 +1,4 @@
 import { useMachine } from "@xstate/solid";
-import type { Session } from "@supabase/supabase-js";
 import {
   type Accessor,
   type JSX,
@@ -26,6 +25,7 @@ import {
 } from "@/utils/settings";
 import { parseTokensFromRedirectUrl } from "@/utils/oauthRedirect";
 import { supabase, supabaseConfigured } from "@/utils/supabase";
+import { useSupabaseSession } from "@cntxt/supabase";
 import { creemMonthlyCheckoutUrl, creemYearlyCheckoutUrl } from "@/utils/creem";
 import { type Entitlements, refreshEntitlements } from "@/utils/entitlements";
 import {
@@ -62,6 +62,7 @@ import {
   type ColorKey,
   COLOR_CLASS,
   COLOR_KEYS,
+  ConfigWarning,
   ICON_NAMES,
   ICONS,
   Icon,
@@ -829,8 +830,20 @@ function App() {
       : "Already up to date";
   }
 
-  const [session, setSession] = createSignal<Session | null>(null);
-  const [authLoading, setAuthLoading] = createSignal(true);
+  function onSignedIn() {
+    refreshEntitlements().then(setEntitlements);
+    syncSend({ type: "PULL" });
+    reconcileSyncStatus().then(refresh);
+  }
+  // Piggyback on the token refresh supabase-js already does on a timer — no
+  // separate polling loop, per docs/architecture-sync.md. syncMachine has
+  // its own periodic pull tick independent of this.
+  const { session, authLoading } = useSupabaseSession(supabase, {
+    onInitialSession: onSignedIn,
+    onAuthEvent: (event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") onSignedIn();
+    },
+  });
   const [entitlements, setEntitlements] = createSignal<Entitlements>();
   const [email, setEmail] = createSignal("");
   const [otpSent, setOtpSent] = createSignal(false);
@@ -900,32 +913,6 @@ function App() {
   }
 
   onMount(async () => {
-    if (supabaseConfigured) {
-      const { data } = await supabase!.auth.getSession();
-      setSession(data.session);
-      if (data.session) {
-        refreshEntitlements().then(setEntitlements);
-        syncSend({ type: "PULL" });
-        reconcileSyncStatus().then(refresh);
-      }
-
-      // Piggyback on the token refresh supabase-js already does on a timer
-      // — no separate polling loop, per docs/architecture-sync.md.
-      // syncMachine has its own periodic pull tick independent of this.
-      const { data: authListener } = supabase!.auth.onAuthStateChange(
-        (event, newSession) => {
-          setSession(newSession);
-          if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-            refreshEntitlements().then(setEntitlements);
-            syncSend({ type: "PULL" });
-            reconcileSyncStatus().then(refresh);
-          }
-        },
-      );
-      onCleanup(() => authListener.subscription.unsubscribe());
-    }
-    setAuthLoading(false);
-
     const win = await browser.windows.getCurrent();
     if (win.id !== undefined) {
       setMyWindowId(win.id);
@@ -1090,20 +1077,15 @@ function App() {
   return (
     <>
       <Show when={!supabaseConfigured}>
-        <div class="min-h-screen bg-surface p-8 font-sans text-surface-txt">
-          <div class="mx-auto max-w-2xl rounded border border-warning bg-warning/10 p-4 text-sm shadow-[var(--shadow-card)]">
-            <p class="font-medium">Supabase isn't configured yet.</p>
-            <p class="mt-1">
-              Copy <code>extension/.env.example</code> to{" "}
-              <code>extension/.env</code> and fill in
-              <code> WXT_SUPABASE_URL</code> /{" "}
-              <code> WXT_SUPABASE_PUBLISHABLE_KEY</code>, then restart{" "}
-              <code>pnpm dev</code>. Local dev values come from{" "}
-              <code>npx supabase status</code> (run <code>supabase start</code>{" "}
-              from the repo root first).
-            </p>
-          </div>
-        </div>
+        <ConfigWarning>
+          Copy <code>extension/.env.example</code> to{" "}
+          <code>extension/.env</code> and fill in
+          <code> WXT_SUPABASE_URL</code> /{" "}
+          <code> WXT_SUPABASE_PUBLISHABLE_KEY</code>, then restart{" "}
+          <code>pnpm dev</code>. Local dev values come from{" "}
+          <code>npx supabase status</code> (run <code>supabase start</code> from
+          the repo root first).
+        </ConfigWarning>
       </Show>
       <Show when={supabaseConfigured && !authLoading()}>
         <Show

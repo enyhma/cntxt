@@ -1,0 +1,22 @@
+{
+  "name": "@cntxt/supabase",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "compile": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "solid-js": "^1.9.11"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

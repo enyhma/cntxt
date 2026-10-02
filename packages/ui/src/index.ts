@@ -1,4 +1,5 @@
 export * from "./colors";
+export * from "./ConfigWarning";
 export * from "./icon";
 export * from "./WorkspaceDot";
 export * from "./SyncBadge";
