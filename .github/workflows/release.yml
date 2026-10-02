@@ -39,8 +39,8 @@ jobs:
 
       - run: pnpm lint
       - run: pnpm format:check
-      - run: pnpm --filter extension compile
-      - run: pnpm --filter extension test
+      - run: pnpm --filter ./extension compile
+      - run: pnpm --filter ./extension test
 
       - run: pnpm release
         env:
