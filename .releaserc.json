@@ -6,11 +6,9 @@
     "@semantic-release/release-notes-generator",
     ["@semantic-release/npm", { "npmPublish": false, "pkgRoot": "extension" }],
     [
-      "semantic-release-chrome",
+      "@semantic-release/exec",
       {
-        "extensionId": "ehnhkcnmbkboaljolbndgdgfmjkgipih",
-        "distFolder": "extension/.output/chrome-mv3",
-        "asset": "extension/.output/cntxt-chrome.zip"
+        "prepareCmd": "pnpm --filter extension zip"
       }
     ],
     [
@@ -25,7 +23,7 @@
       {
         "assets": [
           {
-            "path": "extension/.output/cntxt-chrome.zip",
+            "path": "extension/.output/*-chrome.zip",
             "label": "Chrome extension (.zip)"
           }
         ]
