@@ -14,7 +14,7 @@ export function TabRow(props: {
     <div
       onClick={props.selectable ? props.onToggle : props.onOpen}
       class={
-        "flex cursor-pointer items-center gap-2.75 border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0 hover:bg-surface-alt2" +
+        "flex cursor-pointer items-center gap-[11px] border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0 hover:bg-surface-alt2" +
         (props.selected ? " bg-accent/20" : "")
       }
     >
