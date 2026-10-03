@@ -42,6 +42,15 @@ jobs:
       - run: pnpm --filter ./extension compile
       - run: pnpm --filter ./extension test
 
-      - run: pnpm release
+      # semantic-release's zip step (see .releaserc.json) needs the
+      # WXT_SUPABASE_* vars at build time. Map .env.production's unprefixed
+      # values onto them, same as `just deploy-web` does for VITE_*.
+      - run: |
+          set -a
+          source .env.production
+          set +a
+          export WXT_SUPABASE_URL="$SUPABASE_URL"
+          export WXT_SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
+          pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
