@@ -401,7 +401,7 @@ function Dashboard(props: {
 
   return (
     <>
-      <div class="flex flex-1 items-stretch overflow-hidden">
+      <div class="flex min-h-0 flex-1 items-stretch overflow-hidden">
         <Show when={railOpen()}>
           <nav class="flex w-60 shrink-0 flex-col border-r border-surface-alt2 bg-surface-alt1">
             <div class="flex h-11 shrink-0 items-center gap-2 border-b border-surface-alt2 pr-2.5 pl-3.5">
@@ -432,7 +432,7 @@ function Dashboard(props: {
                 <PanelLeftClose size={13} />
               </button>
             </div>
-            <div class="flex flex-col gap-0.5 overflow-y-auto p-1.5">
+            <div class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-1.5">
               <For each={workspaces()}>
                 {(w) => (
                   <WorkspaceRow
@@ -453,7 +453,7 @@ function Dashboard(props: {
           </nav>
         </Show>
 
-        <main class="flex min-w-0 flex-1 flex-col">
+        <main class="flex min-h-0 min-w-0 flex-1 flex-col">
           <div class="sticky top-0 z-30 flex h-13 min-w-0 shrink-0 items-center gap-2 border-b border-surface-alt2 bg-surface px-3.5">
             <Show when={!railOpen()}>
               <button
@@ -624,7 +624,7 @@ function Dashboard(props: {
             </button>
           </div>
 
-          <div class="flex-1 overflow-y-auto p-3.5">
+          <div class="min-h-0 flex-1 overflow-y-auto p-3.5">
             <Show
               when={viewed() && viewed()!.tabs.length > 0}
               fallback={
@@ -1156,7 +1156,7 @@ function App() {
             </div>
           }
         >
-          <div class="flex min-h-screen flex-col bg-surface font-sans text-surface-txt">
+          <div class="flex h-screen flex-col bg-surface font-sans text-surface-txt">
             <header class="sticky top-0 z-40 flex h-13 shrink-0 items-center gap-1 border-b border-surface-alt2 bg-surface-alt1 px-3.5">
               <svg
                 viewBox="0 0 100 100"
