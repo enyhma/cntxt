@@ -10,6 +10,24 @@ export default defineConfig({
   vite: () => ({
     plugins: [tailwindcss()],
   }),
+  hooks: {
+    // Catch a missing/unset Supabase config at build time instead of
+    // shipping a zip that silently shows "Supabase isn't configured" —
+    // this is what CI's `pnpm release` (and any local `build`/`zip`) hits
+    // if WXT_SUPABASE_URL / WXT_SUPABASE_PUBLISHABLE_KEY aren't in the
+    // env (see .env.example, .github/workflows/release.yml).
+    "build:before": (wxt) => {
+      if (
+        wxt.config.mode === "production" &&
+        (!process.env.WXT_SUPABASE_URL ||
+          !process.env.WXT_SUPABASE_PUBLISHABLE_KEY)
+      ) {
+        throw new Error(
+          "WXT_SUPABASE_URL / WXT_SUPABASE_PUBLISHABLE_KEY must be set for a production build. See extension/.env.example.",
+        );
+      }
+    },
+  },
   manifest: (env) => {
     const base = {
       // "identity" is for browser.identity.launchWebAuthFlow /
