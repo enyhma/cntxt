@@ -1,0 +1,45 @@
+# Deploys marketing/ to Fly.io whenever marketing/** changes land on main.
+# Mirrors `just deploy-marketing` (see justfile) — same fly.toml/Dockerfile,
+# just automated. Needs two repo secrets that only a maintainer can set
+# (Settings > Secrets and variables > Actions):
+#   FLY_API_TOKEN   - `fly tokens create deploy -x 999999h` (or similar)
+#   TINA_TOKEN      - Tina Cloud project's read-only token (Tina's own docs
+#                     call this sensitive — do not put it in .env.production)
+# TINA_CLIENT_ID is NOT a secret (public project identifier, same as the
+# Supabase values below it) — read from .env.production instead.
+# These are build-time values (tinacms build indexes content against Tina
+# Cloud), not Fly runtime secrets — see marketing/Dockerfile.
+name: Deploy marketing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "marketing/**"
+      - ".github/workflows/deploy-marketing.yml"
+
+concurrency:
+  group: deploy-marketing
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: |
+          set -a
+          source .env.production
+          set +a
+          cd marketing
+          flyctl deploy --config fly.toml --dockerfile Dockerfile \
+            --build-arg TINA_CLIENT_ID="$TINA_CLIENT_ID" \
+            --build-arg TINA_TOKEN="$TINA_TOKEN" \
+            .
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          TINA_TOKEN: ${{ secrets.TINA_TOKEN }}

@@ -34,7 +34,18 @@ deploy-web env:
 
 # Deploy marketing/ to Fly.io. Unlike web/, marketing/ is fully
 # self-contained (own pnpm-workspace.yaml/lockfile, no workspace:*
-# deps) and has no VITE_*-style build-time secrets, so the build
-# context is marketing/ itself and there's no env to pick.
+# deps), so the build context is marketing/ itself and there's no env
+# to pick. tinacms build does need Tina Cloud build-time secrets though
+# (see marketing/Dockerfile), read from marketing/.env same as the CMS
+# dev/build scripts expect.
 deploy-marketing:
-    cd marketing && fly deploy --config fly.toml --dockerfile Dockerfile .
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd marketing
+    set -a
+    source .env
+    set +a
+    fly deploy --config fly.toml --dockerfile Dockerfile \
+      --build-arg TINA_CLIENT_ID="$TINA_CLIENT_ID" \
+      --build-arg TINA_TOKEN="$TINA_TOKEN" \
+      .
