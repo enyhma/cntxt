@@ -1,6 +1,9 @@
 ---
 import SEO from "../components/SEO.astro";
-import home from "../../content/home/home.json";
+import TinaIsland from "@tinacms/astro/TinaIsland.astro";
+import { requestWithMetadata } from "@tinacms/astro";
+import { client } from "../../tina/__generated__/client";
+import HomeContent from "../components/HomeContent.astro";
 
 // Live Creem products (public checkout links, safe to embed client-side —
 // no API key involved). Created via `creem products create`; see
@@ -11,10 +14,14 @@ const CREEM_YEARLY_URL =
   "https://www.creem.io/product/prod_7i6mdEk2fz7x5pdo3ZwHC3";
 
 const DASHBOARD_URL = "https://dash.cntxt.work";
-const CHROME_URL =
-  "https://chromewebstore.google.com/detail/cntxt/ehnhkcnmbkboaljolbndgdgfmjkgipih";
 
-const { hero, features: FEATURES, steps: STEPS } = home;
+// Fetched through Tina's client (not a plain JSON import) so this page's
+// render is wired into the same query the admin's live-preview bridge
+// refreshes via /tina-island/home — see src/tina/islands.ts.
+const result = await requestWithMetadata(
+  client.queries.home({ relativePath: "home.json" }),
+);
+const home = result.data.home;
 ---
 
 <html lang="en">
@@ -90,106 +97,9 @@ const { hero, features: FEATURES, steps: STEPS } = home;
     </header>
 
     <main>
-      <section class="hero">
-        <p class="eyebrow">{hero.eyebrow}</p>
-        <h1>{hero.title}</h1>
-        <p class="lede">{hero.lede}</p>
-        <div class="hero-actions">
-          <a href={CHROME_URL} class="btn btn-primary">Add to Chrome</a>
-          <span class="btn btn-ghost" aria-disabled="true">Firefox — coming soon</span>
-          <span class="btn btn-ghost" aria-disabled="true">Edge — coming soon</span>
-        </div>
-        <p class="hero-subaction">
-          <a href="#pricing">See pricing</a>
-        </p>
-
-        <div class="mock" aria-hidden="true">
-          <div class="mock-rail">
-            <p class="mock-rail-label">WORKSPACES</p>
-            <div class="mock-row is-active">
-              <span class="dot" style="background:var(--accent)"></span>
-              Design review
-              <span class="count">7</span>
-            </div>
-            <div class="mock-row">
-              <span class="dot" style="background:var(--success)"></span>
-              Research
-              <span class="count">12</span>
-            </div>
-            <div class="mock-row">
-              <span class="dot" style="background:var(--warning)"></span>
-              Q3 planning
-              <span class="count">4</span>
-            </div>
-            <div class="mock-row">
-              <span class="dot" style="background:var(--info)"></span>
-              Reading list
-              <span class="count">19</span>
-            </div>
-          </div>
-          <div class="mock-main">
-            <div class="mock-topbar">
-              <span class="dot" style="background:var(--accent)"></span>
-              <strong>Design review</strong>
-              <span class="count">7 tabs</span>
-              <span class="mock-kbd">⌘K</span>
-            </div>
-            <div class="mock-tabs">
-              {
-                [
-                  ["Figma — component audit", "figma.com"],
-                  ["Design tokens PR #214", "github.com"],
-                  ["Spacing scale notes", "notion.so"],
-                ].map(([title, domain]) => (
-                  <div class="mock-tab">
-                    <span class="favicon">{domain[0].toUpperCase()}</span>
-                    <span class="tab-title">{title}</span>
-                    <span class="tab-domain">{domain}</span>
-                  </div>
-                ))
-              }
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="features" class="features">
-        <h2>Built around one idea</h2>
-        <p class="section-lede">
-          A window is already the unit of "a project" or "a train of
-          thought." cntxt just gives that unit a name and lets you put it
-          away.
-        </p>
-        <div class="feature-grid">
-          {
-            FEATURES.map((f) => (
-              <div class="feature-card">
-                <span
-                  class="feature-dot"
-                  style={`background:var(--${f.color})`}
-                />
-                <h3>{f.title}</h3>
-                <p>{f.body}</p>
-              </div>
-            ))
-          }
-        </div>
-      </section>
-
-      <section id="how-it-works" class="how">
-        <h2>How it works</h2>
-        <div class="steps">
-          {
-            STEPS.map((s) => (
-              <div class="step">
-                <span class="step-n">{s.n}</span>
-                <h3>{s.title}</h3>
-                <p>{s.body}</p>
-              </div>
-            ))
-          }
-        </div>
-      </section>
+      <TinaIsland name="home" wrapper={{ tag: "div" }} primary>
+        <HomeContent data={home} />
+      </TinaIsland>
 
       <section id="pricing" class="pricing">
         <h2>Simple pricing</h2>
@@ -270,7 +180,7 @@ const { hero, features: FEATURES, steps: STEPS } = home;
   </body>
 </html>
 
-<style>
+<style is:global>
   :root {
     --surface: #12151c;
     --surface-alt1: #171a21;

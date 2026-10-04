@@ -1,0 +1,111 @@
+---
+interface Props {
+  data: {
+    hero: { eyebrow: string; title: string; lede: string };
+    features: Array<{ title: string; body: string; color: string }>;
+    steps: Array<{ n: string; title: string; body: string }>;
+  };
+}
+
+const CHROME_URL =
+  "https://chromewebstore.google.com/detail/cntxt/ehnhkcnmbkboaljolbndgdgfmjkgipih";
+
+const { hero, features, steps } = Astro.props.data;
+---
+
+<section class="hero">
+  <p class="eyebrow">{hero.eyebrow}</p>
+  <h1>{hero.title}</h1>
+  <p class="lede">{hero.lede}</p>
+  <div class="hero-actions">
+    <a href={CHROME_URL} class="btn btn-primary">Add to Chrome</a>
+    <span class="btn btn-ghost" aria-disabled="true">Firefox — coming soon</span>
+    <span class="btn btn-ghost" aria-disabled="true">Edge — coming soon</span>
+  </div>
+  <p class="hero-subaction">
+    <a href="#pricing">See pricing</a>
+  </p>
+
+  <div class="mock" aria-hidden="true">
+    <div class="mock-rail">
+      <p class="mock-rail-label">WORKSPACES</p>
+      <div class="mock-row is-active">
+        <span class="dot" style="background:var(--accent)"></span>
+        Design review
+        <span class="count">7</span>
+      </div>
+      <div class="mock-row">
+        <span class="dot" style="background:var(--success)"></span>
+        Research
+        <span class="count">12</span>
+      </div>
+      <div class="mock-row">
+        <span class="dot" style="background:var(--warning)"></span>
+        Q3 planning
+        <span class="count">4</span>
+      </div>
+      <div class="mock-row">
+        <span class="dot" style="background:var(--info)"></span>
+        Reading list
+        <span class="count">19</span>
+      </div>
+    </div>
+    <div class="mock-main">
+      <div class="mock-topbar">
+        <span class="dot" style="background:var(--accent)"></span>
+        <strong>Design review</strong>
+        <span class="count">7 tabs</span>
+        <span class="mock-kbd">⌘K</span>
+      </div>
+      <div class="mock-tabs">
+        {
+          [
+            ["Figma — component audit", "figma.com"],
+            ["Design tokens PR #214", "github.com"],
+            ["Spacing scale notes", "notion.so"],
+          ].map(([title, domain]) => (
+            <div class="mock-tab">
+              <span class="favicon">{domain[0].toUpperCase()}</span>
+              <span class="tab-title">{title}</span>
+              <span class="tab-domain">{domain}</span>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="features">
+  <h2>Built around one idea</h2>
+  <p class="section-lede">
+    A window is already the unit of "a project" or "a train of thought."
+    cntxt just gives that unit a name and lets you put it away.
+  </p>
+  <div class="feature-grid">
+    {
+      features.map((f) => (
+        <div class="feature-card">
+          <span class="feature-dot" style={`background:var(--${f.color})`} />
+          <h3>{f.title}</h3>
+          <p>{f.body}</p>
+        </div>
+      ))
+    }
+  </div>
+</section>
+
+<section id="how-it-works" class="how">
+  <h2>How it works</h2>
+  <div class="steps">
+    {
+      steps.map((s) => (
+        <div class="step">
+          <span class="step-n">{s.n}</span>
+          <h3>{s.title}</h3>
+          <p>{s.body}</p>
+        </div>
+      ))
+    }
+  </div>
+</section>
