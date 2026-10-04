@@ -27,6 +27,10 @@ export default defineConfig({
         format: "json",
         ui: {
           allowedActions: { create: false, delete: false },
+          // Without this, clicking the document opens the plain full-page
+          // form editor instead of Visual Editing — the admin has no other
+          // way to know this singleton document renders at "/".
+          router: () => "/",
         },
         fields: [
           {
