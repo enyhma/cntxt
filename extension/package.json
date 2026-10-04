@@ -2,7 +2,7 @@
   "name": "cntxt",
   "description": "Save the current window's tabs as a named workspace, close it, and restore it later.",
   "private": true,
-  "version": "1.2.1",
+  "version": "1.2.2",
   "type": "module",
   "scripts": {
     "dev": "wxt",
