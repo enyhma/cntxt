@@ -1,8 +1,9 @@
-# Single stage, not static-site-into-nginx: the @astrojs/node standalone
-# server (see astro.config.mjs) serves prerendered static pages AND the one
-# on-demand /tina-island/[name] route Tina's live-preview bridge needs, so
-# node_modules has to be present at runtime, not just during the build.
-FROM node:22-alpine
+# Two stages so the shipped image only carries production deps. The build
+# stage's node_modules includes @tinacms/cli and its ~300 build-only
+# packages; none of that is needed to run the @astrojs/node standalone
+# server, so the runtime stage does its own prod-only install instead of
+# reusing the build stage's node_modules wholesale.
+FROM node:22-alpine AS build
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -18,6 +19,13 @@ ENV TINA_CLIENT_ID=$TINA_CLIENT_ID
 ENV TINA_TOKEN=$TINA_TOKEN
 
 RUN pnpm build
+
+FROM node:22-alpine
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+COPY --from=build /app/dist ./dist
 
 ENV HOST=0.0.0.0
 ENV PORT=80
