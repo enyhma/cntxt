@@ -3,5 +3,7 @@ extension/.output
 extension/.wxt
 marketing/.astro
 marketing/dist
+marketing/tina/__generated__
+marketing/public/admin
 web/dist
 pnpm-lock.yaml

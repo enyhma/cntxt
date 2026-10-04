@@ -1,0 +1,56 @@
+{
+  "hero": {
+    "eyebrow": "A browser extension",
+    "title": "Close your tabs without losing your place.",
+    "lede": "cntxt saves every tab in a window as you work. Close the window whenever you want — all its tabs come back exactly as you left them, with one click, whenever you're ready for them again."
+  },
+  "features": [
+    {
+      "title": "Every window is a workspace",
+      "body": "Open a window, name it, and cntxt remembers it. No separate save step — it's just how a window works now.",
+      "color": "accent"
+    },
+    {
+      "title": "Close it, restore it later",
+      "body": "Done with a project for now? Close the window. Restore brings every tab back exactly as you left it.",
+      "color": "success"
+    },
+    {
+      "title": "Live sync, always",
+      "body": "Open a tab, close a tab, move one around — the workspace updates in the background. Nothing to remember to save.",
+      "color": "info"
+    },
+    {
+      "title": "Jump with ⌘K",
+      "body": "A command palette searches every workspace and every tab in it, so switching context never means hunting through windows.",
+      "color": "warning"
+    },
+    {
+      "title": "Color and icon per workspace",
+      "body": "Give each workspace a dot color and an icon. Glance at a window and know which one it is.",
+      "color": "danger"
+    },
+    {
+      "title": "Move tabs between workspaces",
+      "body": "Select a batch of tabs in one workspace and send them to another — no drag, drop, and hope.",
+      "color": "accent"
+    }
+  ],
+  "steps": [
+    {
+      "n": "01",
+      "title": "Open a window",
+      "body": "cntxt names it an untitled workspace the moment it sees tabs in it."
+    },
+    {
+      "n": "02",
+      "title": "Work like you normally do",
+      "body": "Every tab you open, close, or move is synced to that workspace automatically."
+    },
+    {
+      "n": "03",
+      "title": "Close it. Restore it whenever.",
+      "body": "The window goes away; the workspace doesn't. Pick it up again in one click, in any window."
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 ---
 import SEO from "../components/SEO.astro";
+import home from "../../content/home/home.json";
 
 // Live Creem products (public checkout links, safe to embed client-side —
 // no API key involved). Created via `creem products create`; see
@@ -13,56 +14,7 @@ const DASHBOARD_URL = "https://dash.cntxt.work";
 const CHROME_URL =
   "https://chromewebstore.google.com/detail/cntxt/ehnhkcnmbkboaljolbndgdgfmjkgipih";
 
-const FEATURES = [
-  {
-    color: "var(--accent)",
-    title: "Every window is a workspace",
-    body: "Open a window, name it, and cntxt remembers it. No separate save step — it's just how a window works now.",
-  },
-  {
-    color: "var(--success)",
-    title: "Close it, restore it later",
-    body: "Done with a project for now? Close the window. Restore brings every tab back exactly as you left it.",
-  },
-  {
-    color: "var(--info)",
-    title: "Live sync, always",
-    body: "Open a tab, close a tab, move one around — the workspace updates in the background. Nothing to remember to save.",
-  },
-  {
-    color: "var(--warning)",
-    title: "Jump with ⌘K",
-    body: "A command palette searches every workspace and every tab in it, so switching context never means hunting through windows.",
-  },
-  {
-    color: "var(--danger)",
-    title: "Color and icon per workspace",
-    body: "Give each workspace a dot color and an icon. Glance at a window and know which one it is.",
-  },
-  {
-    color: "var(--accent)",
-    title: "Move tabs between workspaces",
-    body: "Select a batch of tabs in one workspace and send them to another — no drag, drop, and hope.",
-  },
-];
-
-const STEPS = [
-  {
-    n: "01",
-    title: "Open a window",
-    body: "cntxt names it an untitled workspace the moment it sees tabs in it.",
-  },
-  {
-    n: "02",
-    title: "Work like you normally do",
-    body: "Every tab you open, close, or move is synced to that workspace automatically.",
-  },
-  {
-    n: "03",
-    title: "Close it. Restore it whenever.",
-    body: "The window goes away; the workspace doesn't. Pick it up again in one click, in any window.",
-  },
-];
+const { hero, features: FEATURES, steps: STEPS } = home;
 ---
 
 <html lang="en">
@@ -139,13 +91,9 @@ const STEPS = [
 
     <main>
       <section class="hero">
-        <p class="eyebrow">A browser extension</p>
-        <h1>Every window is a workspace.</h1>
-        <p class="lede">
-          Save a window's tabs under a name, close it without losing it, and
-          restore it whenever you come back — so "reopen closed window"
-          doesn't have to be a memory game.
-        </p>
+        <p class="eyebrow">{hero.eyebrow}</p>
+        <h1>{hero.title}</h1>
+        <p class="lede">{hero.lede}</p>
         <div class="hero-actions">
           <a href={CHROME_URL} class="btn btn-primary">Add to Chrome</a>
           <span class="btn btn-ghost" aria-disabled="true">Firefox — coming soon</span>
@@ -216,7 +164,10 @@ const STEPS = [
           {
             FEATURES.map((f) => (
               <div class="feature-card">
-                <span class="feature-dot" style={`background:${f.color}`} />
+                <span
+                  class="feature-dot"
+                  style={`background:var(--${f.color})`}
+                />
                 <h3>{f.title}</h3>
                 <p>{f.body}</p>
               </div>

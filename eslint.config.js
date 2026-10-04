@@ -10,6 +10,8 @@ export default tseslint.config(
       "**/.wxt/**",
       "**/.astro/**",
       "**/dist/**",
+      "**/tina/__generated__/**",
+      "**/public/admin/**",
     ],
   },
   js.configs.recommended,
