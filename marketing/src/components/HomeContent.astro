@@ -1,9 +1,28 @@
 ---
+import { tinaField } from "@tinacms/astro/tina-field";
+
+type ContentSource = { queryId: string; path: (string | number)[] };
+
 interface Props {
   data: {
-    hero: { eyebrow: string; title: string; lede: string };
-    features: Array<{ title: string; body: string; color: string }>;
-    steps: Array<{ n: string; title: string; body: string }>;
+    hero: {
+      eyebrow: string;
+      title: string;
+      lede: string;
+      _content_source?: ContentSource;
+    };
+    features: Array<{
+      title: string;
+      body: string;
+      color: string;
+      _content_source?: ContentSource;
+    }>;
+    steps: Array<{
+      n: string;
+      title: string;
+      body: string;
+      _content_source?: ContentSource;
+    }>;
   };
 }
 
@@ -14,9 +33,11 @@ const { hero, features, steps } = Astro.props.data;
 ---
 
 <section class="hero">
-  <p class="eyebrow">{hero.eyebrow}</p>
-  <h1>{hero.title}</h1>
-  <p class="lede">{hero.lede}</p>
+  <p class="eyebrow" data-tina-field={tinaField(hero, "eyebrow")}>
+    {hero.eyebrow}
+  </p>
+  <h1 data-tina-field={tinaField(hero, "title")}>{hero.title}</h1>
+  <p class="lede" data-tina-field={tinaField(hero, "lede")}>{hero.lede}</p>
   <div class="hero-actions">
     <a href={CHROME_URL} class="btn btn-primary">Add to Chrome</a>
     <span class="btn btn-ghost" aria-disabled="true">Firefox — coming soon</span>
@@ -87,8 +108,8 @@ const { hero, features, steps } = Astro.props.data;
       features.map((f) => (
         <div class="feature-card">
           <span class="feature-dot" style={`background:var(--${f.color})`} />
-          <h3>{f.title}</h3>
-          <p>{f.body}</p>
+          <h3 data-tina-field={tinaField(f, "title")}>{f.title}</h3>
+          <p data-tina-field={tinaField(f, "body")}>{f.body}</p>
         </div>
       ))
     }
@@ -102,8 +123,8 @@ const { hero, features, steps } = Astro.props.data;
       steps.map((s) => (
         <div class="step">
           <span class="step-n">{s.n}</span>
-          <h3>{s.title}</h3>
-          <p>{s.body}</p>
+          <h3 data-tina-field={tinaField(s, "title")}>{s.title}</h3>
+          <p data-tina-field={tinaField(s, "body")}>{s.body}</p>
         </div>
       ))
     }
