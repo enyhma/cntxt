@@ -377,6 +377,28 @@ function Dashboard(props: {
     workspaces().filter((w) => w.folderId === folderId);
   const ungroupedWorkspaces = () => workspaces().filter((w) => !w.folderId);
 
+  // Areas-then-their-Projects, each tagged with its indent depth — for the
+  // "Move to folder" flat picker in the header's dropdown, which doesn't
+  // need the full collapsible tree the rail renders.
+  function flattenedFolders(): Array<{ folder: Folder; depth: number }> {
+    const out: Array<{ folder: Folder; depth: number }> = [];
+    for (const area of rootFolders()) {
+      out.push({ folder: area, depth: 0 });
+      for (const project of childFolders(area.id)) {
+        out.push({ folder: project, depth: 1 });
+      }
+    }
+    return out;
+  }
+
+  async function handleMoveToFolder(folderId: string | null) {
+    const id = viewedId();
+    if (!id) return;
+    await updateWorkspace(id, { folderId });
+    await refresh();
+    closeOpenDropdowns();
+  }
+
   function toggleExpanded(id: string) {
     const next = new Set(expandedFolders());
     if (next.has(id)) next.delete(id);
@@ -673,7 +695,11 @@ function Dashboard(props: {
                   </>
                 )}
               </For>
-              <Show when={rootFolders().length > 0}>
+              <Show
+                when={
+                  rootFolders().length > 0 && ungroupedWorkspaces().length > 0
+                }
+              >
                 <div class="mt-1 px-2 py-1 font-mono text-[10px] tracking-wider text-surface-txt-faint">
                   UNGROUPED
                 </div>
@@ -817,6 +843,38 @@ function Dashboard(props: {
                     Customize icon &amp; color
                   </button>
                 </li>
+                <Show when={folders().length > 0}>
+                  <li class="px-2 pt-1.5 pb-0.5 font-mono text-[10px] tracking-wider text-surface-txt-faint">
+                    Move to folder
+                  </li>
+                  <Show when={viewed()?.folderId}>
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveToFolder(null)}
+                      >
+                        Ungrouped
+                      </button>
+                    </li>
+                  </Show>
+                  <For each={flattenedFolders()}>
+                    {({ folder, depth }) => (
+                      <Show when={folder.id !== viewed()?.folderId}>
+                        <li>
+                          <button
+                            type="button"
+                            style={{
+                              "padding-left": `${0.75 + depth * 0.875}rem`,
+                            }}
+                            onClick={() => handleMoveToFolder(folder.id)}
+                          >
+                            {folder.name}
+                          </button>
+                        </li>
+                      </Show>
+                    )}
+                  </For>
+                </Show>
                 <Show when={isViewingCurrent()}>
                   <li>
                     <button
