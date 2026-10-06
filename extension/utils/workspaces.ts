@@ -20,6 +20,10 @@ export type Workspace = {
   color?: string;
   icon?: string;
   syncStatus?: SyncStatus;
+  // Null/undefined = ungrouped, exactly like every workspace today. Set via
+  // utils/folders.ts, never required — "every window is a workspace" stays
+  // true with no folder involved at all.
+  folderId?: string | null;
   // Set by deleteWorkspace, cleared by restoreWorkspace — a workspace in
   // the trash, not actually removed from storage.local yet. Kept so the
   // dashboard can show a Trash view and so this soft-delete propagates
@@ -143,7 +147,7 @@ export async function pullRemoteWorkspaces(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
     .from("workspaces")
-    .select("id, name, tabs, created_at, updated_at, deleted_at");
+    .select("id, name, tabs, created_at, updated_at, deleted_at, folder_id");
   if (error) throw new Error(error.message);
   if (!data) return 0;
 
@@ -161,6 +165,7 @@ export async function pullRemoteWorkspaces(): Promise<number> {
       createdAt: Date.parse(row.created_at),
       updatedAt: Date.parse(row.updated_at),
       deletedAt: row.deleted_at ? Date.parse(row.deleted_at) : undefined,
+      folderId: row.folder_id,
       syncStatus: "synced",
     };
     if (!existing) {
@@ -225,6 +230,7 @@ export async function pushDirtyWorkspaces(
         name: w.name,
         tabs: w.tabs,
         deleted_at: w.deletedAt ? new Date(w.deletedAt).toISOString() : null,
+        folder_id: w.folderId ?? null,
       })
       .eq("id", w.id)
       .select("updated_at")
@@ -246,7 +252,9 @@ export async function pushDirtyWorkspaces(
 
 export async function updateWorkspace(
   id: string,
-  patch: Partial<Pick<Workspace, "name" | "tabs" | "color" | "icon">>,
+  patch: Partial<
+    Pick<Workspace, "name" | "tabs" | "color" | "icon" | "folderId">
+  >,
 ) {
   const workspaces = await getWorkspaces();
   await setWorkspaces(

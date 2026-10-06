@@ -32,6 +32,9 @@ import {
   ArrowRight,
   ArrowRightLeft,
   ChevronDown,
+  ChevronRight,
+  Folder as FolderIcon,
+  FolderPlus,
   type LucideProps,
   MoreHorizontal,
   PanelLeftClose,
@@ -47,6 +50,14 @@ import {
   Unplug,
   X,
 } from "lucide-solid";
+import {
+  type Folder,
+  createFolder,
+  deleteFolder,
+  getFolders,
+  reconcileFolderSyncStatus,
+  updateFolder,
+} from "@/utils/folders";
 import {
   type Workspace,
   createWorkspace,
@@ -132,8 +143,96 @@ const NAV_ITEMS: Array<{
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
+// Area (depth 0, parentId null) / Project (depth 1, parentId an Area) — see
+// supabase/migrations/20261005130000_folders.sql for why both tiers share
+// one component instead of two. Collapse state isn't persisted: reopening
+// the dashboard with everything expanded is the simpler default, and
+// nothing here is expensive enough to earn remembering it.
+function FolderHeader(props: {
+  folder: Folder;
+  depth: number;
+  expanded: boolean;
+  onToggle: () => void;
+  editing: boolean;
+  editingValue: string;
+  onEditingInput: (v: string) => void;
+  onStartRename: () => void;
+  onCommitRename: () => void;
+  onAddWorkspace: () => void;
+  onAddProject?: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      class="group flex items-center gap-1 rounded py-1.5 pr-1.5"
+      style={{ "padding-left": `${0.5 + props.depth * 0.875}rem` }}
+    >
+      <button
+        type="button"
+        onClick={props.onToggle}
+        class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint"
+      >
+        <ChevronRight
+          size={11}
+          class={"transition-transform" + (props.expanded ? " rotate-90" : "")}
+        />
+      </button>
+      <FolderIcon size={12} class="shrink-0 text-surface-txt-faint" />
+      <Show
+        when={!props.editing}
+        fallback={
+          <input
+            autofocus
+            class="input input-xs min-w-0 flex-1 bg-surface-alt2"
+            value={props.editingValue}
+            onInput={(e) => props.onEditingInput(e.currentTarget.value)}
+            onBlur={props.onCommitRename}
+            onKeyDown={(e) => e.key === "Enter" && props.onCommitRename()}
+          />
+        }
+      >
+        <span
+          onDblClick={props.onStartRename}
+          class="min-w-0 flex-1 truncate text-[12px] font-semibold tracking-wide text-surface-txt-hint"
+        >
+          {props.folder.name}
+        </span>
+      </Show>
+      <div class="hidden shrink-0 items-center gap-0.5 group-hover:flex">
+        <Show when={props.onAddProject}>
+          <button
+            type="button"
+            title="New project"
+            onClick={props.onAddProject}
+            class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
+          >
+            <FolderPlus size={11} />
+          </button>
+        </Show>
+        <button
+          type="button"
+          title="New workspace"
+          onClick={props.onAddWorkspace}
+          class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
+        >
+          <Plus size={11} />
+        </button>
+        <button
+          type="button"
+          title="Delete"
+          onClick={props.onDelete}
+          class="btn btn-square btn-ghost btn-xs text-surface-txt-hint hover:text-danger"
+        >
+          <Trash2 size={11} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard(props: {
   workspaces: Accessor<Workspace[]>;
+  folders: Accessor<Folder[]>;
   currentId: Accessor<string | undefined>;
   current: Accessor<Workspace | undefined>;
   openIds: Accessor<Set<string>>;
@@ -145,6 +244,7 @@ function Dashboard(props: {
 }) {
   const {
     workspaces,
+    folders,
     currentId,
     current,
     openIds,
@@ -165,6 +265,11 @@ function Dashboard(props: {
 
   const [railOpen, setRailOpen] = createSignal(true);
   const [viewedId, setViewedId] = createSignal<string>();
+  const [expandedFolders, setExpandedFolders] = createSignal<Set<string>>(
+    new Set(),
+  );
+  const [editingFolderId, setEditingFolderId] = createSignal<string>();
+  const [editingFolderName, setEditingFolderName] = createSignal("");
   const [selected, setSelected] = createSignal<Set<number>>(new Set());
   const [paletteQuery, setPaletteQuery] = createSignal("");
   let paletteRef: HTMLDialogElement | undefined;
@@ -263,6 +368,82 @@ function Dashboard(props: {
     const workspace = await createWorkspace("Untitled workspace", []);
     await refresh();
     setViewedId(workspace.id);
+  }
+
+  const rootFolders = () => folders().filter((f) => !f.parentId);
+  const childFolders = (parentId: string) =>
+    folders().filter((f) => f.parentId === parentId);
+  const workspacesIn = (folderId: string) =>
+    workspaces().filter((w) => w.folderId === folderId);
+  const ungroupedWorkspaces = () => workspaces().filter((w) => !w.folderId);
+
+  function toggleExpanded(id: string) {
+    const next = new Set(expandedFolders());
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setExpandedFolders(next);
+  }
+
+  function startRenameFolder(folder: Folder) {
+    setEditingFolderId(folder.id);
+    setEditingFolderName(folder.name);
+  }
+  async function commitRenameFolder() {
+    const id = editingFolderId();
+    const trimmed = editingFolderName().trim();
+    setEditingFolderId(undefined);
+    if (!id || !trimmed) return;
+    await updateFolder(id, { name: trimmed });
+    await refresh();
+  }
+
+  async function handleAddArea() {
+    const folder = await createFolder("Untitled area");
+    setExpandedFolders(new Set(expandedFolders()).add(folder.id));
+    await refresh();
+    startRenameFolder(folder);
+  }
+  async function handleAddProject(parentId: string) {
+    const folder = await createFolder("Untitled project", parentId);
+    setExpandedFolders(new Set(expandedFolders()).add(parentId).add(folder.id));
+    await refresh();
+    startRenameFolder(folder);
+  }
+  async function handleAddWorkspaceIn(folderId: string) {
+    const workspace = await createWorkspace("Untitled workspace", []);
+    await updateWorkspace(workspace.id, { folderId });
+    await refresh();
+    setViewedId(workspace.id);
+  }
+  async function handleDeleteFolder(folder: Folder) {
+    const hasChildren = folders().some((f) => f.parentId === folder.id);
+    const warning = hasChildren
+      ? `Delete "${folder.name}" and the projects inside it? Workspaces stay — they'll just be ungrouped.`
+      : `Delete "${folder.name}"? Any workspaces inside stay — they'll just be ungrouped.`;
+    if (!confirm(warning)) return;
+    await deleteFolder(folder.id);
+    await refresh();
+  }
+
+  function workspaceRowFor(w: Workspace, depth = 0) {
+    return (
+      <div
+        style={depth ? { "padding-left": `${depth * 0.875}rem` } : undefined}
+      >
+        <WorkspaceRow
+          workspace={w}
+          count={w.tabs.length}
+          isViewed={w.id === viewedId()}
+          isCurrent={w.id === currentId()}
+          openElsewhere={w.id !== currentId() && openIds().has(w.id)}
+          anyActive={currentId() !== undefined}
+          busy={busy()}
+          onView={() => setViewedId(w.id)}
+          onOpenAll={() => openAll(w)}
+          onDisconnect={handleDisconnectWindow}
+        />
+      </div>
+    );
   }
 
   async function handleDeleteViewed() {
@@ -410,6 +591,14 @@ function Dashboard(props: {
               </span>
               <button
                 type="button"
+                title="New area"
+                onClick={handleAddArea}
+                class="btn btn-square btn-ghost btn-xs"
+              >
+                <FolderPlus size={14} />
+              </button>
+              <button
+                type="button"
                 title={
                   atWorkspaceLimit()
                     ? "You've hit your plan's limit — this workspace won't sync until you upgrade"
@@ -433,21 +622,64 @@ function Dashboard(props: {
               </button>
             </div>
             <div class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-1.5">
-              <For each={workspaces()}>
-                {(w) => (
-                  <WorkspaceRow
-                    workspace={w}
-                    count={w.tabs.length}
-                    isViewed={w.id === viewedId()}
-                    isCurrent={w.id === currentId()}
-                    openElsewhere={w.id !== currentId() && openIds().has(w.id)}
-                    anyActive={currentId() !== undefined}
-                    busy={busy()}
-                    onView={() => setViewedId(w.id)}
-                    onOpenAll={() => openAll(w)}
-                    onDisconnect={handleDisconnectWindow}
-                  />
+              <For each={rootFolders()}>
+                {(area) => (
+                  <>
+                    <FolderHeader
+                      folder={area}
+                      depth={0}
+                      expanded={expandedFolders().has(area.id)}
+                      onToggle={() => toggleExpanded(area.id)}
+                      editing={editingFolderId() === area.id}
+                      editingValue={editingFolderName()}
+                      onEditingInput={setEditingFolderName}
+                      onStartRename={() => startRenameFolder(area)}
+                      onCommitRename={commitRenameFolder}
+                      onAddProject={() => handleAddProject(area.id)}
+                      onAddWorkspace={() => handleAddWorkspaceIn(area.id)}
+                      onDelete={() => handleDeleteFolder(area)}
+                    />
+                    <Show when={expandedFolders().has(area.id)}>
+                      <For each={childFolders(area.id)}>
+                        {(project) => (
+                          <>
+                            <FolderHeader
+                              folder={project}
+                              depth={1}
+                              expanded={expandedFolders().has(project.id)}
+                              onToggle={() => toggleExpanded(project.id)}
+                              editing={editingFolderId() === project.id}
+                              editingValue={editingFolderName()}
+                              onEditingInput={setEditingFolderName}
+                              onStartRename={() => startRenameFolder(project)}
+                              onCommitRename={commitRenameFolder}
+                              onAddWorkspace={() =>
+                                handleAddWorkspaceIn(project.id)
+                              }
+                              onDelete={() => handleDeleteFolder(project)}
+                            />
+                            <Show when={expandedFolders().has(project.id)}>
+                              <For each={workspacesIn(project.id)}>
+                                {(w) => workspaceRowFor(w, 2)}
+                              </For>
+                            </Show>
+                          </>
+                        )}
+                      </For>
+                      <For each={workspacesIn(area.id)}>
+                        {(w) => workspaceRowFor(w, 1)}
+                      </For>
+                    </Show>
+                  </>
                 )}
+              </For>
+              <Show when={rootFolders().length > 0}>
+                <div class="mt-1 px-2 py-1 font-mono text-[10px] tracking-wider text-surface-txt-faint">
+                  UNGROUPED
+                </div>
+              </Show>
+              <For each={ungroupedWorkspaces()}>
+                {(w) => workspaceRowFor(w)}
               </For>
             </div>
           </nav>
@@ -802,6 +1034,7 @@ function Dashboard(props: {
 
 function App() {
   const [workspaces, setWorkspaces] = createSignal<Workspace[]>([]);
+  const [folders, setFolders] = createSignal<Folder[]>([]);
   const [windowMap, setWindowMap] = createSignal<Record<number, string>>({});
   const [myWindowId, setMyWindowId] = createSignal<number>();
   const [startupBehavior, setStartupBehavior] =
@@ -834,6 +1067,7 @@ function App() {
     refreshEntitlements().then(setEntitlements);
     syncSend({ type: "PULL" });
     reconcileSyncStatus().then(refresh);
+    reconcileFolderSyncStatus().then(refresh);
   }
   // Piggyback on the token refresh supabase-js already does on a timer — no
   // separate polling loop, per docs/architecture-sync.md. syncMachine has
@@ -909,6 +1143,7 @@ function App() {
 
   async function refresh() {
     setWorkspaces(await getWorkspaces());
+    setFolders(await getFolders());
     setWindowMap(await getWindowWorkspaceMap());
   }
 
@@ -930,7 +1165,8 @@ function App() {
     // docs/architecture-sync.md's "Push: local change → Supabase".
     const handleStorageChange = (changes: Record<string, unknown>) => {
       refresh();
-      if ("workspaces" in changes) syncSend({ type: "LOCAL_CHANGE" });
+      if ("workspaces" in changes || "folders" in changes)
+        syncSend({ type: "LOCAL_CHANGE" });
     };
     browser.storage.onChanged.addListener(handleStorageChange);
     onCleanup(() =>
@@ -1348,6 +1584,7 @@ function App() {
               <Match when={nav() === "workspaces"}>
                 <Dashboard
                   workspaces={activeWorkspaces}
+                  folders={folders}
                   currentId={currentId}
                   current={current}
                   openIds={openIds}

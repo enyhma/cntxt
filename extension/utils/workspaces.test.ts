@@ -170,6 +170,7 @@ describe("pushDirtyWorkspaces", () => {
       name: "Renamed",
       tabs: [],
       deleted_at: null,
+      folder_id: null,
     });
     expect(lastPushedAt[workspace.id]).toBe(Date.parse("2030-01-01T00:00:00Z"));
     const workspaces = await getWorkspaces();

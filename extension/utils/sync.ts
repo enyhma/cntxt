@@ -1,5 +1,6 @@
 import { assign, fromPromise, setup } from "xstate";
 import { getCachedEntitlements } from "./entitlements";
+import { pullRemoteFolders, pushDirtyFolders } from "./folders";
 import {
   pullRemoteWorkspaces,
   purgeExpiredLocalTrash,
@@ -7,10 +8,20 @@ import {
 } from "./workspaces";
 
 async function pullAndPurgeTrash(): Promise<number> {
-  const applied = await pullRemoteWorkspaces();
+  // Folders first: a workspace's folder_id pull below is only meaningful
+  // once the folder it points to already exists locally.
+  const folders = await pullRemoteFolders();
+  const workspaces = await pullRemoteWorkspaces();
   const entitlements = await getCachedEntitlements();
   await purgeExpiredLocalTrash(entitlements?.accessExpiresAt);
-  return applied;
+  return folders + workspaces;
+}
+
+async function pushDirty(
+  lastPushedAt: Record<string, number>,
+): Promise<Record<string, number>> {
+  const afterFolders = await pushDirtyFolders(lastPushedAt);
+  return pushDirtyWorkspaces(afterFolders);
 }
 
 type Context = {
@@ -49,7 +60,7 @@ export const syncMachine = setup({
   actors: {
     pull: fromPromise(() => pullAndPurgeTrash()),
     push: fromPromise(({ input }: { input: Record<string, number> }) =>
-      pushDirtyWorkspaces(input),
+      pushDirty(input),
     ),
   },
 }).createMachine({
