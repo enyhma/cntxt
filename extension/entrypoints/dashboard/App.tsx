@@ -35,6 +35,7 @@ import {
   ChevronRight,
   Folder as FolderIcon,
   FolderPlus,
+  Link as LinkIcon,
   type LucideProps,
   MoreHorizontal,
   PanelLeftClose,
@@ -58,6 +59,13 @@ import {
   reconcileFolderSyncStatus,
   updateFolder,
 } from "@/utils/folders";
+import {
+  type Resource,
+  addResource,
+  deleteResource,
+  getResources,
+  reconcileResourceSyncStatus,
+} from "@/utils/resources";
 import {
   type Workspace,
   createWorkspace,
@@ -233,6 +241,7 @@ function FolderHeader(props: {
 function Dashboard(props: {
   workspaces: Accessor<Workspace[]>;
   folders: Accessor<Folder[]>;
+  resources: Accessor<Resource[]>;
   currentId: Accessor<string | undefined>;
   current: Accessor<Workspace | undefined>;
   openIds: Accessor<Set<string>>;
@@ -245,6 +254,7 @@ function Dashboard(props: {
   const {
     workspaces,
     folders,
+    resources,
     currentId,
     current,
     openIds,
@@ -444,6 +454,39 @@ function Dashboard(props: {
       : `Delete "${folder.name}"? Any workspaces inside stay — they'll just be ungrouped.`;
     if (!confirm(warning)) return;
     await deleteFolder(folder.id);
+    await refresh();
+  }
+
+  const resourcesForViewed = () =>
+    resources().filter((r) => r.workspaceId === viewedId());
+
+  const [addingResource, setAddingResource] = createSignal(false);
+  const [resourceUrl, setResourceUrl] = createSignal("");
+  const [resourceNote, setResourceNote] = createSignal("");
+
+  function openAddResource() {
+    setResourceUrl("");
+    setResourceNote("");
+    setAddingResource(true);
+  }
+  async function handleAddResource(e: Event) {
+    e.preventDefault();
+    const id = viewedId();
+    const url = resourceUrl().trim();
+    const note = resourceNote().trim();
+    setAddingResource(false);
+    if (!id || (!url && !note)) return;
+    await addResource(id, { url: url || undefined, note: note || undefined });
+    await refresh();
+  }
+  async function handleSaveTabAsResource(tab: { url: string; title: string }) {
+    const id = viewedId();
+    if (!id) return;
+    await addResource(id, { url: tab.url, note: tab.title });
+    await refresh();
+  }
+  async function handleDeleteResource(id: string) {
+    await deleteResource(id);
     await refresh();
   }
 
@@ -933,10 +976,117 @@ function Dashboard(props: {
                       selectable={!isViewingCurrent()}
                       onToggle={() => toggleSelected(i())}
                       onOpen={() => focusRealTab(tab.url)}
+                      onSaveAsResource={() => handleSaveTabAsResource(tab)}
                     />
                   )}
                 </For>
               </section>
+            </Show>
+
+            <Show when={viewed()}>
+              <div class="mt-5">
+                <div class="mb-1.5 flex items-center gap-2">
+                  <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
+                    RESOURCES
+                  </span>
+                  <button
+                    type="button"
+                    title="Add resource"
+                    onClick={openAddResource}
+                    class="btn btn-square btn-ghost btn-xs"
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
+
+                <Show when={addingResource()}>
+                  <form
+                    onSubmit={handleAddResource}
+                    class="mb-2 flex flex-col gap-1.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5"
+                  >
+                    <input
+                      autofocus
+                      placeholder="https://…"
+                      class="input input-sm bg-surface-alt2"
+                      value={resourceUrl()}
+                      onInput={(e) => setResourceUrl(e.currentTarget.value)}
+                    />
+                    <input
+                      placeholder="Note (optional)"
+                      class="input input-sm bg-surface-alt2"
+                      value={resourceNote()}
+                      onInput={(e) => setResourceNote(e.currentTarget.value)}
+                    />
+                    <div class="flex justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setAddingResource(false)}
+                        class="btn btn-ghost btn-xs"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        class="btn btn-xs border-none bg-accent text-accent-txt hover:bg-accent-alt1"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </form>
+                </Show>
+
+                <Show
+                  when={resourcesForViewed().length > 0}
+                  fallback={
+                    <p class="text-sm text-surface-txt-hint">
+                      No saved resources.
+                    </p>
+                  }
+                >
+                  <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                    <For each={resourcesForViewed()}>
+                      {(r) => (
+                        <div class="group flex items-center gap-2.5 border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0">
+                          <LinkIcon
+                            size={13}
+                            class="shrink-0 text-surface-txt-faint"
+                          />
+                          <Show
+                            when={r.url}
+                            fallback={
+                              <span class="min-w-0 flex-1 truncate text-sm">
+                                {r.note}
+                              </span>
+                            }
+                          >
+                            <a
+                              href={r.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="min-w-0 flex-1 truncate text-sm hover:underline"
+                            >
+                              {r.note || r.url}
+                            </a>
+                          </Show>
+                          <Show when={r.note && r.url}>
+                            <span class="max-w-[30%] shrink-0 truncate font-mono text-[11px] text-surface-txt-faint">
+                              {r.url}
+                            </span>
+                          </Show>
+                          <button
+                            type="button"
+                            title="Remove"
+                            onClick={() => handleDeleteResource(r.id)}
+                            class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+                          >
+                            <X size={11} />
+                          </button>
+                        </div>
+                      )}
+                    </For>
+                  </section>
+                </Show>
+              </div>
             </Show>
           </div>
         </main>
@@ -1093,6 +1243,7 @@ function Dashboard(props: {
 function App() {
   const [workspaces, setWorkspaces] = createSignal<Workspace[]>([]);
   const [folders, setFolders] = createSignal<Folder[]>([]);
+  const [resources, setResources] = createSignal<Resource[]>([]);
   const [windowMap, setWindowMap] = createSignal<Record<number, string>>({});
   const [myWindowId, setMyWindowId] = createSignal<number>();
   const [startupBehavior, setStartupBehavior] =
@@ -1126,6 +1277,7 @@ function App() {
     syncSend({ type: "PULL" });
     reconcileSyncStatus().then(refresh);
     reconcileFolderSyncStatus().then(refresh);
+    reconcileResourceSyncStatus().then(refresh);
   }
   // Piggyback on the token refresh supabase-js already does on a timer — no
   // separate polling loop, per docs/architecture-sync.md. syncMachine has
@@ -1202,6 +1354,7 @@ function App() {
   async function refresh() {
     setWorkspaces(await getWorkspaces());
     setFolders(await getFolders());
+    setResources(await getResources());
     setWindowMap(await getWindowWorkspaceMap());
   }
 
@@ -1643,6 +1796,7 @@ function App() {
                 <Dashboard
                   workspaces={activeWorkspaces}
                   folders={folders}
+                  resources={resources}
                   currentId={currentId}
                   current={current}
                   openIds={openIds}

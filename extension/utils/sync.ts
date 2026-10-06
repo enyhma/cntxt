@@ -1,6 +1,7 @@
 import { assign, fromPromise, setup } from "xstate";
 import { getCachedEntitlements } from "./entitlements";
 import { pullRemoteFolders, pushDirtyFolders } from "./folders";
+import { pullRemoteResources } from "./resources";
 import {
   pullRemoteWorkspaces,
   purgeExpiredLocalTrash,
@@ -9,12 +10,15 @@ import {
 
 async function pullAndPurgeTrash(): Promise<number> {
   // Folders first: a workspace's folder_id pull below is only meaningful
-  // once the folder it points to already exists locally.
+  // once the folder it points to already exists locally. Resources last —
+  // they reference a workspace_id, so pulling them before workspaces exist
+  // locally would just leave them attributed to a workspace not there yet.
   const folders = await pullRemoteFolders();
   const workspaces = await pullRemoteWorkspaces();
+  const resources = await pullRemoteResources();
   const entitlements = await getCachedEntitlements();
   await purgeExpiredLocalTrash(entitlements?.accessExpiresAt);
-  return folders + workspaces;
+  return folders + workspaces + resources;
 }
 
 async function pushDirty(

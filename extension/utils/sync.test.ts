@@ -12,6 +12,8 @@ vi.mock("./workspaces", () => ({
 const pullRemoteFolders = vi.fn();
 const pushDirtyFolders = vi.fn();
 vi.mock("./folders", () => ({ pullRemoteFolders, pushDirtyFolders }));
+const pullRemoteResources = vi.fn();
+vi.mock("./resources", () => ({ pullRemoteResources }));
 vi.mock("./entitlements", () => ({
   getCachedEntitlements: vi.fn().mockResolvedValue(undefined),
 }));
@@ -25,6 +27,7 @@ beforeEach(() => {
   purgeExpiredLocalTrash.mockReset().mockResolvedValue(undefined);
   pullRemoteFolders.mockReset().mockResolvedValue(0);
   pushDirtyFolders.mockReset().mockImplementation((input) => input);
+  pullRemoteResources.mockReset().mockResolvedValue(0);
 });
 
 afterEach(() => {

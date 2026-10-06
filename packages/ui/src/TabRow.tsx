@@ -1,4 +1,5 @@
 import { Show } from "solid-js";
+import { BookmarkPlus } from "lucide-solid";
 import { colorFor, domainOf, textColorFor } from "./colors";
 
 export function TabRow(props: {
@@ -8,13 +9,17 @@ export function TabRow(props: {
   selectable: boolean;
   onToggle: () => void;
   onOpen: () => void;
+  // Optional: omit to render the row exactly as before. Only the extension
+  // dashboard wires this up (see docs/capabilities.md's "Manually-added
+  // links/notes as workspace resources").
+  onSaveAsResource?: () => void;
 }) {
   const domain = () => domainOf(props.tab.url);
   return (
     <div
       onClick={props.selectable ? props.onToggle : props.onOpen}
       class={
-        "flex cursor-pointer items-center gap-[11px] border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0 hover:bg-surface-alt2" +
+        "group flex cursor-pointer items-center gap-[11px] border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0 hover:bg-surface-alt2" +
         (props.selected ? " bg-accent/20" : "")
       }
     >
@@ -43,6 +48,19 @@ export function TabRow(props: {
       <span class="max-w-[38%] shrink-0 truncate font-mono text-[11px] text-surface-txt-faint">
         {domain()}
       </span>
+      <Show when={props.onSaveAsResource}>
+        <button
+          type="button"
+          title="Save as resource"
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onSaveAsResource?.();
+          }}
+          class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <BookmarkPlus size={12} />
+        </button>
+      </Show>
     </div>
   );
 }
