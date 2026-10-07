@@ -174,7 +174,6 @@ function FolderHeader(props: {
   onCommitRename: () => void;
   onAddQuest?: () => void;
   onAddProject?: () => void;
-  onAddSection?: () => void;
   onDelete: () => void;
   // Project-only: the same connect/switch/disconnect affordance a Quest
   // row has (QuestRow.tsx) — a Project is window-bound too (see
@@ -239,16 +238,6 @@ function FolderHeader(props: {
             class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
           >
             <FolderPlus size={11} />
-          </button>
-        </Show>
-        <Show when={props.onAddSection}>
-          <button
-            type="button"
-            title="New section"
-            onClick={props.onAddSection}
-            class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
-          >
-            <LinkIcon size={11} />
           </button>
         </Show>
         <Show when={props.onAddQuest}>
@@ -575,28 +564,29 @@ function Dashboard(props: {
     closeOpenDropdowns();
   }
 
-  // Sections (depth-2 folders, one level under a Project) across every
-  // Area/Project — flat, with each one's Project name as context, for the
-  // "Save to section" picker on a resource row.
-  function flattenedSections(): Array<{
-    section: Folder;
-    projectName: string;
+  // Every Project, nested-under-an-Area or standalone, with its Area's
+  // name as context where it has one — for the "Save to project" picker on
+  // a resource row.
+  function flattenedProjects(): Array<{
+    project: Folder;
+    areaName?: string;
   }> {
-    const out: Array<{ section: Folder; projectName: string }> = [];
+    const out: Array<{ project: Folder; areaName?: string }> = [];
     for (const area of rootFolders()) {
       for (const project of childFolders(area.id)) {
-        for (const section of childFolders(project.id)) {
-          out.push({ section, projectName: project.name });
-        }
+        out.push({ project, areaName: area.name });
       }
+    }
+    for (const project of standaloneProjects()) {
+      out.push({ project });
     }
     return out;
   }
 
   // Copies (not moves — see the type comment on Resource in utils/resources.ts)
-  // a Quest-scoped resource into a Section, so it survives that Quest
+  // a Quest-scoped resource onto its Project, so it survives that Quest
   // being deleted.
-  async function handleSaveResourceToSection(
+  async function handleSaveResourceToProject(
     resource: Resource,
     folderId: string,
   ) {
@@ -633,14 +623,6 @@ function Dashboard(props: {
   }
   async function handleAddProject(parentId: string) {
     const folder = await createFolder("Untitled project", parentId, "project");
-    setExpandedFolders(new Set(expandedFolders()).add(parentId).add(folder.id));
-    await refresh();
-    startRenameFolder(folder);
-  }
-  // Sections are depth-2 folders (parent is a Project) — same tree, one
-  // level deeper, since nothing in the schema enforces only two levels.
-  async function handleAddSection(parentId: string) {
-    const folder = await createFolder("Untitled section", parentId, "section");
     setExpandedFolders(new Set(expandedFolders()).add(parentId).add(folder.id));
     await refresh();
     startRenameFolder(folder);
@@ -697,10 +679,95 @@ function Dashboard(props: {
     await refresh();
   }
 
+  const resourcesForProject = () =>
+    resources().filter((r) => r.folderId === viewedProjectId());
+
+  async function handleAddResourceToProject(e: Event) {
+    e.preventDefault();
+    const id = viewedProjectId();
+    const url = resourceUrl().trim();
+    const note = resourceNote().trim();
+    setAddingResource(false);
+    if (!id || (!url && !note)) return;
+    await addResource(
+      { folderId: id },
+      { url: url || undefined, note: note || undefined },
+    );
+    await refresh();
+  }
+
+  // Shared between a Quest's resources panel and a Project's — same row
+  // shape either way (a link/note, a "Save to project" copy picker, and a
+  // delete button).
+  function resourceRow(r: Resource) {
+    return (
+      <div class="group flex items-center gap-2.5 border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0">
+        <LinkIcon size={13} class="shrink-0 text-surface-txt-faint" />
+        <Show
+          when={r.url}
+          fallback={
+            <span class="min-w-0 flex-1 truncate text-sm">{r.note}</span>
+          }
+        >
+          <a
+            href={r.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="min-w-0 flex-1 truncate text-sm hover:underline"
+          >
+            {r.note || r.url}
+          </a>
+        </Show>
+        <Show when={r.note && r.url}>
+          <span class="max-w-[30%] shrink-0 truncate font-mono text-[11px] text-surface-txt-faint">
+            {r.url}
+          </span>
+        </Show>
+        <Show when={flattenedProjects().length > 0}>
+          <details class="dropdown dropdown-end shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+            <summary
+              title="Save to project"
+              class="btn btn-square btn-ghost btn-xs list-none text-surface-txt-hint"
+            >
+              <FolderPlus size={12} />
+            </summary>
+            <ul class="dropdown-content menu z-50 mt-1 w-52 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]">
+              <For each={flattenedProjects()}>
+                {({ project, areaName }) => (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveResourceToProject(r, project.id)}
+                    >
+                      <span class="truncate">{project.name}</span>
+                      <Show when={areaName}>
+                        <span class="shrink-0 font-mono text-[10px] text-surface-txt-faint">
+                          {areaName}
+                        </span>
+                      </Show>
+                    </button>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </details>
+        </Show>
+        <button
+          type="button"
+          title="Remove"
+          onClick={() => handleDeleteResource(r.id)}
+          class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+        >
+          <X size={11} />
+        </button>
+      </div>
+    );
+  }
+
   // A Project's sidebar block: its own FolderHeader row (with the
   // connect/switch/disconnect affordance, since it's window-bound too) plus
-  // its child Sections and Quests. Used both for a Project nested under an
-  // Area (depth 1) and for a standalone, ad-hoc Project (depth 0, see
+  // its child Quests. Used both for a Project nested under an Area
+  // (depth 1) and for a standalone, ad-hoc Project (depth 0, see
   // standaloneProjects below) — same structure either way.
   function projectBlock(project: Folder, depth: number) {
     return (
@@ -718,7 +785,6 @@ function Dashboard(props: {
           onStartRename={() => startRenameFolder(project)}
           onCommitRename={commitRenameFolder}
           onAddQuest={() => handleAddQuestIn(project.id)}
-          onAddSection={() => handleAddSection(project.id)}
           onDelete={() => handleDeleteFolder(project)}
           isCurrent={project.id === currentId()}
           openElsewhere={
@@ -730,24 +796,6 @@ function Dashboard(props: {
           onDisconnect={handleDisconnectWindow}
         />
         <Show when={expandedFolders().has(project.id)}>
-          <For each={childFolders(project.id)}>
-            {(section) => (
-              <FolderHeader
-                folder={section}
-                depth={depth + 1}
-                expanded={false}
-                active={viewingFolderId() === section.id}
-                onToggle={() => {}}
-                onOpen={() => setViewingFolderId(section.id)}
-                editing={editingFolderId() === section.id}
-                editingValue={editingFolderName()}
-                onEditingInput={setEditingFolderName}
-                onStartRename={() => startRenameFolder(section)}
-                onCommitRename={commitRenameFolder}
-                onDelete={() => handleDeleteFolder(section)}
-              />
-            )}
-          </For>
           <For each={questsIn(project.id)}>
             {(w) => questRowFor(w, depth + 1)}
           </For>
@@ -1350,47 +1398,70 @@ function Dashboard(props: {
                 </Show>
               </div>
 
-              <div class="mt-5 flex flex-col gap-1.5">
-                <div class="flex items-center gap-2">
+              <div class="mt-5">
+                <div class="mb-1.5 flex items-center gap-2">
                   <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
-                    SECTIONS
+                    RESOURCES
                   </span>
                   <button
                     type="button"
-                    title="New section"
-                    onClick={() => handleAddSection(viewedProject()!.id)}
+                    title="Add resource"
+                    onClick={openAddResource}
                     class="btn btn-square btn-ghost btn-xs"
                   >
                     <Plus size={12} />
                   </button>
                 </div>
+
+                <Show when={addingResource()}>
+                  <form
+                    onSubmit={handleAddResourceToProject}
+                    class="mb-2 flex flex-col gap-1.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5"
+                  >
+                    <input
+                      autofocus
+                      placeholder="https://…"
+                      class="input input-sm bg-surface-alt2"
+                      value={resourceUrl()}
+                      onInput={(e) => setResourceUrl(e.currentTarget.value)}
+                    />
+                    <input
+                      placeholder="Note (optional)"
+                      class="input input-sm bg-surface-alt2"
+                      value={resourceNote()}
+                      onInput={(e) => setResourceNote(e.currentTarget.value)}
+                    />
+                    <div class="flex justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setAddingResource(false)}
+                        class="btn btn-ghost btn-xs"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        class="btn btn-xs border-none bg-accent text-accent-txt hover:bg-accent-alt1"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </form>
+                </Show>
+
                 <Show
-                  when={childFolders(viewedProject()!.id).length > 0}
+                  when={resourcesForProject().length > 0}
                   fallback={
                     <p class="text-sm text-surface-txt-hint">
-                      No sections yet.
+                      No saved resources.
                     </p>
                   }
                 >
-                  <For each={childFolders(viewedProject()!.id)}>
-                    {(s) => (
-                      <button
-                        type="button"
-                        onClick={() => setViewingFolderId(s.id)}
-                        class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 text-left shadow-[var(--shadow-card)] hover:bg-surface-alt2"
-                      >
-                        <span class="min-w-0 flex-1 truncate text-sm font-medium">
-                          {s.name}
-                        </span>
-                        <span class="font-mono text-[11px] text-surface-txt-faint">
-                          {
-                            resources().filter((r) => r.folderId === s.id)
-                              .length
-                          }
-                        </span>
-                      </button>
-                    )}
-                  </For>
+                  <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                    <For each={resourcesForProject()}>
+                      {(r) => resourceRow(r)}
+                    </For>
+                  </section>
                 </Show>
               </div>
             </div>
@@ -1501,78 +1572,7 @@ function Dashboard(props: {
                   >
                     <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
                       <For each={resourcesForViewed()}>
-                        {(r) => (
-                          <div class="group flex items-center gap-2.5 border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0">
-                            <LinkIcon
-                              size={13}
-                              class="shrink-0 text-surface-txt-faint"
-                            />
-                            <Show
-                              when={r.url}
-                              fallback={
-                                <span class="min-w-0 flex-1 truncate text-sm">
-                                  {r.note}
-                                </span>
-                              }
-                            >
-                              <a
-                                href={r.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="min-w-0 flex-1 truncate text-sm hover:underline"
-                              >
-                                {r.note || r.url}
-                              </a>
-                            </Show>
-                            <Show when={r.note && r.url}>
-                              <span class="max-w-[30%] shrink-0 truncate font-mono text-[11px] text-surface-txt-faint">
-                                {r.url}
-                              </span>
-                            </Show>
-                            <Show when={flattenedSections().length > 0}>
-                              <details class="dropdown dropdown-end shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                                <summary
-                                  title="Save to section"
-                                  class="btn btn-square btn-ghost btn-xs list-none text-surface-txt-hint"
-                                >
-                                  <FolderPlus size={12} />
-                                </summary>
-                                <ul class="dropdown-content menu z-50 mt-1 w-52 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]">
-                                  <For each={flattenedSections()}>
-                                    {({ section, projectName }) => (
-                                      <li>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleSaveResourceToSection(
-                                              r,
-                                              section.id,
-                                            )
-                                          }
-                                        >
-                                          <span class="truncate">
-                                            {section.name}
-                                          </span>
-                                          <span class="shrink-0 font-mono text-[10px] text-surface-txt-faint">
-                                            {projectName}
-                                          </span>
-                                        </button>
-                                      </li>
-                                    )}
-                                  </For>
-                                </ul>
-                              </details>
-                            </Show>
-                            <button
-                              type="button"
-                              title="Remove"
-                              onClick={() => handleDeleteResource(r.id)}
-                              class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
-                            >
-                              <X size={11} />
-                            </button>
-                          </div>
-                        )}
+                        {(r) => resourceRow(r)}
                       </For>
                     </section>
                   </Show>

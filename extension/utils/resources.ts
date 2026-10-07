@@ -9,11 +9,11 @@ import { supabase } from "./supabase";
 // registerWorkspace/registerFolder), and there's nothing left to push later.
 //
 // A resource is parented to exactly one of a Quest (questId — the
-// original "save this open tab" flow) or a Section (folderId — a depth-2
-// folder, "save this permanently" flow added later). Both optional rather
-// than a tagged union so the Supabase row shape maps straight across:
-// exactly one column is ever non-null, enforced at the call site
-// (addResource), not the type.
+// original "save this open tab" flow) or a Project (folderId — "save this
+// permanently" so it survives the Quest it was found in being deleted).
+// Both optional rather than a tagged union so the Supabase row shape maps
+// straight across: exactly one column is ever non-null, enforced at the
+// call site (addResource), not the type.
 export type Resource = {
   id: string;
   questId?: string;

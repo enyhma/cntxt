@@ -2,13 +2,16 @@ import { supabase } from "./supabase";
 import { getQuests, updateQuest } from "./quests";
 import type { QuestTab } from "./quests";
 
-// Area/Project/Section hierarchy, one self-referencing table instead of
-// three fixed tiers — see supabase/migrations/20261005130000_folders.sql.
-// `kind` is the explicit tier marker: depth-based inference (parentId ===
-// null => Area) broke once a Project can be created unparented (an ad-hoc,
-// window-created Project — see attach.ts), which looks identical to an Area
-// by nesting alone.
-export type FolderKind = "area" | "project" | "section";
+// Area/Project hierarchy, one self-referencing table instead of two fixed
+// tiers — see supabase/migrations/20261005130000_folders.sql. `kind` is the
+// explicit tier marker: depth-based inference (parentId === null => Area)
+// broke once a Project can be created unparented (an ad-hoc, window-created
+// Project — see attach.ts), which looks identical to an Area by nesting
+// alone. A third tier, Section, existed briefly for resources to outlive
+// their originating Quest; removed once Project itself took over that role
+// (see supabase/migrations/20261007180000_remove_sections.sql) — a
+// Resource now attaches directly to a Project instead.
+export type FolderKind = "area" | "project";
 
 export type Folder = {
   id: string;
@@ -20,15 +23,13 @@ export type Folder = {
   updatedAt: number;
   // Project-only: this Project's own live tab list, and which child Quest
   // (if any) currently has its tabs swapped into this Project's window in
-  // place of its own. Area/Section rows never populate these, same as
-  // `color` being a field not every tier uses. Nothing reads/writes these
-  // meaningfully yet — that's a later step.
+  // place of its own. Area rows never populate these, same as `color`
+  // being a field not every tier uses.
   tabs?: QuestTab[];
   activeQuestId?: string;
   // "limit-reached"/"expired" now apply to a Project-kind folder (it's
-  // quota-gated via create_project, see registerProject below) — Area/
-  // Section rows will just never hit them, same as they never hit them
-  // today.
+  // quota-gated via create_project, see registerProject below) — an Area
+  // row will just never hit them.
   syncStatus?:
     | "synced"
     | "syncing"
@@ -58,8 +59,8 @@ async function setSyncStatus(id: string, syncStatus: Folder["syncStatus"]) {
 
 // Best-effort, fire-and-forget — same contract as registerQuest: never
 // awaited by createFolder, so a creation can never block on network/auth.
-// Area/Section only — Project goes through registerProject below instead,
-// since it's quota-gated and an Area/Section plain insert isn't.
+// Area only — Project goes through registerProject below instead, since
+// it's quota-gated and a plain Area insert isn't.
 async function registerFolder(folder: Folder) {
   if (!supabase) return;
   await setSyncStatus(folder.id, "syncing");

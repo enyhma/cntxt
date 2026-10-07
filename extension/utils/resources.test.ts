@@ -137,17 +137,17 @@ describe("deleteResource", () => {
   });
 });
 
-describe("folder-parented resources (Sections)", () => {
+describe("folder-parented resources (Projects)", () => {
   it("inserts with folder_id set and quest_id null", async () => {
     const resource = await addResource(
-      { folderId: "section-1" },
+      { folderId: "project-1" },
       { url: "https://a.com" },
     );
-    expect(resource.folderId).toBe("section-1");
+    expect(resource.folderId).toBe("project-1");
     expect(resource.questId).toBeUndefined();
     await vi.waitFor(() =>
       expect(insert).toHaveBeenCalledWith(
-        expect.objectContaining({ quest_id: null, folder_id: "section-1" }),
+        expect.objectContaining({ quest_id: null, folder_id: "project-1" }),
       ),
     );
   });
@@ -158,7 +158,7 @@ describe("folder-parented resources (Sections)", () => {
         {
           id: "remote-1",
           quest_id: null,
-          folder_id: "section-1",
+          folder_id: "project-1",
           type: "link",
           url: "https://example.com",
           note: null,
@@ -171,7 +171,7 @@ describe("folder-parented resources (Sections)", () => {
     const applied = await pullRemoteResources();
     expect(applied).toBe(1);
     const [r] = await getResources();
-    expect(r?.folderId).toBe("section-1");
+    expect(r?.folderId).toBe("project-1");
     expect(r?.questId).toBeUndefined();
   });
 });
