@@ -709,9 +709,9 @@ function Dashboard(props: {
           folder={project}
           depth={depth}
           expanded={expandedFolders().has(project.id)}
-          active={viewingFolderId() === project.id}
+          active={viewedProjectId() === project.id}
           onToggle={() => toggleExpanded(project.id)}
-          onOpen={() => setViewingFolderId(project.id)}
+          onOpen={() => showProjectTabs(project.id)}
           editing={editingFolderId() === project.id}
           editingValue={editingFolderName()}
           onEditingInput={setEditingFolderName}
@@ -1262,33 +1262,9 @@ function Dashboard(props: {
                   ? () => childFolders(viewingFolderId()!)
                   : undefined
               }
-              onOpenProject={setViewingFolderId}
-              sections={
-                viewingFolder()?.kind === "project"
-                  ? () =>
-                      childFolders(viewingFolderId()!).map((s) => ({
-                        id: s.id,
-                        name: s.name,
-                        resourceCount: resources().filter(
-                          (r) => r.folderId === s.id,
-                        ).length,
-                      }))
-                  : undefined
-              }
-              onOpenSection={setViewingFolderId}
-              onAddSection={() => handleAddSection(viewingFolderId()!)}
+              onOpenProject={showProjectTabs}
               onOpenQuest={goToQuest}
               onAddQuest={() => handleAddQuestIn(viewingFolderId()!)}
-              onOpenTabs={
-                viewingFolder()?.kind === "project"
-                  ? () => showProjectTabs(viewingFolderId()!)
-                  : undefined
-              }
-              tabCount={
-                viewingFolder()?.kind === "project"
-                  ? projectLiveTabCount(viewingFolder()!)
-                  : undefined
-              }
             />
           </Show>
 
@@ -1371,6 +1347,50 @@ function Dashboard(props: {
                   >
                     Disconnect
                   </button>
+                </Show>
+              </div>
+
+              <div class="mt-5 flex flex-col gap-1.5">
+                <div class="flex items-center gap-2">
+                  <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
+                    SECTIONS
+                  </span>
+                  <button
+                    type="button"
+                    title="New section"
+                    onClick={() => handleAddSection(viewedProject()!.id)}
+                    class="btn btn-square btn-ghost btn-xs"
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
+                <Show
+                  when={childFolders(viewedProject()!.id).length > 0}
+                  fallback={
+                    <p class="text-sm text-surface-txt-hint">
+                      No sections yet.
+                    </p>
+                  }
+                >
+                  <For each={childFolders(viewedProject()!.id)}>
+                    {(s) => (
+                      <button
+                        type="button"
+                        onClick={() => setViewingFolderId(s.id)}
+                        class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 text-left shadow-[var(--shadow-card)] hover:bg-surface-alt2"
+                      >
+                        <span class="min-w-0 flex-1 truncate text-sm font-medium">
+                          {s.name}
+                        </span>
+                        <span class="font-mono text-[11px] text-surface-txt-faint">
+                          {
+                            resources().filter((r) => r.folderId === s.id)
+                              .length
+                          }
+                        </span>
+                      </button>
+                    )}
+                  </For>
                 </Show>
               </div>
             </div>

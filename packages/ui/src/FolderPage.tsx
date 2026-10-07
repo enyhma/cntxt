@@ -2,11 +2,13 @@ import { For, Show, type Accessor } from "solid-js";
 import { Plus } from "lucide-solid";
 import { QuestDot } from "./QuestDot";
 
-// Area/Project landing page — the main pane shows this instead of a
-// quest's tabs when the sidebar's FolderHeader name (not its chevron) is
-// clicked. `projects` is only passed for an Area page (an Area's own
-// children); `sections` is only passed for a Project page (a Project's
-// depth-2 folders) — a folder only ever has one or the other.
+// Area landing page — the main pane shows this instead of a quest's tabs
+// when the sidebar's FolderHeader name (not its chevron) is clicked for an
+// Area. A Project's name click goes straight to its own live-tabs view
+// instead (see App.tsx's showProjectTabs) — a Project is window-bound, so
+// there's no separate "organizational" page for it the way an Area has
+// one. `quests` here only ever lists quests directly ungrouped-under-this-
+// Area (a Project's own quests show in its live-tabs view instead).
 export function FolderPage(props: {
   folder: { id: string; name: string };
   breadcrumb: Array<{ id: string; name: string }>;
@@ -21,20 +23,10 @@ export function FolderPage(props: {
   >;
   projects?: Accessor<Array<{ id: string; name: string }>>;
   onOpenProject?: (id: string) => void;
-  sections?: Accessor<
-    Array<{ id: string; name: string; resourceCount: number }>
-  >;
-  onOpenSection?: (id: string) => void;
-  onAddSection?: () => void;
   onOpenQuest: (id: string) => void;
   onAddQuest: () => void;
-  // Only set for a Project (kind === "project") — the way into its own
-  // live-tabs view, separate from this organizational page.
-  onOpenTabs?: () => void;
-  tabCount?: number;
 }) {
   const projectsList = () => props.projects?.() ?? [];
-  const sectionsList = () => props.sections?.() ?? [];
 
   return (
     <div class="flex-1 overflow-y-auto p-6">
@@ -45,18 +37,7 @@ export function FolderPage(props: {
               <For each={props.breadcrumb}>{(b) => <span>{b.name}</span>}</For>
             </div>
           </Show>
-          <div class="flex items-center gap-2.5">
-            <h1 class="text-lg font-semibold">{props.folder.name}</h1>
-            <Show when={props.onOpenTabs}>
-              <button
-                type="button"
-                onClick={props.onOpenTabs}
-                class="btn btn-xs gap-1 border border-surface-alt3"
-              >
-                Project tabs ({props.tabCount ?? 0})
-              </button>
-            </Show>
-          </div>
+          <h1 class="text-lg font-semibold">{props.folder.name}</h1>
         </div>
 
         <Show when={props.projects && projectsList().length > 0}>
@@ -77,47 +58,6 @@ export function FolderPage(props: {
                 </button>
               )}
             </For>
-          </div>
-        </Show>
-
-        <Show when={props.sections}>
-          <div class="flex flex-col gap-1.5">
-            <div class="flex items-center gap-2">
-              <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
-                SECTIONS
-              </span>
-              <button
-                type="button"
-                title="New section"
-                onClick={props.onAddSection}
-                class="btn btn-square btn-ghost btn-xs"
-              >
-                <Plus size={12} />
-              </button>
-            </div>
-            <Show
-              when={sectionsList().length > 0}
-              fallback={
-                <p class="text-sm text-surface-txt-hint">No sections yet.</p>
-              }
-            >
-              <For each={sectionsList()}>
-                {(s) => (
-                  <button
-                    type="button"
-                    onClick={() => props.onOpenSection?.(s.id)}
-                    class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 text-left shadow-[var(--shadow-card)] hover:bg-surface-alt2"
-                  >
-                    <span class="min-w-0 flex-1 truncate text-sm font-medium">
-                      {s.name}
-                    </span>
-                    <span class="font-mono text-[11px] text-surface-txt-faint">
-                      {s.resourceCount}
-                    </span>
-                  </button>
-                )}
-              </For>
-            </Show>
           </div>
         </Show>
 
