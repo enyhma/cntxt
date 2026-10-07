@@ -1,22 +1,41 @@
 import { supabase } from "./supabase";
 import { getQuests, updateQuest } from "./quests";
+import type { QuestTab } from "./quests";
 
-// Area/Project hierarchy: an Area is a folder with parentId null, a Project
-// is a folder whose parent is an Area. See
-// supabase/migrations/20261005130000_folders.sql for why this is one
-// self-referencing table instead of two fixed tiers.
+// Area/Project/Section hierarchy, one self-referencing table instead of
+// three fixed tiers — see supabase/migrations/20261005130000_folders.sql.
+// `kind` is the explicit tier marker: depth-based inference (parentId ===
+// null => Area) broke once a Project can be created unparented (an ad-hoc,
+// window-created Project — see attach.ts), which looks identical to an Area
+// by nesting alone.
+export type FolderKind = "area" | "project" | "section";
+
 export type Folder = {
   id: string;
   name: string;
   parentId: string | null;
+  kind: FolderKind;
   color?: string;
   createdAt: number;
   updatedAt: number;
-  // Unlike Quest, there's no entitlement RPC here (folders aren't
-  // quota-gated), so there's no "limit-reached"/"expired" status to map to
-  // — an RLS rejection (e.g. lapsed access) just falls into "offline" like
-  // any other write failure. See the same gap noted for pushDirtyQuests.
-  syncStatus?: "synced" | "syncing" | "offline" | "signed-out";
+  // Project-only: this Project's own live tab list, and which child Quest
+  // (if any) currently has its tabs swapped into this Project's window in
+  // place of its own. Area/Section rows never populate these, same as
+  // `color` being a field not every tier uses. Nothing reads/writes these
+  // meaningfully yet — that's a later step.
+  tabs?: QuestTab[];
+  activeQuestId?: string;
+  // "limit-reached"/"expired" now apply to a Project-kind folder (it's
+  // quota-gated via create_project, see registerProject below) — Area/
+  // Section rows will just never hit them, same as they never hit them
+  // today.
+  syncStatus?:
+    | "synced"
+    | "syncing"
+    | "offline"
+    | "signed-out"
+    | "limit-reached"
+    | "expired";
 };
 
 const STORAGE_KEY = "folders";
@@ -39,6 +58,8 @@ async function setSyncStatus(id: string, syncStatus: Folder["syncStatus"]) {
 
 // Best-effort, fire-and-forget — same contract as registerQuest: never
 // awaited by createFolder, so a creation can never block on network/auth.
+// Area/Section only — Project goes through registerProject below instead,
+// since it's quota-gated and an Area/Section plain insert isn't.
 async function registerFolder(folder: Folder) {
   if (!supabase) return;
   await setSyncStatus(folder.id, "syncing");
@@ -46,6 +67,7 @@ async function registerFolder(folder: Folder) {
     id: folder.id,
     name: folder.name,
     parent_id: folder.parentId,
+    kind: folder.kind,
     color: folder.color,
   });
   if (!error) {
@@ -62,20 +84,57 @@ async function registerFolder(folder: Folder) {
   }
 }
 
+// Project's counterpart to registerFolder: goes through the create_project
+// RPC instead of a plain insert, since ad-hoc window-created Projects (and
+// the dashboard's explicit "+ Project" button) must stay quota-gated the
+// same way Quest creation always has been — see
+// supabase/migrations/20261007170000_project_quest_restructure.sql's
+// count_workspace_like (Projects and Quests share one max_workspaces pool).
+// Same fire-and-forget contract and error-mapping as registerQuest.
+async function registerProject(folder: Folder) {
+  if (!supabase) return;
+  await setSyncStatus(folder.id, "syncing");
+  const { error } = await supabase.rpc("create_project", {
+    p_name: folder.name,
+    p_parent_id: folder.parentId,
+    p_id: folder.id,
+  });
+  if (!error) {
+    await setSyncStatus(folder.id, "synced");
+    return;
+  }
+  console.debug("project not synced:", error.message);
+  if (error.code === "23505") {
+    await setSyncStatus(folder.id, "synced");
+  } else if (error.message === "not authenticated") {
+    await setSyncStatus(folder.id, "signed-out");
+  } else if (error.message === "access expired") {
+    await setSyncStatus(folder.id, "expired");
+  } else if (error.message === "workspace limit reached") {
+    await setSyncStatus(folder.id, "limit-reached");
+  } else {
+    await setSyncStatus(folder.id, "offline");
+  }
+}
+
 export async function createFolder(
   name: string,
-  parentId: string | null = null,
+  parentId: string | null,
+  kind: FolderKind,
 ): Promise<Folder> {
   const folder: Folder = {
     id: crypto.randomUUID(),
     name,
     parentId,
+    kind,
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    ...(kind === "project" ? { tabs: [] } : {}),
   };
   const folders = await getFolders();
   await setFolders([...folders, folder]);
-  registerFolder(folder);
+  if (kind === "project") registerProject(folder);
+  else registerFolder(folder);
   return folder;
 }
 
@@ -92,7 +151,9 @@ export async function pullRemoteFolders(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
     .from("folders")
-    .select("id, name, parent_id, color, created_at, updated_at");
+    .select(
+      "id, name, parent_id, kind, color, created_at, updated_at, tabs, active_quest_id",
+    );
   if (error) throw new Error(error.message);
   if (!data) return 0;
 
@@ -107,9 +168,12 @@ export async function pullRemoteFolders(): Promise<number> {
       id: row.id,
       name: row.name,
       parentId: row.parent_id,
+      kind: row.kind,
       color: row.color ?? undefined,
       createdAt: Date.parse(row.created_at),
       updatedAt: Date.parse(row.updated_at),
+      tabs: (row.tabs as QuestTab[] | null) ?? [],
+      activeQuestId: row.active_quest_id ?? undefined,
       syncStatus: "synced",
     };
     if (!existing) {
@@ -140,7 +204,13 @@ export async function pushDirtyFolders(
 
     const { data, error } = await supabase
       .from("folders")
-      .update({ name: f.name, parent_id: f.parentId, color: f.color })
+      .update({
+        name: f.name,
+        parent_id: f.parentId,
+        color: f.color,
+        tabs: f.tabs ?? [],
+        active_quest_id: f.activeQuestId ?? null,
+      })
       .eq("id", f.id)
       .select("updated_at")
       .single();
@@ -161,7 +231,9 @@ export async function pushDirtyFolders(
 
 export async function updateFolder(
   id: string,
-  patch: Partial<Pick<Folder, "name" | "parentId" | "color">>,
+  patch: Partial<
+    Pick<Folder, "name" | "parentId" | "color" | "tabs" | "activeQuestId">
+  >,
 ) {
   const folders = await getFolders();
   await setFolders(

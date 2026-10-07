@@ -43,7 +43,7 @@ async function syncStatusOf(id: string) {
 }
 
 it("marks a folder synced once the insert succeeds", async () => {
-  const folder = await createFolder("Engineering");
+  const folder = await createFolder("Engineering", null, "area");
   await vi.waitFor(async () =>
     expect(await syncStatusOf(folder.id)).toBe("synced"),
   );
@@ -51,7 +51,7 @@ it("marks a folder synced once the insert succeeds", async () => {
 
 it("falls back to offline on an unrecognized insert error", async () => {
   insert.mockResolvedValue({ error: { message: "network down" } });
-  const folder = await createFolder("Engineering");
+  const folder = await createFolder("Engineering", null, "area");
   await vi.waitFor(async () =>
     expect(await syncStatusOf(folder.id)).toBe("offline"),
   );
@@ -64,9 +64,12 @@ it("pullRemoteFolders adds a remote folder missing locally", async () => {
         id: "remote-1",
         name: "Marketing",
         parent_id: null,
+        kind: "area",
         color: null,
         created_at: new Date(0).toISOString(),
         updated_at: new Date(0).toISOString(),
+        tabs: [],
+        active_quest_id: null,
       },
     ],
     error: null,
@@ -77,8 +80,33 @@ it("pullRemoteFolders adds a remote folder missing locally", async () => {
   expect((await getFolders()).map((f) => f.name)).toContain("Marketing");
 });
 
+it("pullRemoteFolders round-trips a Project's kind, tabs, and active_quest_id", async () => {
+  select.mockResolvedValue({
+    data: [
+      {
+        id: "remote-project-1",
+        name: "App Redesign",
+        parent_id: null,
+        kind: "project",
+        color: null,
+        created_at: new Date(0).toISOString(),
+        updated_at: new Date(0).toISOString(),
+        tabs: [{ url: "https://a.com", title: "A" }],
+        active_quest_id: "quest-9",
+      },
+    ],
+    error: null,
+  });
+
+  await pullRemoteFolders();
+  const project = (await getFolders()).find((f) => f.id === "remote-project-1");
+  expect(project?.kind).toBe("project");
+  expect(project?.tabs).toEqual([{ url: "https://a.com", title: "A" }]);
+  expect(project?.activeQuestId).toBe("quest-9");
+});
+
 it("pushDirtyFolders pushes a locally-renamed, already-synced folder", async () => {
-  const folder = await createFolder("Engineering");
+  const folder = await createFolder("Engineering", null, "area");
   await vi.waitFor(async () =>
     expect(await syncStatusOf(folder.id)).toBe("synced"),
   );
@@ -95,10 +123,61 @@ it("pushDirtyFolders pushes a locally-renamed, already-synced folder", async () 
   );
 });
 
+it("pushDirtyFolders includes a Project's tabs and active_quest_id", async () => {
+  const folder = await createFolder("App Redesign", null, "project");
+  await vi.waitFor(async () =>
+    expect(await syncStatusOf(folder.id)).toBe("synced"),
+  );
+  await updateFolder(folder.id, {
+    tabs: [{ url: "https://a.com", title: "A" }],
+    activeQuestId: "quest-9",
+  });
+
+  single.mockResolvedValue({
+    data: { updated_at: new Date().toISOString() },
+    error: null,
+  });
+
+  await pushDirtyFolders({});
+  expect(update).toHaveBeenCalledWith(
+    expect.objectContaining({
+      tabs: [{ url: "https://a.com", title: "A" }],
+      active_quest_id: "quest-9",
+    }),
+  );
+});
+
+describe("createFolder with kind: 'project'", () => {
+  it("calls create_project instead of a plain insert", async () => {
+    rpc.mockResolvedValue({ error: null });
+    const folder = await createFolder("App Redesign", "area-1", "project");
+    await vi.waitFor(async () =>
+      expect(await syncStatusOf(folder.id)).toBe("synced"),
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "create_project",
+      expect.objectContaining({
+        p_name: "App Redesign",
+        p_parent_id: "area-1",
+        p_id: folder.id,
+      }),
+    );
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("maps a workspace-limit-reached RPC error to limit-reached", async () => {
+    rpc.mockResolvedValue({ error: { message: "workspace limit reached" } });
+    const folder = await createFolder("App Redesign", null, "project");
+    await vi.waitFor(async () =>
+      expect(await syncStatusOf(folder.id)).toBe("limit-reached"),
+    );
+  });
+});
+
 describe("deleteFolder", () => {
   it("cascades to child folders and ungroups quests pointing at either", async () => {
-    const area = await createFolder("Engineering");
-    const project = await createFolder("App Redesign", area.id);
+    const area = await createFolder("Engineering", null, "area");
+    const project = await createFolder("App Redesign", area.id, "project");
     const quest = await createQuest("Research", []);
     await updateQuest(quest.id, { folderId: project.id });
 

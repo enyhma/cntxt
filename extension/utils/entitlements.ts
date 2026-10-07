@@ -14,7 +14,7 @@ export async function getCachedEntitlements(): Promise<
   return result[STORAGE_KEY] as Entitlements | undefined;
 }
 
-// A plain RLS-protected select, not the create_workspace RPC — reading
+// A plain RLS-protected select, not the create_quest/create_project RPCs — reading
 // isn't the operation that needs atomicity, only the write is (see
 // docs/architecture-sync.md → "Entitlements"). Advisory only: this cache is
 // what the dashboard reads to gray out UI ahead of a round-trip, it's never

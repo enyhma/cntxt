@@ -529,13 +529,13 @@ function Dashboard(props: {
   }
 
   async function handleAddArea() {
-    const folder = await createFolder("Untitled area");
+    const folder = await createFolder("Untitled area", null, "area");
     setExpandedFolders(new Set(expandedFolders()).add(folder.id));
     await refresh();
     startRenameFolder(folder);
   }
   async function handleAddProject(parentId: string) {
-    const folder = await createFolder("Untitled project", parentId);
+    const folder = await createFolder("Untitled project", parentId, "project");
     setExpandedFolders(new Set(expandedFolders()).add(parentId).add(folder.id));
     await refresh();
     startRenameFolder(folder);
@@ -543,7 +543,7 @@ function Dashboard(props: {
   // Sections are depth-2 folders (parent is a Project) — same tree, one
   // level deeper, since nothing in the schema enforces only two levels.
   async function handleAddSection(parentId: string) {
-    const folder = await createFolder("Untitled section", parentId);
+    const folder = await createFolder("Untitled section", parentId, "section");
     setExpandedFolders(new Set(expandedFolders()).add(parentId).add(folder.id));
     await refresh();
     startRenameFolder(folder);
@@ -565,7 +565,7 @@ function Dashboard(props: {
   }
 
   const resourcesForViewed = () =>
-    resources().filter((r) => r.workspaceId === viewedId());
+    resources().filter((r) => r.questId === viewedId());
 
   const [addingResource, setAddingResource] = createSignal(false);
   const [resourceUrl, setResourceUrl] = createSignal("");
@@ -584,7 +584,7 @@ function Dashboard(props: {
     setAddingResource(false);
     if (!id || (!url && !note)) return;
     await addResource(
-      { workspaceId: id },
+      { questId: id },
       { url: url || undefined, note: note || undefined },
     );
     await refresh();
@@ -592,7 +592,7 @@ function Dashboard(props: {
   async function handleSaveTabAsResource(tab: { url: string; title: string }) {
     const id = viewedId();
     if (!id) return;
-    await addResource({ workspaceId: id }, { url: tab.url, note: tab.title });
+    await addResource({ questId: id }, { url: tab.url, note: tab.title });
     await refresh();
   }
   async function handleDeleteResource(id: string) {

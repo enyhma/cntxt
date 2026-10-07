@@ -94,9 +94,31 @@ it("pullRemoteQuests adds a remote quest missing from local storage", async () =
       tabs: [{ url: "https://a.test", title: "A" }],
       createdAt: Date.parse("2026-01-01T00:00:00Z"),
       updatedAt: Date.parse("2026-01-02T00:00:00Z"),
+      order: 0,
       syncStatus: "synced",
     },
   ]);
+});
+
+it("pullRemoteQuests round-trips status and order_index", async () => {
+  select.mockResolvedValue({
+    data: [
+      {
+        id: "remote-2",
+        name: "From another device",
+        tabs: [],
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-02T00:00:00Z",
+        status: "active",
+        order_index: 3,
+      },
+    ],
+    error: null,
+  });
+  await pullRemoteQuests();
+  const quest = (await getQuests()).find((q) => q.id === "remote-2");
+  expect(quest?.status).toBe("active");
+  expect(quest?.order).toBe(3);
 });
 
 it("pullRemoteQuests keeps a local edit that is newer than the server's row", async () => {
@@ -173,6 +195,8 @@ describe("pushDirtyQuests", () => {
       folder_id: null,
       phases: [],
       active_phase_id: null,
+      status: "pending",
+      order_index: 0,
     });
     expect(lastPushedAt[quest.id]).toBe(Date.parse("2030-01-01T00:00:00Z"));
     const quests = await getQuests();
@@ -286,7 +310,7 @@ describe("purgeExpiredLocalTrash", () => {
     await deleteQuest(quest.id);
     const [m] = await getQuests();
     m!.deletedAt = Date.now() - 8 * 24 * 60 * 60 * 1000;
-    await browser.storage.local.set({ workspaces: [m] });
+    await browser.storage.local.set({ quests: [m] });
 
     await purgeExpiredLocalTrash(null);
     expect(await getQuests()).toEqual([]);
@@ -305,7 +329,7 @@ describe("purgeExpiredLocalTrash", () => {
     await deleteQuest(quest.id);
     const [m] = await getQuests();
     m!.deletedAt = Date.now() - 10 * 24 * 60 * 60 * 1000;
-    await browser.storage.local.set({ workspaces: [m] });
+    await browser.storage.local.set({ quests: [m] });
 
     await purgeExpiredLocalTrash("2099-01-01T00:00:00Z");
     expect(await getQuests()).toHaveLength(1);

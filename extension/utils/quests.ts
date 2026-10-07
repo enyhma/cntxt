@@ -10,6 +10,8 @@ export type QuestTab = { url: string; title: string; phaseId?: string };
 export type PhaseStatus = "pending" | "active" | "done";
 export type Phase = { id: string; name: string; status: PhaseStatus };
 
+export type QuestStatus = "pending" | "active" | "done";
+
 // See docs/workspace-sync-semantics.md for what each state means and how
 // the dashboard should render it. Undefined (legacy quests predating
 // this field) is treated the same as "syncing" — unknown, pending a check.
@@ -44,11 +46,20 @@ export type Quest = {
   // never required.
   phases?: Phase[];
   activePhaseId?: string;
+  // Project-nested swap lifecycle (unused by a standalone quest, which
+  // stays undefined forever): "pending"/"active"/"done" tracking whether
+  // this quest is currently swapped into its parent Project's window.
+  // Wiring for this lands in a later step — just plumbed through here.
+  status?: QuestStatus;
+  // Explicit ordinal among sibling quests sharing the same folderId —
+  // replaces the implicit array-index ordering `phases` relied on. Every
+  // quest gets one (defaulting to 0); nothing meaningfully orders by it yet.
+  order: number;
 };
 
 // Mirrors purge_trashed_workspaces()'s retention window in the trash_and_purge
 // migration — keep both in sync if either changes. "Paid" is the same
-// access_expires_at-in-the-future check create_workspace's RPC uses.
+// access_expires_at-in-the-future check create_quest's RPC uses.
 const FREE_TRASH_RETENTION_DAYS = 7;
 const PAID_TRASH_RETENTION_DAYS = 30;
 
@@ -59,11 +70,7 @@ export function trashRetentionDays(
   return isPaid ? PAID_TRASH_RETENTION_DAYS : FREE_TRASH_RETENTION_DAYS;
 }
 
-// Kept as "workspaces" — this is the storage.local key for already-installed
-// users' data. Renaming it would silently orphan every existing local
-// quest with no user-facing benefit; the concept is Quest everywhere
-// else, this string is just storage wire-compat.
-const STORAGE_KEY = "workspaces";
+const STORAGE_KEY = "quests";
 
 export async function getQuests(): Promise<Quest[]> {
   const result = await browser.storage.local.get(STORAGE_KEY);
@@ -84,6 +91,7 @@ export async function createQuest(
     tabs,
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    order: 0,
   };
   const quests = await getQuests();
   await setQuests([...quests, quest]);
@@ -109,10 +117,7 @@ async function setSyncStatus(id: string, syncStatus: SyncStatus) {
 async function registerQuest(quest: Quest) {
   if (!supabase) return;
   await setSyncStatus(quest.id, "syncing");
-  // Table/RPC/param names are the Supabase schema's own identifiers — still
-  // literally "workspace" there on purpose (see the rename plan: renaming
-  // the backend is a separate, riskier migration).
-  const { error } = await supabase.rpc("create_workspace", {
+  const { error } = await supabase.rpc("create_quest", {
     p_name: quest.name,
     p_tabs: quest.tabs,
     p_id: quest.id,
@@ -164,9 +169,9 @@ export async function reconcileQuestSyncStatus() {
 export async function pullRemoteQuests(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
-    .from("workspaces")
+    .from("quests")
     .select(
-      "id, name, tabs, created_at, updated_at, deleted_at, folder_id, phases, active_phase_id",
+      "id, name, tabs, created_at, updated_at, deleted_at, folder_id, phases, active_phase_id, status, order_index",
     );
   if (error) throw new Error(error.message);
   if (!data) return 0;
@@ -188,6 +193,8 @@ export async function pullRemoteQuests(): Promise<number> {
       folderId: row.folder_id,
       phases: (row.phases as Phase[] | null) ?? undefined,
       activePhaseId: row.active_phase_id ?? undefined,
+      status: row.status ?? undefined,
+      order: row.order_index ?? 0,
       syncStatus: "synced",
     };
     if (!existing) {
@@ -225,7 +232,7 @@ export async function purgeExpiredLocalTrash(
 // Pushes every locally-edited, already-synced quest up to Supabase —
 // M6's push half (docs/architecture-sync.md → "Push: local change →
 // Supabase"). Only `syncStatus === "synced"` quests are eligible: a
-// brand-new quest reaches the server via create_workspace
+// brand-new quest reaches the server via create_quest
 // (registerQuest above), not this path, since that RPC is what enforces
 // the entitlement limit; this only ever runs `update`, never `insert`.
 // `lastPushedAt` (kept in utils/sync.ts's machine context, not persisted) is
@@ -233,7 +240,7 @@ export async function purgeExpiredLocalTrash(
 // moved since the last successful push — without it, the "write the
 // server's updatedAt back to local storage" step below would itself trigger
 // another storage.onChanged, pushing the same content forever. Uses
-// `.update().eq("id", ...)` rather than `.upsert()`: workspaces.user_id has
+// `.update().eq("id", ...)` rather than `.upsert()`: quests.user_id has
 // no column default, so an upsert's (unused but still validated) insert
 // branch would fail a not-null check on a row that already exists.
 export async function pushDirtyQuests(
@@ -247,7 +254,7 @@ export async function pushDirtyQuests(
     if (m.updatedAt <= (next[m.id] ?? 0)) continue;
 
     const { data, error } = await supabase
-      .from("workspaces")
+      .from("quests")
       .update({
         name: m.name,
         tabs: m.tabs,
@@ -255,6 +262,8 @@ export async function pushDirtyQuests(
         folder_id: m.folderId ?? null,
         phases: m.phases ?? [],
         active_phase_id: m.activePhaseId ?? null,
+        status: m.status ?? "pending",
+        order_index: m.order ?? 0,
       })
       .eq("id", m.id)
       .select("updated_at")
@@ -286,6 +295,8 @@ export async function updateQuest(
       | "folderId"
       | "phases"
       | "activePhaseId"
+      | "status"
+      | "order"
     >
   >,
 ) {
@@ -327,5 +338,5 @@ export async function restoreQuest(id: string) {
 export async function permanentlyDeleteQuest(id: string) {
   const quests = await getQuests();
   await setQuests(quests.filter((m) => m.id !== id));
-  await supabase?.from("workspaces").delete().eq("id", id);
+  await supabase?.from("quests").delete().eq("id", id);
 }
