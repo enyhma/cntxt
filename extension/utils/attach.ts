@@ -1,33 +1,43 @@
 import { getSettings } from "./settings";
-import { getWindowQuestMap, setWindowQuest } from "./session";
-import { createQuest } from "./quests";
+import {
+  getWindowBindingMap,
+  setWindowBinding,
+  sameBinding,
+  type WindowBinding,
+} from "./session";
+import { createFolder, updateFolder } from "./folders";
 import { snapshotTabs } from "./tabs";
 
 /**
- * Ensures the given window is mapped to a quest, creating one if needed.
- * Idempotent: safe to call from both the background script and the dashboard page.
+ * Ensures the given window is bound to something — a Project or a Quest —
+ * creating a Project if needed. Idempotent: safe to call from both the
+ * background script and the dashboard page.
  */
-export async function ensureQuestForWindow(windowId: number): Promise<string> {
-  const map = await getWindowQuestMap();
+export async function ensureBindingForWindow(
+  windowId: number,
+): Promise<WindowBinding> {
+  const map = await getWindowBindingMap();
   const existing = map[windowId];
   if (existing) return existing;
 
   const settings = await getSettings();
-  if (
-    settings.startupBehavior === "lastUsed" &&
-    settings.lastActiveWorkspaceId
-  ) {
-    const alreadyOpenElsewhere = Object.values(map).includes(
-      settings.lastActiveWorkspaceId,
+  if (settings.startupBehavior === "lastUsed" && settings.lastActiveBinding) {
+    const alreadyOpenElsewhere = Object.values(map).some((b) =>
+      sameBinding(b, settings.lastActiveBinding!),
     );
     if (!alreadyOpenElsewhere) {
-      await setWindowQuest(windowId, settings.lastActiveWorkspaceId);
-      return settings.lastActiveWorkspaceId;
+      await setWindowBinding(windowId, settings.lastActiveBinding);
+      return settings.lastActiveBinding;
     }
   }
 
+  // "Every window is a workspace" — a window with nothing to resume gets a
+  // fresh Project (the window-bound workspace role Mission/Quest used to
+  // have alone), not a Quest.
   const tabs = await snapshotTabs(windowId);
-  const quest = await createQuest("Untitled", tabs);
-  await setWindowQuest(windowId, quest.id);
-  return quest.id;
+  const project = await createFolder("Untitled Project", null, "project");
+  await updateFolder(project.id, { tabs });
+  const binding: WindowBinding = { kind: "project", projectId: project.id };
+  await setWindowBinding(windowId, binding);
+  return binding;
 }

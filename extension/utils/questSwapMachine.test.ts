@@ -2,7 +2,7 @@ import { createActor, waitFor } from "xstate";
 import { beforeEach, describe, expect, it } from "vitest";
 import { fakeBrowser } from "wxt/testing/fake-browser";
 import { questSwapMachine } from "./questSwapMachine";
-import { setWindowQuest } from "./session";
+import { setWindowBinding } from "./session";
 import { DASHBOARD_URL } from "./tabs";
 import { createQuest, getQuests, updateQuest } from "./quests";
 
@@ -31,7 +31,7 @@ async function setUpRoadmapWindow() {
     ],
     activePhaseId: "p1",
   });
-  await setWindowQuest(win.id!, quest.id);
+  await setWindowBinding(win.id!, { kind: "quest", questId: quest.id });
 
   // Phase 1's and the unphased tab start open; phase 2's does not, mirroring
   // "only the active phase's tabs are open right now".

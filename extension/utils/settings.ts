@@ -1,13 +1,14 @@
+import type { WindowBinding } from "./session";
+
 export type StartupBehavior = "none" | "lastUsed";
 export type Theme = "baseline" | "indigo" | "brass";
 
 export type Settings = {
   startupBehavior: StartupBehavior;
-  // Field name kept as "lastActiveWorkspaceId" — it's part of the persisted
-  // settings object in storage.local; renaming it would silently drop
-  // existing users' "resume last used quest" setting. The concept is
-  // Quest everywhere else.
-  lastActiveWorkspaceId?: string;
+  // The window/binding this was last attached to — a Project or a
+  // standalone Quest — so "resume last used" (startupBehavior ===
+  // "lastUsed") can reattach to whichever kind it was.
+  lastActiveBinding?: WindowBinding;
   theme: Theme;
   // Gates the "Pull quests now" control in the account menu (see
   // App.tsx) behind an opt-in toggle in Settings — pullRemoteQuests

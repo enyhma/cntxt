@@ -108,7 +108,7 @@ async function setSyncStatus(id: string, syncStatus: SyncStatus) {
 // limit so it counts as synced. Never awaited by callers and never blocks
 // or fails loudly — offline, signed out, or already at the plan's limit
 // all just mean this quest stays local-only, exactly as it does today,
-// so opening a browser window (ensureQuestForWindow calls this too)
+// so opening a browser window (ensureBindingForWindow calls this too)
 // can never break because of an entitlement or network check. See
 // docs/architecture-sync.md's "open question" about entitlement checks
 // with no click to intercept. The result is recorded as `syncStatus` (see

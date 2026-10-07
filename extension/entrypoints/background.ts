@@ -1,6 +1,6 @@
 import { type ActorRefFrom, createActor } from "xstate";
-import { ensureQuestForWindow } from "@/utils/attach";
-import { getWindowQuestMap, removeWindowQuest } from "@/utils/session";
+import { ensureBindingForWindow } from "@/utils/attach";
+import { getWindowBindingMap, removeWindowBinding } from "@/utils/session";
 import { updateSettings } from "@/utils/settings";
 import { DASHBOARD_URL, ensureDashboardTab } from "@/utils/tabs";
 import { windowSyncMachine } from "@/utils/windowSyncMachine";
@@ -33,10 +33,10 @@ export default defineBackground(() => {
   }
 
   // Service workers restart often (idle unload, browser startup); rehydrate
-  // the in-memory actor registry from the persisted window->quest map
+  // the in-memory actor registry from the persisted window->binding map
   // every time this callback runs so tab-sync survives a restart.
   (async () => {
-    const map = await getWindowQuestMap();
+    const map = await getWindowBindingMap();
     for (const windowId of Object.keys(map).map(Number)) {
       trackWindow(windowId);
     }
@@ -46,7 +46,7 @@ export default defineBackground(() => {
     const windows = await browser.windows.getAll({ windowTypes: ["normal"] });
     for (const win of windows) {
       if (win.id === undefined) continue;
-      await ensureQuestForWindow(win.id);
+      await ensureBindingForWindow(win.id);
       await ensureDashboardTab(win.id);
       trackWindow(win.id);
     }
@@ -54,14 +54,14 @@ export default defineBackground(() => {
 
   browser.windows.onRemoved.addListener((windowId) => {
     untrackWindow(windowId);
-    removeWindowQuest(windowId);
+    removeWindowBinding(windowId);
   });
 
   browser.windows.onFocusChanged.addListener(async (windowId) => {
     if (windowId === browser.windows.WINDOW_ID_NONE) return;
-    const map = await getWindowQuestMap();
-    const questId = map[windowId];
-    if (questId) await updateSettings({ lastActiveWorkspaceId: questId });
+    const map = await getWindowBindingMap();
+    const binding = map[windowId];
+    if (binding) await updateSettings({ lastActiveBinding: binding });
   });
 
   browser.tabs.onCreated.addListener((tab) => notifyTabsChanged(tab.windowId));
@@ -86,7 +86,7 @@ export default defineBackground(() => {
       await browser.tabs.update(existing.id, { active: true });
       return;
     }
-    await ensureQuestForWindow(tab.windowId);
+    await ensureBindingForWindow(tab.windowId);
     await ensureDashboardTab(tab.windowId);
     trackWindow(tab.windowId);
   });

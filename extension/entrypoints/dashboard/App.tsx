@@ -12,11 +12,11 @@ import {
   onMount,
   untrack,
 } from "solid-js";
-import { ensureQuestForWindow } from "@/utils/attach";
+import { ensureBindingForWindow } from "@/utils/attach";
 import { restoreMachine } from "@/utils/restoreMachine";
 import { questSwapMachine } from "@/utils/questSwapMachine";
 import { syncMachine } from "@/utils/sync";
-import { getWindowQuestMap } from "@/utils/session";
+import { getWindowBindingMap, type WindowBinding } from "@/utils/session";
 import {
   type Settings,
   type StartupBehavior,
@@ -379,7 +379,7 @@ function Dashboard(props: {
   }
 
   function openAll(quest: Quest) {
-    restoreSend({ type: "RESTORE", quest });
+    restoreSend({ type: "RESTORE", target: { kind: "quest", quest } });
     showQuest(quest.id);
   }
 
@@ -1466,7 +1466,9 @@ function App() {
   const [quests, setQuests] = createSignal<Quest[]>([]);
   const [folders, setFolders] = createSignal<Folder[]>([]);
   const [resources, setResources] = createSignal<Resource[]>([]);
-  const [windowMap, setWindowMap] = createSignal<Record<number, string>>({});
+  const [windowMap, setWindowMap] = createSignal<Record<number, WindowBinding>>(
+    {},
+  );
   const [myWindowId, setMyWindowId] = createSignal<number>();
   const [startupBehavior, setStartupBehavior] =
     createSignal<StartupBehavior>("none");
@@ -1515,11 +1517,18 @@ function App() {
   const [otpCode, setOtpCode] = createSignal("");
   const [authError, setAuthError] = createSignal("");
 
-  const openIds = () => new Set(Object.values(windowMap()));
+  const bindingId = (b: WindowBinding) =>
+    b.kind === "quest" ? b.questId : b.projectId;
+  const openIds = () => new Set(Object.values(windowMap()).map(bindingId));
   const currentId = () => {
     const windowId = myWindowId();
-    return windowId !== undefined ? windowMap()[windowId] : undefined;
+    const binding = windowId !== undefined ? windowMap()[windowId] : undefined;
+    return binding ? bindingId(binding) : undefined;
   };
+  // A window bound to a Project (not yet nested in/showing a Quest) has no
+  // "current quest" to resolve to here — that's correct, not a gap: there's
+  // no Quest-shaped UI to show instead until the Project's own tabs view
+  // lands in a later step.
   const current = () => quests().find((w) => w.id === currentId());
 
   // A trashed quest is still in storage.local (and still has whatever
@@ -1576,14 +1585,14 @@ function App() {
     setQuests(await getQuests());
     setFolders(await getFolders());
     setResources(await getResources());
-    setWindowMap(await getWindowQuestMap());
+    setWindowMap(await getWindowBindingMap());
   }
 
   onMount(async () => {
     const win = await browser.windows.getCurrent();
     if (win.id !== undefined) {
       setMyWindowId(win.id);
-      await ensureQuestForWindow(win.id);
+      await ensureBindingForWindow(win.id);
     }
     await refresh();
 

@@ -2,9 +2,10 @@ import { createActor, waitFor } from "xstate";
 import { beforeEach, describe, expect, it } from "vitest";
 import { fakeBrowser } from "wxt/testing/fake-browser";
 import { restoreMachine } from "./restoreMachine";
-import { getWindowQuestMap, setWindowQuest } from "./session";
+import { getWindowBindingMap, setWindowBinding } from "./session";
 import { DASHBOARD_URL } from "./tabs";
 import { createQuest, getQuests } from "./quests";
+import { createFolder } from "./folders";
 import { windowSyncMachine } from "./windowSyncMachine";
 
 beforeEach(() => {
@@ -20,8 +21,8 @@ async function flushAsyncWork() {
  * wires it to tabs.onCreated/onRemoved, the same as background.ts does.
  * Without this, closing tabs during Restore wouldn't reproduce the bug this
  * suite guards against: the corruption only happens because something is
- * live-syncing tab changes back onto whichever quest the window was
- * mapped to at the moment the tabs closed.
+ * live-syncing tab changes back onto whichever target the window was
+ * bound to at the moment the tabs closed.
  */
 async function setUpWindowWithQuest() {
   const win = (await browser.windows.create({ focused: true }))!;
@@ -31,7 +32,7 @@ async function setUpWindowWithQuest() {
     { url: "https://a1.example/", title: "A1" },
     { url: "https://a2.example/", title: "A2" },
   ]);
-  await setWindowQuest(win.id!, quest.id);
+  await setWindowBinding(win.id!, { kind: "quest", questId: quest.id });
 
   for (const tab of quest.tabs) {
     await browser.tabs.create({ windowId: win.id, url: tab.url });
@@ -66,7 +67,10 @@ describe("restoreMachine", () => {
     ]);
 
     const actor = createActor(restoreMachine).start();
-    actor.send({ type: "RESTORE", quest: questB });
+    actor.send({
+      type: "RESTORE",
+      target: { kind: "quest", quest: questB },
+    });
     await waitFor(actor, (state) => state.matches("idle"));
     await flushAsyncWork();
 
@@ -74,8 +78,8 @@ describe("restoreMachine", () => {
     const updatedA = quests.find((m) => m.id === questA.id);
     expect(updatedA?.tabs).toEqual(questA.tabs);
 
-    const map = await getWindowQuestMap();
-    expect(map[windowId]).toBe(questB.id);
+    const map = await getWindowBindingMap();
+    expect(map[windowId]).toEqual({ kind: "quest", questId: questB.id });
 
     const openUrls = (await browser.tabs.query({ windowId }))
       .map((t) => t.url)
@@ -91,8 +95,8 @@ describe("restoreMachine", () => {
     await waitFor(actor, (state) => state.matches("idle"));
     await flushAsyncWork();
 
-    const map = await getWindowQuestMap();
-    expect(map[windowId]).toBe(questA.id);
+    const map = await getWindowBindingMap();
+    expect(map[windowId]).toEqual({ kind: "quest", questId: questA.id });
 
     const openUrls = (await browser.tabs.query({ windowId })).map((t) => t.url);
     expect(openUrls).toEqual([DASHBOARD_URL]);
@@ -103,7 +107,7 @@ describe("restoreMachine", () => {
     expect(updatedA?.tabs).toEqual([]);
   });
 
-  it("disconnect closes tabs but preserves the quest and leaves the window unmapped", async () => {
+  it("disconnect closes tabs but preserves the quest and leaves the window unbound", async () => {
     const { windowId, quest: questA } = await setUpWindowWithQuest();
 
     const actor = createActor(restoreMachine).start();
@@ -111,7 +115,7 @@ describe("restoreMachine", () => {
     await waitFor(actor, (state) => state.matches("idle"));
     await flushAsyncWork();
 
-    const map = await getWindowQuestMap();
+    const map = await getWindowBindingMap();
     expect(map[windowId]).toBeUndefined();
 
     const openUrls = (await browser.tabs.query({ windowId })).map((t) => t.url);
@@ -121,5 +125,30 @@ describe("restoreMachine", () => {
     // attributed to questA, unlike a plain close.
     const updatedA = (await getQuests()).find((m) => m.id === questA.id);
     expect(updatedA?.tabs).toEqual(questA.tabs);
+  });
+
+  it("restores a project target by opening its own tabs and binding the window to it", async () => {
+    const win = (await browser.windows.create({ focused: true }))!;
+    const project = await createFolder("Untitled Project", null, "project");
+    const projectWithTabs = {
+      ...project,
+      tabs: [{ url: "https://p1.example/", title: "P1" }],
+    };
+
+    const actor = createActor(restoreMachine).start();
+    actor.send({
+      type: "RESTORE",
+      target: { kind: "project", project: projectWithTabs },
+    });
+    await waitFor(actor, (state) => state.matches("idle"));
+    await flushAsyncWork();
+
+    const map = await getWindowBindingMap();
+    expect(map[win.id!]).toEqual({ kind: "project", projectId: project.id });
+
+    const openUrls = (await browser.tabs.query({ windowId: win.id })).map(
+      (t) => t.url,
+    );
+    expect(openUrls).toEqual(["https://p1.example/"]);
   });
 });
