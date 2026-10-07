@@ -61,10 +61,14 @@ null default 10`, `access_expires_at timestamptz` (null until a
       row on signup. Verified: a fresh `auth.users` insert produces a
       matching `entitlements` row with the default limit.
 
-## M2 — The one exception: `create_workspace`
+## M2 — The one exception: `create_quest`
 
 **Status: done.** Migration `20260912162121_entitlements.sql`, tests in
-`supabase/tests/`.
+`supabase/tests/`. Later extended with a sibling `create_project` RPC
+(Project/Quest restructuring,
+`supabase/migrations/20261007170000_project_quest_restructure.sql`), mirroring
+this exact pattern and sharing its quota check via a `count_workspace_like()`
+helper — a second exception by the same name, not a third kind.
 
 - [x] One `plpgsql` function, `security definer` — **not** `invoker` as
       originally planned here. `entitlements` deliberately has no UPDATE
@@ -77,11 +81,11 @@ FOR UPDATE` checks the UPDATE policy's `USING` clause, not just
       check was skipped rather than erroring. `security definer` runs as
       the function's owner, which bypasses RLS the same way any table owner
       does, so ownership is enforced explicitly via `auth.uid()` inside the
-      function instead of through the `workspaces` policy.
+      function instead of through the `quests` policy.
 - [x] Body: lock the caller's `entitlements` row (`for update`), count
       their workspaces, compare to the limit, insert-and-return on success,
       raise otherwise.
-- [x] Exposed automatically as `supabase.rpc('create_workspace', {...})` —
+- [x] Exposed automatically as `supabase.rpc('create_quest', {...})` —
       PostgREST does this for free once the function exists; no extra
       server-side wiring.
 - [x] pgTAP tests (`supabase/tests/create_workspace_test.sql`,
@@ -175,29 +179,33 @@ FOR UPDATE` checks the UPDATE policy's `USING` clause, not just
       limit — a tooltip, not a disabled button (see M5: creation itself is
       never blocked).
 
-## M5 — Workspace creation: local-first always, sync is what's gated
+## M5 — Quest/Project creation: local-first always, sync is what's gated
 
 **Status: done, resolved differently than originally planned** — see
-`architecture-sync.md` → "The write-time check — resolved for workspace
+`architecture-sync.md` → "The write-time check — resolved for Quest/Project
 creation". The original plan below (RPC-gates-creation, fail loudly
-offline) was never implemented: `ensureWorkspaceForWindow` creates a
-workspace on every window open with no click to intercept and no UI in
+offline) was never implemented: `ensureBindingForWindow` creates a
+Project on every window open with no click to intercept and no UI in
 `background.ts` to show a rejection, so gating it on the server would break
-window-opening itself while offline or at-limit. Built instead:
+window-opening itself while offline or at-limit. Built instead (described
+below for Quest/`create_quest`, since that's what existed when this
+milestone was written; `create_project` was added later, mirroring the exact
+same pattern and sharing its quota pool — see the Project/Quest
+restructuring plan, `supabase/migrations/20261007170000_project_quest_restructure.sql`):
 
-- [x] `createWorkspace` (`utils/workspaces.ts`) writes to `storage.local`
+- [x] `createQuest` (`utils/quests.ts`) writes to `storage.local`
       first and unconditionally, exactly as before this milestone, then
-      fires `registerWorkspace` — a non-blocking `create_workspace` RPC call
+      fires `registerQuest` — a non-blocking `create_quest` RPC call
       (passing the local `p_id`) whose result nobody awaits or surfaces.
-      `ensureWorkspaceForWindow` (`utils/attach.ts`) gets this for free,
-      since it calls the same `createWorkspace`.
-- [x] `create_workspace`'s SQL signature grew an optional `p_id uuid`
+      `ensureBindingForWindow` (`utils/attach.ts`) gets this for free,
+      since it calls the same `createQuest`.
+- [x] `create_quest`'s SQL signature grew an optional `p_id uuid`
       (migration `20260928163000_create_workspace_client_id_and_expiry.sql`)
       so the server row lands under the same id the extension already
       generated — no id remapping needed once M6 exists to read it back.
       Backward compatible: existing 2-arg calls still work.
 - [x] Same migration adds the `access_expires_at` check flagged as missing
-      in M9 below: `create_workspace` now rejects once a caller's access has
+      in M9 below: `create_quest` now rejects once a caller's access has
       lapsed, _even though_ `max_workspaces` was left inflated (the Creem
       webhook only ever touches `access_expires_at` on expiry, never claws
       back `max_workspaces`). Free-tier accounts have a permanently-null
@@ -210,28 +218,28 @@ window-opening itself while offline or at-limit. Built instead:
       Docker/Podman, so `supabase test db --local` couldn't actually be
       executed; treat these as reviewed-by-hand, not verified, until that
       run happens.
-- [ ] This only updates the `create_workspace` RPC's own check — the
-      broader "should `workspaces` RLS itself freeze reads/writes past
-      expiry" question from `architecture-sync.md` → "Payments" is
-      untouched and still open (creation is gated; nothing about existing
-      synced rows is).
+- [x] The broader "should `quests` RLS itself freeze reads/writes past
+      expiry" question from `architecture-sync.md` → "Payments" is now also
+      resolved (`has_active_access(user_id)`, migration
+      `20261005120000_freeze_writes_on_expiry.sql`, applied to `quests`,
+      `folders`, and `resources`) — not just `create_quest`'s own check.
 
 ## M6 — Sync engine: push and pull
 
-- [x] **Pull, with conflict resolution** — `pullRemoteWorkspaces`
-      (`utils/workspaces.ts`): a plain `select` of the caller's own
-      `workspaces` rows (RLS-scoped, no RPC). A row missing locally is
+- [x] **Pull, with conflict resolution** — `pullRemoteQuests`
+      (`utils/quests.ts`): a plain `select` of the caller's own
+      `quests` rows (RLS-scoped, no RPC). A row missing locally is
       added; a row that exists locally is overwritten only when the
       server's `updated_at` is strictly newer than the local copy's —
       last-write-wins exactly as diagrammed in `architecture-sync.md` →
       "Pull + conflict resolution". An unpushed local edit always has a
       newer local `updatedAt` than its still-stale server row, so it's
       left alone rather than clobbered.
-- [x] **Push** — `pushDirtyWorkspaces` (`utils/workspaces.ts`), driven by
+- [x] **Push** — `pushDirtyQuests` (`utils/quests.ts`), driven by
       `utils/sync.ts`'s `syncMachine` listening to `storage.onChanged`:
-      debounce, then `update` (not `upsert` — `workspaces.user_id` has no
+      debounce, then `update` (not `upsert` — `quests.user_id` has no
       column default, so upsert's insert branch would fail a not-null
-      check on a row that already exists) the `workspaces` table via a
+      check on a row that already exists) the `quests` table via a
       plain `supabase-js` call for every `syncStatus === "synced"`
       workspace whose local `updatedAt` has moved. Not an RPC — updates to
       an existing, already-owned workspace aren't entitlement-gated.
@@ -254,17 +262,17 @@ soft-delete (every read filtering `.is("deleted_at", null)`), deleted
 workspaces are user-visible in a Trash view for a retention window — 7
 days free, 30 days paid — before being purged for good.
 
-- [x] `deleted_at timestamptz` added to `workspaces`
+- [x] `deleted_at timestamptz` added to `quests`
       (`supabase/migrations/20260930200000_trash_and_purge.sql`).
-      `deleteWorkspace` (`utils/workspaces.ts`) sets it (soft delete,
+      `deleteQuest` (`utils/quests.ts`) sets it (soft delete,
       local-first, propagated by the existing push path) instead of
-      removing the row; `restoreWorkspace` clears it; the Trash view's
-      explicit "Delete forever" (`permanentlyDeleteWorkspace`) is the one
+      removing the row; `restoreQuest` clears it; the Trash view's
+      explicit "Delete forever" (`permanentlyDeleteQuest`) is the one
       path that still does a real `delete`.
 - [x] Reads are **not** filtered to active-only server-side — the client
       pulls trashed rows too (so trash state itself syncs across
       devices) and filters active-vs-trashed locally
-      (`App.tsx`'s `activeWorkspaces`/`trashedWorkspaces`).
+      (`App.tsx`'s `activeQuests`/`trashedQuests`).
 - [x] Scheduled purge: a `pg_cron` job (hourly) calls
       `purge_trashed_workspaces()`, which hard-deletes rows past their
       retention window — 30 days if `entitlements.access_expires_at` is
@@ -274,7 +282,7 @@ days free, 30 days paid — before being purged for good.
       `purgeExpiredLocalTrash` mirrors the same rule client-side so a
       workspace's countdown hitting zero removes it from the dashboard
       immediately rather than lagging behind the next hourly tick.
-- [x] `create_workspace`'s limit check now excludes `deleted_at is not null`
+- [x] `create_quest`'s limit check now excludes `deleted_at is not null`
       rows — trashing a workspace frees its quota slot instead of holding
       it until purge.
 
@@ -323,30 +331,25 @@ events, not one-time orders.
       the _current_ period is no longer paid up — all three immediately set
       `access_expires_at = now()`, revoking access right away rather than
       waiting for a timestamp that may already be stale.
-- [x] `create_workspace` now checks `access_expires_at` (M5,
+- [x] `create_quest` now checks `access_expires_at` (M5,
       `20260928163000_create_workspace_client_id_and_expiry.sql`) — the one
       write path that existed to gate. Expiry has a real effect: a lapsed
       account can no longer create new workspaces (locally it still can —
       see M5 — but they won't sync).
-- [ ] The broader ask — `workspaces` (and any other user-scoped) RLS
-      requiring `access_expires_at > now()` on every read/write, not just
-      creation — is still open. That's a different, bigger question than
-      M5 answered: it's the "what happens to data at expiry" product
-      decision below (freeze writes? drop to local-only? delete after a
-      grace period?), and applies to a general sync engine (M6) that
-      doesn't exist yet, not to `create_workspace` alone.
-- [ ] The "what happens to data at expiry" open question
-      (`architecture-sync.md` → "Payments") needs an answer before this
-      milestone can be called fully done, not after.
+- [x] The broader ask — `quests` (and other user-scoped tables') RLS
+      requiring active access on every read/write, not just creation — is
+      now also resolved: `has_active_access(user_id)`, migration
+      `20261005120000_freeze_writes_on_expiry.sql`, required by every write
+      policy on `quests`/`folders`/`resources`. Answers the "what happens to
+      data at expiry" question too — freeze writes, keep serving reads.
 
 ## Deliberately not in this plan
 
 - Edge Functions.
 - A custom REST/GraphQL server.
-- A generalized entitlement engine — only `create_workspace` exists until a
-  second gated action is actually being built (tab-count/size limits are
-  still an open product question per `architecture-sync.md`).
+- A generalized entitlement engine — only `create_quest`/`create_project`
+  exist (sharing one quota check) until a genuinely different kind of gated
+  action is actually being built (tab-count/size limits are still an open
+  product question per `architecture-sync.md`).
 - Admin tooling for managing plans or entitlements — Phase 3/billing
   territory.
-- Resource sync — blocked on the Phase 1 "manually-added links/notes"
-  capability landing locally first (❌ in `capabilities.md`).

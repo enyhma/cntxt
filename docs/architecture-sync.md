@@ -1,13 +1,15 @@
 # Architecture: local-first, then sync
 
-**Status: design document. Nothing on this page is implemented.**
-`supabase/migrations/` has the target schema; the extension has zero sync or
-auth code today. Unlike the original Phase 1/2 split in `ROADMAP.md` (local
-use now, accounts later), this version requires an account **from first
-use**, so the server can enforce plan limits — see "Accounts are mandatory"
-below for why that doesn't collapse into a plain thin client. See
+**Status: implemented.** `supabase/migrations/` has the shipped schema, and
+the extension has sync + auth code built against it — see
 [`implementation-plan-sync.md`](./implementation-plan-sync.md) for the
-ordered build plan this design turns into.
+milestone-by-milestone build history this design turned into, and this
+page's own sections for a few places where the implementation later resolved
+an open question differently than originally drafted. Unlike the original
+Phase 1/2 split in `ROADMAP.md` (local use now, accounts later), this
+version requires an account **from first use**, so the server can enforce
+plan limits — see "Accounts are mandatory" below for why that doesn't
+collapse into a plain thin client.
 
 ## Two separate questions this doc keeps distinct
 
@@ -23,7 +25,7 @@ ordered build plan this design turns into.
 
 ## Principle: local-first is a data-flow property, not a no-account promise
 
-For every workspace operation _except creating a new workspace_ (see below),
+For every Quest/Project operation _except creating a new one_ (see below),
 the extension still reads and writes `storage.local`/`storage.session`
 directly and instantly, never blocked on a network call — every diagram in
 `workflows.md` continues to describe exactly what happens, unmodified. Sync
@@ -33,9 +35,9 @@ loop ever waiting on it.
 
 Consequences of taking that seriously:
 
-- Once a workspace exists, every local write to it (`updateWorkspace`, tab
-  sync, ...) commits to `storage.local` first, full stop. Sync is notified
-  after the fact, not in the write path.
+- Once a Quest or Project exists, every local write to it (`updateQuest`/
+  `updateFolder`, tab sync, ...) commits to `storage.local` first, full stop.
+  Sync is notified after the fact, not in the write path.
 - The UI (`App.tsx`) never has a loading spinner for "syncing" ordinary
   changes — it already re-renders from `storage.onChanged`, which fires the
   instant the local write lands, regardless of whether that write has
@@ -47,9 +49,9 @@ Consequences of taking that seriously:
 ## Accounts are mandatory — why that doesn't make this a thin client
 
 Signing in is a hard gate: there's no anonymous local-only mode, and no
-"claim your existing local workspaces later" migration (an earlier draft of
-this doc had one — deleted, since there's no pre-account period left for
-orphan workspaces to exist in). That single gate is also where most server-dependency lives, but not the
+"claim your existing local Quests/Projects later" migration (an earlier draft
+of this doc had one — deleted, since there's no pre-account period left for
+orphans to exist in). That single gate is also where most server-dependency lives, but not the
 only place — see "Entitlements" below for the general rule.
 
 So "requires an account" and "local-first" aren't in tension; they apply to
@@ -64,7 +66,7 @@ flowchart TB
     subgraph DeviceA["Device A (extension)"]
         BGA[background.ts]
         DashA[Dashboard UI]
-        LocalA[(storage.local<br/>workspaces, settings)]
+        LocalA[(storage.local<br/>quests, folders, settings)]
         SyncA[Sync engine — new]
         BGA --> LocalA
         DashA --> LocalA
@@ -81,7 +83,7 @@ flowchart TB
 
     subgraph Supabase
         Auth[Supabase Auth]
-        PG[(Postgres<br/>workspaces, resources<br/>RLS by user_id)]
+        PG[(Postgres<br/>quests, folders, resources<br/>RLS by user_id)]
     end
 
     SyncA <-->|supabase-js<br/>PostgREST| PG
@@ -128,13 +130,13 @@ sequenceDiagram
     actor User
     participant Local as storage.local
     participant Sync as Sync engine
-    participant PG as Supabase (workspaces)
+    participant PG as Supabase (quests)
 
-    User->>Local: (via existing Phase 1 flow) updateWorkspace(id, patch)
+    User->>Local: (via existing Phase 1 flow) updateQuest(id, patch)
     Note over Local: unchanged from workflows.md —<br/>this write already happened before sync exists
     Local-->>Sync: storage.onChanged
     Sync->>Sync: debounce (coalesce a burst of tab-sync writes)
-    Sync->>PG: upsert workspaces (id, user_id, name, tabs)
+    Sync->>PG: upsert quests (id, user_id, name, tabs)
     PG->>PG: trigger sets updated_at = now() — server clock, not the client's
     PG-->>Sync: returns the row, including the server's updated_at
     Sync->>Local: overwrite local updatedAt with the server's value
@@ -144,7 +146,9 @@ sequenceDiagram
 The write to `storage.local` is exactly today's Phase 1 write — sync
 observes it after the fact via `storage.onChanged`, the same mechanism the
 dashboard already uses to react to background-script writes. It doesn't
-insert itself into the save/close/restore path at all.
+insert itself into the save/close/restore path at all. A `kind:"project"`
+Folder follows the identical push pattern against the `folders` table
+(`pushDirtyFolders`) — this diagram only shows the Quest side for brevity.
 
 ## Pull + conflict resolution
 
@@ -157,14 +161,14 @@ should win.
 sequenceDiagram
     actor Trigger as dashboard mount / periodic tick / focus
     participant Sync as Sync engine
-    participant PG as Supabase (workspaces)
+    participant PG as Supabase (quests)
     participant Local as storage.local
 
     Trigger->>Sync: run a sync tick
     Sync->>PG: select * where updated_at > lastSyncedAt
     PG-->>Sync: changed rows (possibly none)
     loop each changed row R
-        Sync->>Local: read local workspace with id = R.id
+        Sync->>Local: read local quest with id = R.id
         alt local has no pending (unpushed) change for this id
             Sync->>Local: overwrite with R — server is the only writer left
         else local has a pending change too
@@ -209,15 +213,22 @@ needed for the core UI to stay correct.
 
 ## Local model vs. Postgres schema
 
-|                       | Local (`utils/workspaces.ts`)           | Postgres (`supabase/migrations/...`)                             | Note                                                                                                                                                                                                             |
-| --------------------- | --------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| id                    | `crypto.randomUUID()`, client-generated | `uuid default gen_random_uuid()`                                 | Already compatible — locally-created ids need no remapping on first sync.                                                                                                                                        |
-| name                  | `text`                                  | `text`                                                           | Direct.                                                                                                                                                                                                          |
-| tabs                  | `WorkspaceTab[]` (`{url, title}`)       | `jsonb`                                                          | Direct serialization.                                                                                                                                                                                            |
-| createdAt / updatedAt | `number` (client `Date.now()`)          | `timestamptz`, `updated_at` server-set via `moddatetime` trigger | **Not the same clock.** See Push diagram — after any round-trip, local `updatedAt` must be replaced with the server's value, never compared as client-generated ms against another device's client-generated ms. |
-| ownership             | none (single-profile, implicit)         | `user_id` (RLS: `auth.uid() = user_id`)                          | No claiming step needed — every workspace is created after sign-in (see "Entitlements"), so it always has an owner from the moment it exists locally.                                                            |
-| resources             | _(field doesn't exist yet)_             | `resources` table, FK to `workspaces`                            | Server schema is ahead of the client here: resources sync has nothing to sync until the Phase 1 "manually-added links/notes" capability (❌ in `capabilities.md`) is built locally.                              |
-| deletion              | array filter, no tombstone              | hard `delete` cascades to `resources`                            | See open question below — a poll-based pull can't see "this row is now gone" the way it sees "this row changed."                                                                                                 |
+|                       | Local (`utils/quests.ts`)                 | Postgres (`supabase/migrations/...`)                             | Note                                                                                                                                                                                                             |
+| --------------------- | ----------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id                    | `crypto.randomUUID()`, client-generated   | `uuid default gen_random_uuid()`                                 | Already compatible — locally-created ids need no remapping on first sync.                                                                                                                                        |
+| name                  | `text`                                    | `text`                                                           | Direct.                                                                                                                                                                                                          |
+| tabs                  | `QuestTab[]` (`{url, title}`)             | `jsonb`                                                          | Direct serialization.                                                                                                                                                                                            |
+| status / order        | `QuestStatus`, `number`                   | `text` (check constraint), `order_index integer`                 | `order` → `order_index` is the one field-name mismatch (`order` is reserved in SQL), mapped explicitly in `pullRemoteQuests`/`pushDirtyQuests`.                                                                  |
+| folderId              | `string \| null \| undefined`             | `folder_id uuid references folders(id) on delete set null`       | Which Area, Project, or (if null) ungrouped — never a Section. A Project-parented Quest is also the one `questSwapMachine` can swap (`Folder.active_quest_id`).                                                  |
+| createdAt / updatedAt | `number` (client `Date.now()`)            | `timestamptz`, `updated_at` server-set via `moddatetime` trigger | **Not the same clock.** See Push diagram — after any round-trip, local `updatedAt` must be replaced with the server's value, never compared as client-generated ms against another device's client-generated ms. |
+| ownership             | none (single-profile, implicit)           | `user_id` (RLS: `auth.uid() = user_id`)                          | No claiming step needed — every Quest/Project is created after sign-in (see "Entitlements"), so it always has an owner from the moment it exists locally.                                                        |
+| resources             | `Resource.questId` (`utils/resources.ts`) | `resources` table, FK to `quests` (nullable) or `folders`        | Built — a Resource is parented to exactly one of a Quest or a Section, enforced at the call site, not the schema.                                                                                                |
+| deletion              | `deletedAt` soft-delete, Trash view       | `deleted_at timestamptz`, `pg_cron`-purged past retention        | Resolved — see `implementation-plan-sync.md` M7: soft delete fits the existing poll (an update, not a disappearance); a scheduled purge hard-deletes past the retention window.                                  |
+
+A `kind:"project"` Folder (`utils/folders.ts`) has its own, smaller local/
+Postgres mapping for the fields a Quest doesn't have: `kind`, `tabs` (its own
+live tab list when no child Quest is swapped in), and `active_quest_id` — see
+`CLAUDE.md`'s "Entities" section.
 
 ## Entitlements: what the server gates, and how the client stays fast
 
@@ -254,24 +265,32 @@ sequenceDiagram
 ```
 
 > **The cache is advisory, never authoritative.** It exists so the UI can
-> gray out "New workspace" or show "approaching your tab limit" without a
-> round-trip just to render that state. A stale or tampered local cache must
+> gray out "New quest"/"New project" or show "approaching your tab limit"
+> without a round-trip just to render that state. A stale or tampered local cache must
 > never be what actually allows or blocks a write.
 
-### The write-time check — resolved for workspace creation: local-first wins, sync is what's gated
+### The write-time check — resolved for Quest/Project creation: local-first wins, sync is what's gated
 
-An earlier draft of this doc had the entitlement check block workspace
-creation itself — reject the write, and the workspace simply doesn't exist
-yet. That's wrong for this product specifically:
-`ensureWorkspaceForWindow` creates a workspace automatically every time a
-browser window opens (see `CLAUDE.md`), with no click to intercept and no
-UI in `background.ts` to show a rejection. Blocking that on a server
-round-trip means opening a window while offline, or while already at your
-plan's limit, would silently fail to create that window's workspace —
-breaking the "every window is a workspace" guarantee the whole product is
-built on. Resolved: creation is **local-first, unconditionally** — it never
-fails, online or off, at-limit or not. What the entitlement actually gates
-is whether that workspace gets a server-side counterpart at all.
+An earlier draft of this doc had the entitlement check block creation
+itself — reject the write, and the Quest/Project simply doesn't exist yet.
+That's wrong for this product specifically: `ensureBindingForWindow` creates
+a Project automatically every time a browser window opens (see `CLAUDE.md`),
+with no click to intercept and no UI in `background.ts` to show a rejection.
+Blocking that on a server round-trip means opening a window while offline,
+or while already at your plan's limit, would silently fail to create that
+window's Project — breaking the "every window is a workspace" guarantee the
+whole product is built on. Resolved: creation is **local-first,
+unconditionally** — it never fails, online or off, at-limit or not. What the
+entitlement actually gates is whether that Quest/Project gets a server-side
+counterpart at all.
+
+Explicit Quest creation (the dashboard's "+ Quest" buttons) _does_ have a
+click to intercept, unlike the automatic Project case — but it deliberately
+uses the exact same local-first-always pattern anyway, for one reason:
+consistency. A Quest and a Project share one quota pool
+(`count_workspace_like()`, see `supabase/migrations/20261007170000_project_quest_restructure.sql`),
+so having one creation path fail loudly and the other not would mean the
+same limit behaves differently depending on which button you clicked.
 
 ```mermaid
 sequenceDiagram
@@ -280,35 +299,36 @@ sequenceDiagram
     participant Local as storage.local
     participant PG as Supabase
 
-    User->>Dashboard: a new workspace (explicit click, or a window just opened)
+    User->>Dashboard: a new Quest (explicit click) or Project (explicit click, or a window just opened)
     Dashboard->>Local: create it — always succeeds, no check first
     Note over Dashboard,Local: same commit as every other local-first write;<br/>the UI never waits on this
-    Dashboard-->>PG: create_workspace RPC, fire-and-forget (same local id, so no remapping)
-    alt under the limit and access not expired
-        PG-->>Dashboard: row created — this workspace now has a synced counterpart
+    Dashboard-->>PG: create_quest / create_project RPC, fire-and-forget (same local id, so no remapping)
+    alt under the shared limit and access not expired
+        PG-->>Dashboard: row created — this Quest/Project now has a synced counterpart
     else at the limit, expired, or offline
         PG-->>Dashboard: rejected or unreachable — silently ignored
-        Note over Dashboard: the workspace stays exactly as usable, just unsynced —<br/>no error surfaced, no retry
+        Note over Dashboard: it stays exactly as usable, just unsynced —<br/>no error surfaced, no retry
     end
 ```
 
-`extension/utils/workspaces.ts`'s `registerWorkspace` is this — a
-non-blocking `.rpc('create_workspace', ...)` call whose result nobody
-awaits or reports. The dashboard's cached entitlements (`utils/entitlements.ts`)
-still gray out the "New workspace" button's tooltip as an early warning
-("this won't sync"), but that's advisory framing only — clicking through
-anyway still works, it just stays local-only, which is the whole point of
-this design.
+`extension/utils/quests.ts`'s `registerQuest` and `extension/utils/folders.ts`'s
+`registerProject` are this — a non-blocking `.rpc('create_quest'/'create_project', ...)`
+call whose result nobody awaits or reports. The dashboard's cached entitlements
+(`utils/entitlements.ts`) still gray out the "New quest"/"New project" tooltip
+as an early warning ("this won't sync"), but that's advisory framing only —
+clicking through anyway still works, it just stays local-only, which is the
+whole point of this design.
 
-This resolves the offline question below for workspace creation
+This resolves the offline question below for Quest/Project creation
 specifically; the equivalent question for a tab-count entitlement (no
 click to intercept at all, not even an implicit one) is still open — see
 below.
 
 ### Open problem: an entitlement with no click to intercept
 
-Workspace creation is a deliberate action — there's a moment to say "no."
-A tabs-per-workspace limit doesn't have that: tabs arrive via live sync
+Explicit Quest/Project creation is a deliberate action — there's a moment to
+say "no" (even though, per above, nothing actually does). A tabs-per-quest
+limit doesn't have that: tabs arrive via live sync
 (`workflows.md` → "Live tab sync") as a side effect of ordinary browsing,
 not a request the extension can reject. Undecided, and worth a product
 call rather than an architectural default:
@@ -371,53 +391,45 @@ way every other table access in this document does. Something has to sit at
 a public HTTPS endpoint, verify the payload actually came from Creem
 (signature check), and only then write. Postgres has no notion of an
 inbound HTTP endpoint, so this is unavoidably a second exception to "the
-server is just tables and RLS" — alongside `create_workspace`, and for the
-same underlying reason: an operation exists that a bare client-side insert
-cannot safely perform. Implemented: `supabase/functions/creem-webhook/`.
+server is just tables and RLS" — alongside `create_quest`/`create_project`,
+and for the same underlying reason: an operation exists that a bare
+client-side insert cannot safely perform. Implemented: `supabase/functions/creem-webhook/`.
 
-**Enforcement has to live in RLS, not the entitlements cache.** Everywhere
-else in this document, the client-side entitlements cache is explicitly
-_advisory_ — a UX shortcut, never the actual gate. Expiry is the one place
-that distinction really matters for the business model: if an expired
-user's writes still succeed because nothing at the database layer checks
-`access_expires_at`, the "N-year pass caps hosting cost" premise in the
-pricing plan isn't actually true — it's just a payment schedule with no
-enforcement behind it. The relevant `workspaces` RLS policies need
-`access_expires_at > now()` added to their `using`/`with check` clauses (or
-a small SQL helper function wrapping that check), not just a read in
-application code.
+**Enforcement lives in RLS, not the entitlements cache — resolved.**
+Everywhere else in this document, the client-side entitlements cache is
+explicitly _advisory_ — a UX shortcut, never the actual gate. Expiry is the
+one place that distinction really matters for the business model, and it's
+now enforced where it needs to be: `has_active_access(user_id)`
+(`supabase/migrations/20261005120000_freeze_writes_on_expiry.sql`) is
+required by every write policy on `quests`, `folders`, and `resources` — an
+expired user's `update`/`insert`/`delete` fails at the RLS layer itself, not
+just at `create_quest`/`create_project` time. Reads stay unrestricted so the
+dashboard still renders.
 
-**Open question, not resolved by the pricing plan:** what happens to a
-user's synced data the moment their pass lapses? Candidates — freeze writes
-but keep serving reads (cheapest to build, storage cost doesn't shrink),
-drop back to local-only (extension keeps working, sync stops, matches
-Phase 1's original offline-first behavior), or delete server-side data after
-some grace period (the only option that actually reclaims the storage cost
-the pricing table is optimizing for). This is a product decision the pricing
-math assumes an answer to but doesn't supply one.
+**Resolved, not just an open question:** what happens to a user's synced
+data the moment their pass lapses is the "freeze writes but keep serving
+reads" option — chosen and implemented by the migration above, not the
+"drop to local-only" or "delete after a grace period" alternatives this
+section used to list as still-undecided.
 
-- **Delete propagation.** A poll comparing `updated_at` never notices a row
-  that's now _absent_. Either add a `deleted_at` soft-delete column (delete
-  becomes an update, fits the existing poll) or have each pull tick fetch
-  the full remote id set and locally-delete anything missing from it. Soft
-  delete is the smaller change to the sync engine; it does mean adding a
-  filter (`where deleted_at is null`) everywhere the app currently reads
-  `workspaces` outright.
+- **Delete propagation — resolved.** `deletedAt`/`deleted_at` soft delete
+  (delete becomes an update, fits the existing poll), with a `pg_cron`-driven
+  purge past the plan's retention window. See `implementation-plan-sync.md`
+  M7 and `quest-sync-semantics.md`'s "Dormant" framing.
 - **Push batching.** Live tab sync (`workflows.md` → "Live tab sync") can
-  fire several `updateWorkspace` calls in quick succession while someone's
-  actively browsing. The Push diagram above debounces before hitting
-  Supabase — without that, a busy window would generate a write per tab
-  event.
-- **Resources sync is blocked**, not just unbuilt: the local `Workspace`
-  type has nowhere to put a resource yet, so this is a schema dependency,
-  not a sync-layer task.
+  fire several `updateQuest`/`updateFolder` calls in quick succession while
+  someone's actively browsing. The Push diagram above debounces before
+  hitting Supabase — without that, a busy window would generate a write per
+  tab event.
+- **Resources sync — resolved, built.** `Resource.questId`/`folderId`
+  (`extension/utils/resources.ts`) sync against the `resources` table like
+  everything else in this document.
 - **What happens offline at the point of an entitlement-gated write?**
-  Resolved for workspace creation — see "The write-time check" above:
+  Resolved for Quest/Project creation — see "The write-time check" above:
   creation always succeeds locally, offline or not; the entitlement check
   only gates whether it gets a synced server-side counterpart. Still open
   for any future entitlement that isn't tied to a creation event at all
-  (e.g. a tabs-per-workspace or size cap) — see the tab-count problem
-  below.
+  (e.g. a tabs-per-quest or size cap) — see the tab-count problem below.
 - **The tab-count entitlement problem has no chosen answer** — see
   "Entitlements → Open problem" above.
 
@@ -425,14 +437,13 @@ math assumes an answer to but doesn't supply one.
 
 - No CRDT or field-level merge — last-write-wins, whole-row.
 - No custom API server — `supabase-js` talks to PostgREST/Auth directly,
-  except the `create_workspace` RPC (atomic limit enforcement) and the
-  Polar webhook Edge Function (the only inbound request with no user
-  session to authenticate it through RLS). Two exceptions, both because an
-  operation exists that a plain client-side table call cannot safely do —
-  not a sign the rule is soft.
+  except the `create_quest`/`create_project` RPCs (atomic limit enforcement,
+  now sharing one quota pool) and the Creem webhook Edge Function (the only
+  inbound request with no user session to authenticate it through RLS).
+  Exceptions, all because an operation exists that a plain client-side table
+  call cannot safely do — not a sign the rule is soft.
 - No realtime subscriptions yet — see `ROADMAP.md` Phase 3 for the
   team-live-updates upgrade this schema is meant to support later.
 - No anonymous or local-only mode — this supersedes `ROADMAP.md`'s original
-  Phase 1 (local-only) / Phase 2 (add accounts) split. Worth reconciling
-  `ROADMAP.md` itself with this if the mandatory-account decision is final —
-  it currently still describes Phase 1 as usable without signing in.
+  Phase 1 (local-only) / Phase 2 (add accounts) split; `ROADMAP.md` has
+  since been reconciled with this (Phase 2 is marked shipped there).
