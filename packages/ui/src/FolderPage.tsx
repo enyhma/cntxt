@@ -124,7 +124,7 @@ export function FolderPage(props: {
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center gap-2">
             <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
-              MISSIONS
+              QUESTS
             </span>
             <button
               type="button"

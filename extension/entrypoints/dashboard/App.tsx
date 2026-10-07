@@ -931,7 +931,7 @@ function Dashboard(props: {
           <nav class="flex w-60 shrink-0 flex-col border-r border-surface-alt2 bg-surface-alt1">
             <div class="flex h-11 shrink-0 items-center gap-2 border-b border-surface-alt2 pr-2.5 pl-3.5">
               <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
-                MISSIONS
+                QUESTS
               </span>
               <button
                 type="button"
