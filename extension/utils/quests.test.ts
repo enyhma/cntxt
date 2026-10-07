@@ -193,8 +193,6 @@ describe("pushDirtyQuests", () => {
       tabs: [],
       deleted_at: null,
       folder_id: null,
-      phases: [],
-      active_phase_id: null,
       status: "pending",
       order_index: 0,
     });

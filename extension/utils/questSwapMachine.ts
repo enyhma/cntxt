@@ -1,173 +1,129 @@
 import { assign, fromPromise, setup } from "xstate";
 import { closeMatchingTabs, openMissingTabs } from "./tabOps";
-import { updateQuest } from "./quests";
-import type { Quest, Phase } from "./quests";
+import { getQuests, updateQuest } from "./quests";
+import type { Quest } from "./quests";
+import { updateFolder } from "./folders";
+import type { Folder } from "./folders";
 
 type Mode = "activate" | "complete";
 
 type Context = {
+  project: Folder | null;
   quest: Quest | null;
   windowId: number | null;
   mode: Mode | null;
-  // The phase named in the triggering event — the one to activate, or the
-  // one being marked done.
-  eventPhaseId: string | null;
-  // Phase to open tabs for once closing finishes; null when completing the
-  // last phase in the roadmap leaves nothing to advance to.
-  openPhaseId: string | null;
-  nextPhases: Phase[] | null;
-  nextActivePhaseId: string | undefined;
 };
 
 type Event =
-  | { type: "ACTIVATE_PHASE"; quest: Quest; phaseId: string }
-  | { type: "COMPLETE_PHASE"; quest: Quest; phaseId: string };
+  | { type: "ACTIVATE_QUEST"; project: Folder; quest: Quest }
+  | { type: "COMPLETE_QUEST"; project: Folder; quest: Quest };
 
-function phaseIdOfUrl(quest: Quest, url: string | undefined) {
-  if (!url) return undefined;
-  return quest.tabs.find((t) => t.url === url)?.phaseId;
-}
-
-async function closeForEvent(input: {
-  quest: Quest;
-  mode: Mode;
-  eventPhaseId: string;
-}): Promise<number | null> {
+async function closeForEvent(): Promise<number | null> {
   const win = await browser.windows.getCurrent();
   if (win.id === undefined) return null;
-  await closeMatchingTabs(win.id, (tab) => {
-    const tabPhaseId = phaseIdOfUrl(input.quest, tab.url);
-    // Activating a phase closes every *other* phase's tabs, leaving
-    // unphased tabs (phaseId undefined) and this phase's own tabs alone.
-    // Completing a phase closes only that phase's own tabs.
-    return input.mode === "activate"
-      ? tabPhaseId !== undefined && tabPhaseId !== input.eventPhaseId
-      : tabPhaseId === input.eventPhaseId;
-  });
+  await closeMatchingTabs(win.id, () => true);
   return win.id;
 }
 
 async function openAndPersist(input: {
   windowId: number | null;
+  mode: Mode;
+  project: Folder;
   quest: Quest;
-  openPhaseId: string | null;
-  nextPhases: Phase[];
-  nextActivePhaseId: string | undefined;
 }) {
-  if (input.windowId !== null && input.openPhaseId !== null) {
-    const tabs = input.quest.tabs.filter(
-      (t) => t.phaseId === input.openPhaseId,
-    );
-    await openMissingTabs(input.windowId, tabs);
+  const siblings = (await getQuests()).filter(
+    (q) => q.folderId === input.project.id,
+  );
+
+  if (input.mode === "activate") {
+    if (input.windowId !== null) {
+      await openMissingTabs(input.windowId, input.quest.tabs);
+    }
+    await updateFolder(input.project.id, { activeQuestId: input.quest.id });
+    await updateQuest(input.quest.id, { status: "active" });
+    for (const sib of siblings) {
+      if (sib.id !== input.quest.id && sib.status === "active") {
+        await updateQuest(sib.id, { status: "pending" });
+      }
+    }
+    return;
   }
-  await updateQuest(input.quest.id, {
-    phases: input.nextPhases,
-    activePhaseId: input.nextActivePhaseId,
-  });
+
+  // Complete: close its tabs and mark it done — `quest.tabs` is NEVER
+  // cleared, so this stays a full record, reopenable later via another
+  // ACTIVATE_QUEST (which works identically regardless of prior status).
+  // Then auto-advance to the next pending sibling by order, if any.
+  await updateQuest(input.quest.id, { status: "done" });
+  const next = siblings
+    .filter((s) => s.id !== input.quest.id && s.status === "pending")
+    .sort((a, b) => a.order - b.order)[0];
+  if (next) {
+    if (input.windowId !== null) {
+      await openMissingTabs(input.windowId, next.tabs);
+    }
+    await updateFolder(input.project.id, { activeQuestId: next.id });
+    await updateQuest(next.id, { status: "active" });
+  } else {
+    await updateFolder(input.project.id, { activeQuestId: undefined });
+  }
 }
 
 /**
- * Stage-gated roadmap: activating a phase swaps the window's tabs to that
- * phase's subset; completing one closes its tabs and auto-advances to the
- * next pending phase. Mirrors restoreMachine's closingTabs/openingTabs
- * shape (sharing its tabOps.ts helpers) but is its own machine — the
- * close/open semantics genuinely differ (filtered close instead of
- * close-all, no window detach/reattach) enough that one shared machine
- * would need branchy context instead of two small ones.
+ * Swaps which child Quest of a Project has its tabs live in the Project's
+ * window: activating one closes whatever's currently open and opens that
+ * quest's own full tab list; completing one closes its tabs (never
+ * clearing them) and auto-advances to the next pending sibling by order.
+ * Only `Folder.activeQuestId` ever changes here — the window's
+ * WindowBinding stays pointed at the Project throughout, unlike
+ * restoreMachine's RESTORE/DISCONNECT, which do change it. Shares
+ * closingTabs/openingTabs shape and tabOps.ts helpers with restoreMachine,
+ * but close/open here is always everything-at-once (no detach/reattach),
+ * so it stays its own small machine rather than branchy shared context.
  */
 export const questSwapMachine = setup({
   types: {} as { context: Context; events: Event },
   actors: {
-    closeForEvent: fromPromise(
-      ({
-        input,
-      }: {
-        input: { quest: Quest; mode: Mode; eventPhaseId: string };
-      }) => closeForEvent(input),
-    ),
+    closeForEvent: fromPromise(() => closeForEvent()),
     openAndPersist: fromPromise(
       ({
         input,
       }: {
         input: {
           windowId: number | null;
+          mode: Mode;
+          project: Folder;
           quest: Quest;
-          openPhaseId: string | null;
-          nextPhases: Phase[];
-          nextActivePhaseId: string | undefined;
         };
       }) => openAndPersist(input),
     ),
   },
 }).createMachine({
-  context: {
-    quest: null,
-    windowId: null,
-    mode: null,
-    eventPhaseId: null,
-    openPhaseId: null,
-    nextPhases: null,
-    nextActivePhaseId: undefined,
-  },
+  context: { project: null, quest: null, windowId: null, mode: null },
   initial: "idle",
   states: {
     idle: {
       on: {
-        ACTIVATE_PHASE: {
+        ACTIVATE_QUEST: {
           target: "closingTabs",
-          actions: assign(({ event }) => {
-            const phases = (event.quest.phases ?? []).map((p) =>
-              p.id === event.phaseId
-                ? { ...p, status: "active" as const }
-                : p.status === "active"
-                  ? { ...p, status: "pending" as const }
-                  : p,
-            );
-            return {
-              quest: event.quest,
-              mode: "activate" as const,
-              eventPhaseId: event.phaseId,
-              openPhaseId: event.phaseId,
-              nextPhases: phases,
-              nextActivePhaseId: event.phaseId,
-            };
-          }),
+          actions: assign(({ event }) => ({
+            project: event.project,
+            quest: event.quest,
+            mode: "activate" as const,
+          })),
         },
-        COMPLETE_PHASE: {
+        COMPLETE_QUEST: {
           target: "closingTabs",
-          actions: assign(({ event }) => {
-            const phases = event.quest.phases ?? [];
-            const idx = phases.findIndex((p) => p.id === event.phaseId);
-            const next = phases
-              .slice(idx + 1)
-              .find((p) => p.status === "pending");
-            const nextPhases = phases.map((p) =>
-              p.id === event.phaseId
-                ? { ...p, status: "done" as const }
-                : next && p.id === next.id
-                  ? { ...p, status: "active" as const }
-                  : p,
-            );
-            return {
-              quest: event.quest,
-              mode: "complete" as const,
-              eventPhaseId: event.phaseId,
-              openPhaseId: next?.id ?? null,
-              nextPhases,
-              nextActivePhaseId: next?.id,
-            };
-          }),
+          actions: assign(({ event }) => ({
+            project: event.project,
+            quest: event.quest,
+            mode: "complete" as const,
+          })),
         },
       },
     },
     closingTabs: {
       invoke: {
         src: "closeForEvent",
-        input: ({ context }) => ({
-          quest: context.quest!,
-          mode: context.mode!,
-          eventPhaseId: context.eventPhaseId!,
-        }),
         onDone: {
           target: "openingTabs",
           actions: assign({ windowId: ({ event }) => event.output }),
@@ -178,11 +134,10 @@ export const questSwapMachine = setup({
       invoke: {
         src: "openAndPersist",
         input: ({ context }) => ({
-          windowId: context.windowId ?? null,
+          windowId: context.windowId,
+          mode: context.mode!,
+          project: context.project!,
           quest: context.quest!,
-          openPhaseId: context.openPhaseId,
-          nextPhases: context.nextPhases!,
-          nextActivePhaseId: context.nextActivePhaseId,
         }),
         onDone: "idle",
       },

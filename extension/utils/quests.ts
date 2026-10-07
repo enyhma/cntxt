@@ -1,14 +1,10 @@
 import { supabase } from "./supabase";
 
-// Unset on a tab = not part of any phase's roadmap — always shown,
-// regardless of which phase is active. Identity across a resync is by URL
-// (see windowSyncMachine.ts's syncTabs), matching how the rest of this
-// codebase already treats tab identity; a known, pre-existing weak spot is
-// a duplicate open tab with the same URL, not something this adds.
-export type QuestTab = { url: string; title: string; phaseId?: string };
-
-export type PhaseStatus = "pending" | "active" | "done";
-export type Phase = { id: string; name: string; status: PhaseStatus };
+// Identity across a resync is by URL (see windowSyncMachine.ts's syncTabs),
+// matching how the rest of this codebase already treats tab identity; a
+// known, pre-existing weak spot is a duplicate open tab with the same URL,
+// not something this adds.
+export type QuestTab = { url: string; title: string };
 
 export type QuestStatus = "pending" | "active" | "done";
 
@@ -41,19 +37,14 @@ export type Quest = {
   // supabase/migrations' trash_and_purge migration and
   // purgeExpiredLocalTrash below).
   deletedAt?: number;
-  // Absent/empty = no roadmap — the quest behaves exactly as it does
-  // today, a flat tab list. Set via questSwapMachine.ts (utils/questSwapMachine.ts),
-  // never required.
-  phases?: Phase[];
-  activePhaseId?: string;
   // Project-nested swap lifecycle (unused by a standalone quest, which
   // stays undefined forever): "pending"/"active"/"done" tracking whether
-  // this quest is currently swapped into its parent Project's window.
-  // Wiring for this lands in a later step — just plumbed through here.
+  // this quest is currently swapped into its parent Project's window —
+  // see questSwapMachine.ts. A former Mission "phase" is now just another
+  // sibling Quest sharing the same parent Project's folderId.
   status?: QuestStatus;
-  // Explicit ordinal among sibling quests sharing the same folderId —
-  // replaces the implicit array-index ordering `phases` relied on. Every
-  // quest gets one (defaulting to 0); nothing meaningfully orders by it yet.
+  // Explicit ordinal among sibling quests sharing the same folderId, used
+  // to pick the next quest to auto-activate when one completes.
   order: number;
 };
 
@@ -171,7 +162,7 @@ export async function pullRemoteQuests(): Promise<number> {
   const { data, error } = await supabase
     .from("quests")
     .select(
-      "id, name, tabs, created_at, updated_at, deleted_at, folder_id, phases, active_phase_id, status, order_index",
+      "id, name, tabs, created_at, updated_at, deleted_at, folder_id, status, order_index",
     );
   if (error) throw new Error(error.message);
   if (!data) return 0;
@@ -191,8 +182,6 @@ export async function pullRemoteQuests(): Promise<number> {
       updatedAt: Date.parse(row.updated_at),
       deletedAt: row.deleted_at ? Date.parse(row.deleted_at) : undefined,
       folderId: row.folder_id,
-      phases: (row.phases as Phase[] | null) ?? undefined,
-      activePhaseId: row.active_phase_id ?? undefined,
       status: row.status ?? undefined,
       order: row.order_index ?? 0,
       syncStatus: "synced",
@@ -260,8 +249,6 @@ export async function pushDirtyQuests(
         tabs: m.tabs,
         deleted_at: m.deletedAt ? new Date(m.deletedAt).toISOString() : null,
         folder_id: m.folderId ?? null,
-        phases: m.phases ?? [],
-        active_phase_id: m.activePhaseId ?? null,
         status: m.status ?? "pending",
         order_index: m.order ?? 0,
       })
@@ -288,15 +275,7 @@ export async function updateQuest(
   patch: Partial<
     Pick<
       Quest,
-      | "name"
-      | "tabs"
-      | "color"
-      | "icon"
-      | "folderId"
-      | "phases"
-      | "activePhaseId"
-      | "status"
-      | "order"
+      "name" | "tabs" | "color" | "icon" | "folderId" | "status" | "order"
     >
   >,
 ) {

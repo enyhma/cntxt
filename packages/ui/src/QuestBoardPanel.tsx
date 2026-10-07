@@ -1,25 +1,30 @@
 import { createSignal, For, Show, type Accessor } from "solid-js";
 import { Check, Plus } from "lucide-solid";
 
-export type PhaseStatus = "pending" | "active" | "done";
-export type Phase = { id: string; name: string; status: PhaseStatus };
+export type QuestStatus = "pending" | "active" | "done";
+export type QuestBoardItem = {
+  id: string;
+  name: string;
+  status?: QuestStatus;
+  tabCount: number;
+};
 
-const STATUS_LABEL: Record<PhaseStatus, string> = {
+const STATUS_LABEL: Record<QuestStatus, string> = {
   pending: "PENDING",
   active: "ACTIVE",
   done: "DONE",
 };
 
-// The stage-gated roadmap: ordered phase cards above a quest's tab list.
-// Absent/empty phases (handled by the caller, not here) means a quest has
-// no roadmap at all — this only ever renders once there's at least one.
+// A Project's roadmap: its child quests as ordered cards, one swapped into
+// the Project's window at a time. Absent/empty quests (handled by the
+// caller, not here) means nothing is nested under this Project yet — this
+// only ever renders once there's at least one.
 export function QuestBoardPanel(props: {
-  phases: Accessor<Phase[]>;
-  tabCount: (phaseId: string) => number;
+  quests: Accessor<QuestBoardItem[]>;
   busy: boolean;
-  onActivate: (phaseId: string) => void;
-  onComplete: (phaseId: string) => void;
-  onAddPhase: (name: string) => void;
+  onActivate: (questId: string) => void;
+  onComplete: (questId: string) => void;
+  onAddQuest: (name: string) => void;
 }) {
   const [adding, setAdding] = createSignal(false);
   const [name, setName] = createSignal("");
@@ -28,7 +33,7 @@ export function QuestBoardPanel(props: {
     const trimmed = name().trim();
     setAdding(false);
     setName("");
-    if (trimmed) props.onAddPhase(trimmed);
+    if (trimmed) props.onAddQuest(trimmed);
   }
 
   return (
@@ -42,7 +47,7 @@ export function QuestBoardPanel(props: {
           fallback={
             <input
               autofocus
-              placeholder="Phase name"
+              placeholder="Quest name"
               class="input input-xs w-36 bg-surface-alt2"
               value={name()}
               onInput={(e) => setName(e.currentTarget.value)}
@@ -53,7 +58,7 @@ export function QuestBoardPanel(props: {
         >
           <button
             type="button"
-            title="Add phase"
+            title="Add quest"
             onClick={() => setAdding(true)}
             class="btn btn-square btn-ghost btn-xs"
           >
@@ -62,63 +67,66 @@ export function QuestBoardPanel(props: {
         </Show>
       </div>
 
-      <Show when={props.phases().length === 0}>
+      <Show when={props.quests().length === 0}>
         <p class="text-sm text-surface-txt-hint">
-          No roadmap — add a phase to stage-gate this quest's tabs.
+          No other quests in this project yet.
         </p>
       </Show>
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <For each={props.phases()}>
-          {(phase) => (
-            <div
-              class={
-                "flex flex-col gap-2 rounded border p-3" +
-                (phase.status === "active"
-                  ? " border-accent bg-surface-alt1"
-                  : " border-surface-alt3 bg-surface-alt1")
-              }
-            >
-              <div class="flex items-center justify-between gap-2">
-                <span class="font-mono text-[10px] tracking-wider text-surface-txt-faint">
-                  {STATUS_LABEL[phase.status]}
-                </span>
-                <span class="font-mono text-[11px] text-surface-txt-faint">
-                  {props.tabCount(phase.id)} tabs
-                </span>
-              </div>
-              <span
+        <For each={props.quests()}>
+          {(quest) => {
+            const status = () => quest.status ?? "pending";
+            return (
+              <div
                 class={
-                  "truncate text-sm font-medium" +
-                  (phase.status === "done"
-                    ? " text-surface-txt-hint line-through"
-                    : "")
+                  "flex flex-col gap-2 rounded border p-3" +
+                  (status() === "active"
+                    ? " border-accent bg-surface-alt1"
+                    : " border-surface-alt3 bg-surface-alt1")
                 }
               >
-                {phase.name}
-              </span>
-              <Show when={phase.status === "pending"}>
-                <button
-                  type="button"
-                  disabled={props.busy}
-                  onClick={() => props.onActivate(phase.id)}
-                  class="btn btn-xs self-start border-none bg-accent text-accent-txt hover:bg-accent-alt1 disabled:opacity-50"
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-mono text-[10px] tracking-wider text-surface-txt-faint">
+                    {STATUS_LABEL[status()]}
+                  </span>
+                  <span class="font-mono text-[11px] text-surface-txt-faint">
+                    {quest.tabCount} tabs
+                  </span>
+                </div>
+                <span
+                  class={
+                    "truncate text-sm font-medium" +
+                    (status() === "done"
+                      ? " text-surface-txt-hint line-through"
+                      : "")
+                  }
                 >
-                  Activate
-                </button>
-              </Show>
-              <Show when={phase.status === "active"}>
-                <button
-                  type="button"
-                  disabled={props.busy}
-                  onClick={() => props.onComplete(phase.id)}
-                  class="btn btn-xs gap-1 self-start border border-surface-alt3 disabled:opacity-50"
-                >
-                  <Check size={11} />
-                  Complete phase
-                </button>
-              </Show>
-            </div>
-          )}
+                  {quest.name}
+                </span>
+                <Show when={status() !== "active"}>
+                  <button
+                    type="button"
+                    disabled={props.busy}
+                    onClick={() => props.onActivate(quest.id)}
+                    class="btn btn-xs self-start border-none bg-accent text-accent-txt hover:bg-accent-alt1 disabled:opacity-50"
+                  >
+                    Activate
+                  </button>
+                </Show>
+                <Show when={status() === "active"}>
+                  <button
+                    type="button"
+                    disabled={props.busy}
+                    onClick={() => props.onComplete(quest.id)}
+                    class="btn btn-xs gap-1 self-start border border-surface-alt3 disabled:opacity-50"
+                  >
+                    <Check size={11} />
+                    Complete quest
+                  </button>
+                </Show>
+              </div>
+            );
+          }}
         </For>
       </div>
     </div>

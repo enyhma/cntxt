@@ -151,4 +151,23 @@ describe("restoreMachine", () => {
     );
     expect(openUrls).toEqual(["https://p1.example/"]);
   });
+
+  it("COMPLETE_QUEST detaches and closes a standalone quest's tabs while marking it done", async () => {
+    const { windowId, quest: questA } = await setUpWindowWithQuest();
+
+    const actor = createActor(restoreMachine).start();
+    actor.send({ type: "COMPLETE_QUEST", quest: questA });
+    await waitFor(actor, (state) => state.matches("idle"));
+    await flushAsyncWork();
+
+    const map = await getWindowBindingMap();
+    expect(map[windowId]).toBeUndefined();
+
+    const openUrls = (await browser.tabs.query({ windowId })).map((t) => t.url);
+    expect(openUrls).toEqual([DASHBOARD_URL]);
+
+    const updatedA = (await getQuests()).find((m) => m.id === questA.id);
+    expect(updatedA?.status).toBe("done");
+    expect(updatedA?.tabs).toEqual(questA.tabs);
+  });
 });

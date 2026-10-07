@@ -2,7 +2,7 @@ import { assign, fromPromise, setup } from "xstate";
 import { removeWindowBinding, setWindowBinding } from "./session";
 import { closeMatchingTabs, openMissingTabs } from "./tabOps";
 import { resolveProjectLiveTarget } from "./projectLiveTabs";
-import { getQuests } from "./quests";
+import { getQuests, updateQuest } from "./quests";
 import type { Quest } from "./quests";
 import type { Folder } from "./folders";
 
@@ -17,7 +17,13 @@ type Context = {
 type Event =
   | { type: "RESTORE"; target: RestoreTarget }
   | { type: "CLOSE_TABS" }
-  | { type: "DISCONNECT" };
+  | { type: "DISCONNECT" }
+  // A standalone quest (no Project parent, so no questSwapMachine sibling
+  // roster) gets the same non-destructive complete/reopen lifecycle a
+  // Project-nested quest gets from questSwapMachine: detach + close like
+  // DISCONNECT, plus mark it done. Reopening later is a plain RESTORE —
+  // ACTIVATE-style reopening already works for any status.
+  | { type: "COMPLETE_QUEST"; quest: Quest };
 
 async function closeCurrentTabs(input: {
   detach: boolean;
@@ -103,6 +109,15 @@ export const restoreMachine = setup({
         DISCONNECT: {
           target: "closingTabs",
           actions: assign({ target: null, detach: true }),
+        },
+        COMPLETE_QUEST: {
+          target: "closingTabs",
+          actions: [
+            assign({ target: null, detach: true }),
+            ({ event }) => {
+              updateQuest(event.quest.id, { status: "done" });
+            },
+          ],
         },
       },
     },

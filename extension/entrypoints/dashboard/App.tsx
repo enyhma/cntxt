@@ -275,8 +275,8 @@ function Dashboard(props: {
   refresh: () => Promise<void>;
   restoreState: ReturnType<typeof useMachine<typeof restoreMachine>>[0];
   restoreSend: ReturnType<typeof useMachine<typeof restoreMachine>>[1];
-  phaseState: ReturnType<typeof useMachine<typeof questSwapMachine>>[0];
-  phaseSend: ReturnType<typeof useMachine<typeof questSwapMachine>>[1];
+  questSwapState: ReturnType<typeof useMachine<typeof questSwapMachine>>[0];
+  questSwapSend: ReturnType<typeof useMachine<typeof questSwapMachine>>[1];
 }) {
   const {
     quests,
@@ -290,8 +290,8 @@ function Dashboard(props: {
     refresh,
     restoreState,
     restoreSend,
-    phaseState,
-    phaseSend,
+    questSwapState,
+    questSwapSend,
   } = props;
 
   // Advisory only — a stale or missing cache never blocks anything by
@@ -349,23 +349,37 @@ function Dashboard(props: {
   const isViewingCurrent = () =>
     viewedId() !== undefined && viewedId() === currentId();
   const busy = () =>
-    !restoreState.matches("idle") || !phaseState.matches("idle");
+    !restoreState.matches("idle") || !questSwapState.matches("idle");
 
-  function handleActivatePhase(phaseId: string) {
-    const quest = viewed();
-    if (quest) phaseSend({ type: "ACTIVATE_PHASE", quest, phaseId });
+  // A quest's roadmap board shows when the *viewed* quest itself belongs to
+  // a Project — its siblings (quests sharing that same folderId) are the
+  // roadmap's cards. An ungrouped or Area-level quest has no such roster.
+  function projectOf(folderId: string | null | undefined) {
+    const folder = folderId
+      ? folders().find((f) => f.id === folderId)
+      : undefined;
+    return folder?.kind === "project" ? folder : undefined;
   }
-  function handleCompletePhase(phaseId: string) {
-    const quest = viewed();
-    if (quest) phaseSend({ type: "COMPLETE_PHASE", quest, phaseId });
+  function handleActivateQuest(questId: string) {
+    const project = projectOf(viewed()?.folderId);
+    const quest = quests().find((q) => q.id === questId);
+    if (project && quest) {
+      questSwapSend({ type: "ACTIVATE_QUEST", project, quest });
+    }
   }
-  async function handleAddPhase(name: string) {
-    const quest = viewed();
-    if (!quest) return;
-    const phase = { id: crypto.randomUUID(), name, status: "pending" as const };
-    await updateQuest(quest.id, {
-      phases: [...(quest.phases ?? []), phase],
-    });
+  function handleCompleteQuest(questId: string) {
+    const project = projectOf(viewed()?.folderId);
+    const quest = quests().find((q) => q.id === questId);
+    if (project && quest) {
+      questSwapSend({ type: "COMPLETE_QUEST", project, quest });
+    }
+  }
+  async function handleAddQuestToProject(name: string) {
+    const project = projectOf(viewed()?.folderId);
+    if (!project) return;
+    const order = questsIn(project.id).length;
+    const quest = await createQuest(name, []);
+    await updateQuest(quest.id, { folderId: project.id, order });
     await refresh();
   }
 
@@ -677,6 +691,16 @@ function Dashboard(props: {
   // handleCloseAllTabs, the quest's saved tab list is left untouched.
   function handleDisconnectWindow() {
     restoreSend({ type: "DISCONNECT" });
+    closeOpenDropdowns();
+  }
+
+  // Standalone-quest counterpart to questSwapMachine's COMPLETE_QUEST: a
+  // quest with no Project parent has no sibling roster to auto-advance
+  // into, so this just detaches + closes (restoreMachine.COMPLETE_QUEST)
+  // and marks it done — reopenable later via an ordinary Restore.
+  function handleCompleteQuestStandalone() {
+    const quest = viewed();
+    if (quest) restoreSend({ type: "COMPLETE_QUEST", quest });
     closeOpenDropdowns();
   }
 
@@ -1071,6 +1095,19 @@ function Dashboard(props: {
                       </button>
                     </li>
                   </Show>
+                  <Show
+                    when={isViewingCurrent() && !projectOf(viewed()?.folderId)}
+                  >
+                    <li>
+                      <button
+                        type="button"
+                        disabled={busy()}
+                        onClick={handleCompleteQuestStandalone}
+                      >
+                        Complete quest
+                      </button>
+                    </li>
+                  </Show>
                   <Show when={!isViewingCurrent()}>
                     <li>
                       <button
@@ -1133,16 +1170,20 @@ function Dashboard(props: {
             }
           >
             <div class="min-h-0 flex-1 overflow-y-auto p-3.5">
-              <Show when={viewed()}>
+              <Show when={viewed() && projectOf(viewed()!.folderId)}>
                 <QuestBoardPanel
-                  phases={() => viewed()!.phases ?? []}
-                  tabCount={(phaseId) =>
-                    viewed()!.tabs.filter((t) => t.phaseId === phaseId).length
+                  quests={() =>
+                    questsIn(projectOf(viewed()!.folderId)!.id).map((q) => ({
+                      id: q.id,
+                      name: q.name,
+                      status: q.status,
+                      tabCount: q.tabs.length,
+                    }))
                   }
                   busy={busy()}
-                  onActivate={handleActivatePhase}
-                  onComplete={handleCompletePhase}
-                  onAddPhase={handleAddPhase}
+                  onActivate={handleActivateQuest}
+                  onComplete={handleCompleteQuest}
+                  onAddQuest={handleAddQuestToProject}
                 />
               </Show>
               <Show
@@ -1476,7 +1517,7 @@ function App() {
   const [manualPullEnabled, setManualPullEnabled] = createSignal(false);
   const [nav, setNav] = createSignal<"quests" | "trash" | "settings">("quests");
   const [state, send] = useMachine(restoreMachine);
-  const [phaseState, phaseSend] = useMachine(questSwapMachine);
+  const [questSwapState, questSwapSend] = useMachine(questSwapMachine);
   const [syncState, syncSend] = useMachine(syncMachine);
 
   // See docs/implementation-plan-sync.md M6: syncMachine owns pull/push
@@ -2035,8 +2076,8 @@ function App() {
                   refresh={refresh}
                   restoreState={state}
                   restoreSend={send}
-                  phaseState={phaseState}
-                  phaseSend={phaseSend}
+                  questSwapState={questSwapState}
+                  questSwapSend={questSwapSend}
                 />
               </Match>
             </Switch>
