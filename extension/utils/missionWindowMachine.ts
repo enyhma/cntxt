@@ -1,25 +1,25 @@
 import { setup } from "xstate";
-import { getWindowWorkspaceMap } from "./session";
+import { getWindowMissionMap } from "./session";
 import { snapshotTabs } from "./tabs";
-import { updateWorkspace } from "./workspaces";
+import { updateMission } from "./missions";
 
 type Context = { windowId: number };
 type Event = { type: "TABS_CHANGED" } | { type: "WINDOW_CLOSED" };
 
 async function syncTabs(windowId: number) {
-  const map = await getWindowWorkspaceMap();
-  const workspaceId = map[windowId];
-  if (!workspaceId) return;
-  await updateWorkspace(workspaceId, { tabs: await snapshotTabs(windowId) });
+  const map = await getWindowMissionMap();
+  const missionId = map[windowId];
+  if (!missionId) return;
+  await updateMission(missionId, { tabs: await snapshotTabs(windowId) });
 }
 
 /**
- * One actor per open window. workspaceId is deliberately NOT kept in
- * context: the dashboard can reassign a window to a different workspace
+ * One actor per open window. missionId is deliberately NOT kept in
+ * context: the dashboard can reassign a window to a different mission
  * (Restore) without this actor knowing, so syncTabs re-reads the mapping
  * from session storage on every sync instead of trusting stale context.
  */
-export const workspaceWindowMachine = setup({
+export const missionWindowMachine = setup({
   types: {} as { context: Context; events: Event; input: Context },
   actions: {
     syncTabs: ({ context }) => {

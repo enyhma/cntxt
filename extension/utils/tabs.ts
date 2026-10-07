@@ -1,8 +1,8 @@
-import type { WorkspaceTab } from "./workspaces";
+import type { MissionTab } from "./missions";
 
 export const DASHBOARD_URL = browser.runtime.getURL("/dashboard.html");
 
-export async function snapshotTabs(windowId: number): Promise<WorkspaceTab[]> {
+export async function snapshotTabs(windowId: number): Promise<MissionTab[]> {
   const tabs = await browser.tabs.query({ windowId });
   return tabs
     .filter((t) => t.url !== DASHBOARD_URL)

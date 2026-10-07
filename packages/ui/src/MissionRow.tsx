@@ -1,10 +1,10 @@
 import { Show } from "solid-js";
 import { AppWindow, ArrowRightLeft, Plug, Unplug } from "lucide-solid";
-import { WorkspaceDot } from "./WorkspaceDot";
+import { MissionDot } from "./MissionDot";
 import { SyncBadge, type SyncStatus } from "./SyncBadge";
 
-export function WorkspaceRow(props: {
-  workspace: {
+export function MissionRow(props: {
+  mission: {
     id: string;
     name: string;
     color?: string;
@@ -31,18 +31,16 @@ export function WorkspaceRow(props: {
           : " border-l-transparent text-surface-txt-hint")
       }
     >
-      <WorkspaceDot
-        workspace={props.workspace}
+      <MissionDot
+        mission={props.mission}
         ring={props.isCurrent}
         title={props.isCurrent ? "Active" : undefined}
       />
-      <span class="min-w-0 flex-1 truncate text-sm">
-        {props.workspace.name}
-      </span>
+      <span class="min-w-0 flex-1 truncate text-sm">{props.mission.name}</span>
       <span class="font-mono text-[11px] text-surface-txt-faint">
         {props.count}
       </span>
-      <SyncBadge status={props.workspace.syncStatus} />
+      <SyncBadge status={props.mission.syncStatus} />
       <Show when={props.isCurrent}>
         <button
           type="button"

@@ -1,5 +1,5 @@
 // Dot/avatar colors are derived from a hash of a stable id rather than
-// stored, so tabs (and workspaces without an explicit color) get a
+// stored, so tabs (and missions without an explicit color) get a
 // consistent color without a schema migration. Paired with a matching
 // *-txt role (not always white — a light accent theme like Brass on
 // Obsidian needs dark ink on its own hue) so a color that happens to land
@@ -44,22 +44,22 @@ export function textColorFor(seed: string): string {
   return COLOR_TXT_CLASS[hashColorKey(seed)];
 }
 
-export function workspaceColorKey(
-  w: { id: string; color?: string } | undefined,
+export function missionColorKey(
+  m: { id: string; color?: string } | undefined,
 ): ColorKey {
-  return (w?.color as ColorKey | undefined) ?? hashColorKey(w?.id ?? "cntxt");
+  return (m?.color as ColorKey | undefined) ?? hashColorKey(m?.id ?? "cntxt");
 }
 
-export function workspaceDotClass(
-  w: { id: string; color?: string } | undefined,
+export function missionDotClass(
+  m: { id: string; color?: string } | undefined,
 ): string {
-  return COLOR_CLASS[workspaceColorKey(w)];
+  return COLOR_CLASS[missionColorKey(m)];
 }
 
-export function workspaceTxtClass(
-  w: { id: string; color?: string } | undefined,
+export function missionTxtClass(
+  m: { id: string; color?: string } | undefined,
 ): string {
-  return COLOR_TXT_CLASS[workspaceColorKey(w)];
+  return COLOR_TXT_CLASS[missionColorKey(m)];
 }
 
 export function domainOf(url: string): string {

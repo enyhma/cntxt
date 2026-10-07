@@ -1,15 +1,15 @@
 import { assign, fromPromise, setup } from "xstate";
-import { removeWindowWorkspace, setWindowWorkspace } from "./session";
+import { removeWindowMission, setWindowMission } from "./session";
 import { DASHBOARD_URL } from "./tabs";
-import type { Workspace } from "./workspaces";
+import type { Mission } from "./missions";
 
 type Context = {
-  workspace: Workspace | null;
+  mission: Mission | null;
   windowId: number | null;
   detach: boolean;
 };
 type Event =
-  | { type: "RESTORE"; workspace: Workspace }
+  | { type: "RESTORE"; mission: Mission }
   | { type: "CLOSE_TABS" }
   | { type: "DISCONNECT" };
 
@@ -20,14 +20,14 @@ async function closeCurrentTabs(input: {
   if (win.id === undefined) return null;
 
   if (input.detach) {
-    // Detach the outgoing workspace before closing its tabs, so the
+    // Detach the outgoing mission before closing its tabs, so the
     // background script's live tab-sync doesn't attribute the closures to
     // it and zero out its saved tab list — we're leaving it, not clearing
     // it. (Plain "close all tabs" skips this: staying attached is what
-    // makes that sync correctly record the workspace as now empty.) Used by
-    // both RESTORE (reattaches to a new workspace right after) and
+    // makes that sync correctly record the mission as now empty.) Used by
+    // both RESTORE (reattaches to a new mission right after) and
     // DISCONNECT (doesn't reattach at all).
-    await removeWindowWorkspace(win.id);
+    await removeWindowMission(win.id);
   }
 
   const tabs = await browser.tabs.query({ windowId: win.id });
@@ -39,20 +39,20 @@ async function closeCurrentTabs(input: {
   return win.id;
 }
 
-async function openWorkspaceTabs(input: {
+async function openMissionTabs(input: {
   windowId: number | null;
-  workspace: Workspace | null;
+  mission: Mission | null;
 }) {
-  if (input.windowId === null || input.workspace === null) return;
-  await setWindowWorkspace(input.windowId, input.workspace.id);
-  for (const tab of input.workspace.tabs) {
+  if (input.windowId === null || input.mission === null) return;
+  await setWindowMission(input.windowId, input.mission.id);
+  for (const tab of input.mission.tabs) {
     await browser.tabs.create({ windowId: input.windowId, url: tab.url });
   }
 }
 
 /**
  * Shared "busy" gate for the two window-mutating dashboard actions: closing
- * the current workspace's tabs, and restoring another workspace into this
+ * the current mission's tabs, and restoring another mission into this
  * window (which is a close, then an open). Mutually exclusive so a
  * double-click can't overlap two of these operations.
  */
@@ -62,12 +62,12 @@ export const restoreMachine = setup({
     closeCurrentTabs: fromPromise(({ input }: { input: { detach: boolean } }) =>
       closeCurrentTabs(input),
     ),
-    openWorkspaceTabs: fromPromise(({ input }: { input: Context }) =>
-      openWorkspaceTabs(input),
+    openMissionTabs: fromPromise(({ input }: { input: Context }) =>
+      openMissionTabs(input),
     ),
   },
 }).createMachine({
-  context: { workspace: null, windowId: null, detach: false },
+  context: { mission: null, windowId: null, detach: false },
   initial: "idle",
   states: {
     idle: {
@@ -75,17 +75,17 @@ export const restoreMachine = setup({
         RESTORE: {
           target: "closingTabs",
           actions: assign({
-            workspace: ({ event }) => event.workspace,
+            mission: ({ event }) => event.mission,
             detach: true,
           }),
         },
         CLOSE_TABS: {
           target: "closingTabs",
-          actions: assign({ workspace: null, detach: false }),
+          actions: assign({ mission: null, detach: false }),
         },
         DISCONNECT: {
           target: "closingTabs",
-          actions: assign({ workspace: null, detach: true }),
+          actions: assign({ mission: null, detach: true }),
         },
       },
     },
@@ -101,7 +101,7 @@ export const restoreMachine = setup({
     },
     openingTabs: {
       invoke: {
-        src: "openWorkspaceTabs",
+        src: "openMissionTabs",
         input: ({ context }) => context,
         onDone: "idle",
       },

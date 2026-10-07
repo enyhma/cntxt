@@ -3,10 +3,14 @@ export type Theme = "baseline" | "indigo" | "brass";
 
 export type Settings = {
   startupBehavior: StartupBehavior;
+  // Field name kept as "lastActiveWorkspaceId" — it's part of the persisted
+  // settings object in storage.local; renaming it would silently drop
+  // existing users' "resume last used mission" setting. The concept is
+  // Mission everywhere else.
   lastActiveWorkspaceId?: string;
   theme: Theme;
-  // Gates the "Pull workspaces now" control in the account menu (see
-  // App.tsx) behind an opt-in toggle in Settings — pullRemoteWorkspaces
+  // Gates the "Pull missions now" control in the account menu (see
+  // App.tsx) behind an opt-in toggle in Settings — pullRemoteMissions
   // only runs automatically on sign-in/token refresh today (see
   // docs/implementation-plan-sync.md M6), so this is an escape hatch for
   // forcing a check rather than a fully-designed manual-sync feature.

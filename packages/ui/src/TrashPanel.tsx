@@ -1,6 +1,6 @@
 import { For, Show, type Accessor } from "solid-js";
 import { RotateCcw, Trash2 } from "lucide-solid";
-import { WorkspaceDot } from "./WorkspaceDot";
+import { MissionDot } from "./MissionDot";
 
 // Days left before purge_trashed_workspaces (supabase/migrations) removes
 // this for good. Floored, not rounded, so "0 days left" means "could be
@@ -14,7 +14,7 @@ export function daysRemaining(
 }
 
 export function TrashPanel(props: {
-  workspaces: Accessor<
+  missions: Accessor<
     Array<{
       id: string;
       name: string;
@@ -32,20 +32,20 @@ export function TrashPanel(props: {
       <div class="flex max-w-md flex-col gap-3">
         <h2 class="text-base font-semibold">Trash</h2>
         <Show
-          when={props.workspaces().length > 0}
+          when={props.missions().length > 0}
           fallback={
             <p class="text-sm text-surface-txt-hint">Trash is empty.</p>
           }
         >
-          <For each={props.workspaces()}>
-            {(w) => (
+          <For each={props.missions()}>
+            {(m) => (
               <div class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 shadow-[var(--shadow-card)]">
-                <WorkspaceDot workspace={w} />
+                <MissionDot mission={m} />
                 <div class="flex min-w-0 flex-1 flex-col">
-                  <span class="truncate text-sm font-medium">{w.name}</span>
+                  <span class="truncate text-sm font-medium">{m.name}</span>
                   <span class="text-xs text-surface-txt-hint">
-                    {daysRemaining(w.deletedAt, props.retentionDays())} day
-                    {daysRemaining(w.deletedAt, props.retentionDays()) === 1
+                    {daysRemaining(m.deletedAt, props.retentionDays())} day
+                    {daysRemaining(m.deletedAt, props.retentionDays()) === 1
                       ? ""
                       : "s"}{" "}
                     left
@@ -54,7 +54,7 @@ export function TrashPanel(props: {
                 <button
                   type="button"
                   title="Restore"
-                  onClick={() => props.onRestore(w.id)}
+                  onClick={() => props.onRestore(m.id)}
                   class="btn btn-square btn-sm border border-surface-alt3 bg-surface-alt2"
                 >
                   <RotateCcw size={13} />
@@ -62,7 +62,7 @@ export function TrashPanel(props: {
                 <button
                   type="button"
                   title="Delete forever"
-                  onClick={() => props.onDeleteForever(w.id)}
+                  onClick={() => props.onDeleteForever(m.id)}
                   class="btn btn-square btn-sm border border-surface-alt3 text-danger"
                 >
                   <Trash2 size={13} />

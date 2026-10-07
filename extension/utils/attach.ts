@@ -1,16 +1,16 @@
 import { getSettings } from "./settings";
-import { getWindowWorkspaceMap, setWindowWorkspace } from "./session";
-import { createWorkspace } from "./workspaces";
+import { getWindowMissionMap, setWindowMission } from "./session";
+import { createMission } from "./missions";
 import { snapshotTabs } from "./tabs";
 
 /**
- * Ensures the given window is mapped to a workspace, creating one if needed.
+ * Ensures the given window is mapped to a mission, creating one if needed.
  * Idempotent: safe to call from both the background script and the dashboard page.
  */
-export async function ensureWorkspaceForWindow(
+export async function ensureMissionForWindow(
   windowId: number,
 ): Promise<string> {
-  const map = await getWindowWorkspaceMap();
+  const map = await getWindowMissionMap();
   const existing = map[windowId];
   if (existing) return existing;
 
@@ -23,13 +23,13 @@ export async function ensureWorkspaceForWindow(
       settings.lastActiveWorkspaceId,
     );
     if (!alreadyOpenElsewhere) {
-      await setWindowWorkspace(windowId, settings.lastActiveWorkspaceId);
+      await setWindowMission(windowId, settings.lastActiveWorkspaceId);
       return settings.lastActiveWorkspaceId;
     }
   }
 
   const tabs = await snapshotTabs(windowId);
-  const workspace = await createWorkspace("Untitled", tabs);
-  await setWindowWorkspace(windowId, workspace.id);
-  return workspace.id;
+  const mission = await createMission("Untitled", tabs);
+  await setWindowMission(windowId, mission.id);
+  return mission.id;
 }

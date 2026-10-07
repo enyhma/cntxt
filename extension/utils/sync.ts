@@ -3,29 +3,29 @@ import { getCachedEntitlements } from "./entitlements";
 import { pullRemoteFolders, pushDirtyFolders } from "./folders";
 import { pullRemoteResources } from "./resources";
 import {
-  pullRemoteWorkspaces,
+  pullRemoteMissions,
   purgeExpiredLocalTrash,
-  pushDirtyWorkspaces,
-} from "./workspaces";
+  pushDirtyMissions,
+} from "./missions";
 
 async function pullAndPurgeTrash(): Promise<number> {
-  // Folders first: a workspace's folder_id pull below is only meaningful
+  // Folders first: a mission's folder_id pull below is only meaningful
   // once the folder it points to already exists locally. Resources last —
-  // they reference a workspace_id, so pulling them before workspaces exist
-  // locally would just leave them attributed to a workspace not there yet.
+  // they reference a workspace_id, so pulling them before missions exist
+  // locally would just leave them attributed to a mission not there yet.
   const folders = await pullRemoteFolders();
-  const workspaces = await pullRemoteWorkspaces();
+  const missions = await pullRemoteMissions();
   const resources = await pullRemoteResources();
   const entitlements = await getCachedEntitlements();
   await purgeExpiredLocalTrash(entitlements?.accessExpiresAt);
-  return folders + workspaces + resources;
+  return folders + missions + resources;
 }
 
 async function pushDirty(
   lastPushedAt: Record<string, number>,
 ): Promise<Record<string, number>> {
   const afterFolders = await pushDirtyFolders(lastPushedAt);
-  return pushDirtyWorkspaces(afterFolders);
+  return pushDirtyMissions(afterFolders);
 }
 
 type Context = {
@@ -50,8 +50,8 @@ const PULL_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
  * Owns the sync engine's timing (docs/architecture-sync.md's push/pull/
- * offline diagrams) the way workspaceWindowMachine owns per-window tab-sync
- * timing: the actual storage.local reads/writes live in utils/workspaces.ts,
+ * offline diagrams) the way missionWindowMachine owns per-window tab-sync
+ * timing: the actual storage.local reads/writes live in utils/missions.ts,
  * this just decides when to call them. One instance for the whole dashboard,
  * not per-window.
  *
@@ -108,7 +108,7 @@ export const syncMachine = setup({
         },
       },
       // A local change that lands mid-push isn't in this invoke's snapshot
-      // of dirty workspaces — flag it so onDone re-debounces instead of
+      // of dirty missions — flag it so onDone re-debounces instead of
       // going idle and losing it until the next periodic pull tick.
       on: { LOCAL_CHANGE: { actions: assign({ pendingPush: true }) } },
     },

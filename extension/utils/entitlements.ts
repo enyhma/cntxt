@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 
 export type Entitlements = {
-  maxWorkspaces: number;
+  maxMissions: number;
   accessExpiresAt: string | null;
 };
 
@@ -27,7 +27,7 @@ export async function refreshEntitlements(): Promise<Entitlements | undefined> {
   if (error || !data) return undefined;
 
   const entitlements: Entitlements = {
-    maxWorkspaces: data.max_workspaces,
+    maxMissions: data.max_workspaces,
     accessExpiresAt: data.access_expires_at,
   };
   await browser.storage.local.set({ [STORAGE_KEY]: entitlements });

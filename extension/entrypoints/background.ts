@@ -1,19 +1,19 @@
 import { type ActorRefFrom, createActor } from "xstate";
-import { ensureWorkspaceForWindow } from "@/utils/attach";
-import { getWindowWorkspaceMap, removeWindowWorkspace } from "@/utils/session";
+import { ensureMissionForWindow } from "@/utils/attach";
+import { getWindowMissionMap, removeWindowMission } from "@/utils/session";
 import { updateSettings } from "@/utils/settings";
 import { DASHBOARD_URL, ensureDashboardTab } from "@/utils/tabs";
-import { workspaceWindowMachine } from "@/utils/workspaceWindowMachine";
+import { missionWindowMachine } from "@/utils/missionWindowMachine";
 
 export default defineBackground(() => {
   const windowActors = new Map<
     number,
-    ActorRefFrom<typeof workspaceWindowMachine>
+    ActorRefFrom<typeof missionWindowMachine>
   >();
 
   function trackWindow(windowId: number) {
     if (windowActors.has(windowId)) return;
-    const actor = createActor(workspaceWindowMachine, {
+    const actor = createActor(missionWindowMachine, {
       input: { windowId },
     });
     actor.start();
@@ -33,10 +33,10 @@ export default defineBackground(() => {
   }
 
   // Service workers restart often (idle unload, browser startup); rehydrate
-  // the in-memory actor registry from the persisted window->workspace map
+  // the in-memory actor registry from the persisted window->mission map
   // every time this callback runs so tab-sync survives a restart.
   (async () => {
-    const map = await getWindowWorkspaceMap();
+    const map = await getWindowMissionMap();
     for (const windowId of Object.keys(map).map(Number)) {
       trackWindow(windowId);
     }
@@ -46,7 +46,7 @@ export default defineBackground(() => {
     const windows = await browser.windows.getAll({ windowTypes: ["normal"] });
     for (const win of windows) {
       if (win.id === undefined) continue;
-      await ensureWorkspaceForWindow(win.id);
+      await ensureMissionForWindow(win.id);
       await ensureDashboardTab(win.id);
       trackWindow(win.id);
     }
@@ -54,15 +54,14 @@ export default defineBackground(() => {
 
   browser.windows.onRemoved.addListener((windowId) => {
     untrackWindow(windowId);
-    removeWindowWorkspace(windowId);
+    removeWindowMission(windowId);
   });
 
   browser.windows.onFocusChanged.addListener(async (windowId) => {
     if (windowId === browser.windows.WINDOW_ID_NONE) return;
-    const map = await getWindowWorkspaceMap();
-    const workspaceId = map[windowId];
-    if (workspaceId)
-      await updateSettings({ lastActiveWorkspaceId: workspaceId });
+    const map = await getWindowMissionMap();
+    const missionId = map[windowId];
+    if (missionId) await updateSettings({ lastActiveWorkspaceId: missionId });
   });
 
   browser.tabs.onCreated.addListener((tab) => notifyTabsChanged(tab.windowId));
@@ -87,7 +86,7 @@ export default defineBackground(() => {
       await browser.tabs.update(existing.id, { active: true });
       return;
     }
-    await ensureWorkspaceForWindow(tab.windowId);
+    await ensureMissionForWindow(tab.windowId);
     await ensureDashboardTab(tab.windowId);
     trackWindow(tab.windowId);
   });

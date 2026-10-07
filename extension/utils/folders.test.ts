@@ -9,8 +9,8 @@ const update = vi.fn(() => ({ eq }));
 const deleteEq = vi.fn().mockResolvedValue({ error: null });
 const del = vi.fn(() => ({ eq: deleteEq }));
 const from = vi.fn(() => ({ select, insert, update, delete: del }));
-// createWorkspace (used by the deleteFolder test below) fires off
-// registerWorkspace's RPC call without awaiting it — needs a resolved stub
+// createMission (used by the deleteFolder test below) fires off
+// registerMission's RPC call without awaiting it — needs a resolved stub
 // or that unawaited call rejects with "rpc is not a function".
 const rpc = vi.fn().mockResolvedValue({ error: null });
 vi.mock("./supabase", () => ({ supabase: { from, rpc } }));
@@ -23,8 +23,8 @@ const {
   pushDirtyFolders,
   updateFolder,
 } = await import("./folders");
-const { createWorkspace, getWorkspaces, updateWorkspace } =
-  await import("./workspaces");
+const { createMission, getMissions, updateMission } =
+  await import("./missions");
 
 beforeEach(() => {
   fakeBrowser.reset();
@@ -97,11 +97,11 @@ it("pushDirtyFolders pushes a locally-renamed, already-synced folder", async () 
 });
 
 describe("deleteFolder", () => {
-  it("cascades to child folders and ungroups workspaces pointing at either", async () => {
+  it("cascades to child folders and ungroups missions pointing at either", async () => {
     const area = await createFolder("Engineering");
     const project = await createFolder("App Redesign", area.id);
-    const workspace = await createWorkspace("Research", []);
-    await updateWorkspace(workspace.id, { folderId: project.id });
+    const mission = await createMission("Research", []);
+    await updateMission(mission.id, { folderId: project.id });
 
     await deleteFolder(area.id);
 
@@ -109,7 +109,7 @@ describe("deleteFolder", () => {
     expect(folderIds).not.toContain(area.id);
     expect(folderIds).not.toContain(project.id);
 
-    const updated = (await getWorkspaces()).find((w) => w.id === workspace.id);
+    const updated = (await getMissions()).find((m) => m.id === mission.id);
     expect(updated?.folderId).toBeNull();
   });
 });

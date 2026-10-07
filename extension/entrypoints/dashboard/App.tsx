@@ -12,10 +12,10 @@ import {
   onMount,
   untrack,
 } from "solid-js";
-import { ensureWorkspaceForWindow } from "@/utils/attach";
+import { ensureMissionForWindow } from "@/utils/attach";
 import { restoreMachine } from "@/utils/restoreMachine";
 import { syncMachine } from "@/utils/sync";
-import { getWindowWorkspaceMap } from "@/utils/session";
+import { getWindowMissionMap } from "@/utils/session";
 import {
   type Settings,
   type StartupBehavior,
@@ -67,16 +67,16 @@ import {
   reconcileResourceSyncStatus,
 } from "@/utils/resources";
 import {
-  type Workspace,
-  createWorkspace,
-  deleteWorkspace,
-  getWorkspaces,
-  permanentlyDeleteWorkspace,
-  reconcileSyncStatus,
-  restoreWorkspace,
+  type Mission,
+  createMission,
+  deleteMission,
+  getMissions,
+  permanentlyDeleteMission,
+  reconcileMissionSyncStatus,
+  restoreMission,
   trashRetentionDays,
-  updateWorkspace,
-} from "@/utils/workspaces";
+  updateMission,
+} from "@/utils/missions";
 import {
   type ColorKey,
   COLOR_CLASS,
@@ -90,10 +90,11 @@ import {
   SettingsPanel,
   TabRow,
   TrashPanel,
-  WorkspaceDot,
-  WorkspaceRow,
-  workspaceColorKey,
-  workspaceDotClass,
+  FolderPage,
+  MissionDot,
+  MissionRow,
+  missionColorKey,
+  missionDotClass,
 } from "@cntxt/ui";
 
 function iconNodeToSvgString(node: IconNode, color: string): string {
@@ -122,13 +123,13 @@ function resolveDotColor(colorClass: string): string {
   return getComputedStyle(colorProbe).backgroundColor;
 }
 
-// A workspace with a chosen icon draws that icon (in its own dot color);
+// A mission with a chosen icon draws that icon (in its own dot color);
 // otherwise falls back to the cntxt mark (open ring + caret) traced in that
 // same color, so every window's pinned dashboard tab stays identifiable at
 // a glance even without a custom icon set.
-function faviconHrefFor(workspace: Workspace | undefined): string {
-  const color = resolveDotColor(workspaceDotClass(workspace));
-  const icon = workspace?.icon as IconName | undefined;
+function faviconHrefFor(mission: Mission | undefined): string {
+  const color = resolveDotColor(missionDotClass(mission));
+  const icon = mission?.icon as IconName | undefined;
   const svg = icon
     ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconNodeToSvgString(ICONS[icon], color)}</svg>`
     : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32"><path d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/><rect x="74" y="40" width="8" height="20" rx="4" fill="${color}"/></svg>`;
@@ -142,11 +143,11 @@ function closeOpenDropdowns() {
 }
 
 const NAV_ITEMS: Array<{
-  key: "workspaces" | "trash" | "settings";
+  key: "missions" | "trash" | "settings";
   label: string;
   icon: (props: LucideProps) => JSX.Element;
 }> = [
-  { key: "workspaces", label: "Workspaces", icon: SectionsIcon },
+  { key: "missions", label: "Missions", icon: SectionsIcon },
   { key: "trash", label: "Trash", icon: Trash2 },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -160,19 +161,24 @@ function FolderHeader(props: {
   folder: Folder;
   depth: number;
   expanded: boolean;
+  active: boolean;
   onToggle: () => void;
+  onOpen: () => void;
   editing: boolean;
   editingValue: string;
   onEditingInput: (v: string) => void;
   onStartRename: () => void;
   onCommitRename: () => void;
-  onAddWorkspace: () => void;
+  onAddMission: () => void;
   onAddProject?: () => void;
   onDelete: () => void;
 }) {
   return (
     <div
-      class="group flex items-center gap-1 rounded py-1.5 pr-1.5"
+      class={
+        "group flex items-center gap-1 rounded py-1.5 pr-1.5" +
+        (props.active ? " bg-surface-alt2" : "")
+      }
       style={{ "padding-left": `${0.5 + props.depth * 0.875}rem` }}
     >
       <button
@@ -200,8 +206,12 @@ function FolderHeader(props: {
         }
       >
         <span
+          onClick={props.onOpen}
           onDblClick={props.onStartRename}
-          class="min-w-0 flex-1 truncate text-[12px] font-semibold tracking-wide text-surface-txt-hint"
+          class={
+            "min-w-0 flex-1 cursor-pointer truncate text-[12px] font-semibold tracking-wide" +
+            (props.active ? " text-surface-txt" : " text-surface-txt-hint")
+          }
         >
           {props.folder.name}
         </span>
@@ -219,8 +229,8 @@ function FolderHeader(props: {
         </Show>
         <button
           type="button"
-          title="New workspace"
-          onClick={props.onAddWorkspace}
+          title="New mission"
+          onClick={props.onAddMission}
           class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
         >
           <Plus size={11} />
@@ -239,11 +249,11 @@ function FolderHeader(props: {
 }
 
 function Dashboard(props: {
-  workspaces: Accessor<Workspace[]>;
+  missions: Accessor<Mission[]>;
   folders: Accessor<Folder[]>;
   resources: Accessor<Resource[]>;
   currentId: Accessor<string | undefined>;
-  current: Accessor<Workspace | undefined>;
+  current: Accessor<Mission | undefined>;
   openIds: Accessor<Set<string>>;
   myWindowId: Accessor<number | undefined>;
   entitlements: Accessor<Entitlements | undefined>;
@@ -252,7 +262,7 @@ function Dashboard(props: {
   restoreSend: ReturnType<typeof useMachine<typeof restoreMachine>>[1];
 }) {
   const {
-    workspaces,
+    missions,
     folders,
     resources,
     currentId,
@@ -268,9 +278,9 @@ function Dashboard(props: {
   // Advisory only — a stale or missing cache never blocks anything by
   // itself, it just gates whether this button offers to try. See
   // docs/architecture-sync.md → "Entitlements".
-  const atWorkspaceLimit = () => {
-    const max = entitlements()?.maxWorkspaces;
-    return max !== undefined && workspaces().length >= max;
+  const atMissionLimit = () => {
+    const max = entitlements()?.maxMissions;
+    return max !== undefined && missions().length >= max;
   };
 
   const [railOpen, setRailOpen] = createSignal(true);
@@ -285,6 +295,12 @@ function Dashboard(props: {
   let paletteRef: HTMLDialogElement | undefined;
   let customizeRef: HTMLDialogElement | undefined;
 
+  // Set when the sidebar's FolderHeader *name* (not its chevron) is
+  // clicked — the main pane shows that folder's own page instead of a
+  // mission's tabs until something navigates back to a mission.
+  const [viewingFolderId, setViewingFolderId] = createSignal<string>();
+  const viewingFolder = () => folders().find((f) => f.id === viewingFolderId());
+
   onMount(() => {
     try {
       const stored = localStorage.getItem("cntxt.railOpen");
@@ -294,7 +310,7 @@ function Dashboard(props: {
     }
   });
 
-  // Seed the initially-viewed workspace from this window's workspace once
+  // Seed the initially-viewed mission from this window's mission once
   // it resolves, without fighting later manual browsing (viewed() isn't a
   // dependency here, just read via untrack).
   createEffect(() => {
@@ -302,15 +318,15 @@ function Dashboard(props: {
     if (id && untrack(viewedId) === undefined) setViewedId(id);
   });
 
-  // Any storage tab data shown for a *saved* (non-open) workspace goes
-  // stale the moment you switch which workspace you're looking at, so
+  // Any storage tab data shown for a *saved* (non-open) mission goes
+  // stale the moment you switch which mission you're looking at, so
   // selection indices reset on every view change.
   createEffect(() => {
     viewedId();
     setSelected(new Set<number>());
   });
 
-  const viewed = () => workspaces().find((w) => w.id === viewedId());
+  const viewed = () => missions().find((w) => w.id === viewedId());
   const isViewingCurrent = () =>
     viewedId() !== undefined && viewedId() === currentId();
   const busy = () => !restoreState.matches("idle");
@@ -324,17 +340,17 @@ function Dashboard(props: {
     setRailOpen(v);
   }
 
-  function openAll(workspace: Workspace) {
-    restoreSend({ type: "RESTORE", workspace });
-    setViewedId(workspace.id);
+  function openAll(mission: Mission) {
+    restoreSend({ type: "RESTORE", mission });
+    showMission(mission.id);
   }
 
-  // A workspace's *live* tabs (the one mapped to this window) are the
+  // A mission's *live* tabs (the one mapped to this window) are the
   // source of truth for the real browser window, re-synced on every tab
-  // event by workspaceWindowMachine — editing that array in storage would
+  // event by missionWindowMachine — editing that array in storage would
   // just be overwritten on the next sync. So a click on one of its rows
   // jumps to the real tab instead of "selecting" it, and only saved
-  // (non-open) workspaces support the multi-select/move flow below.
+  // (non-open) missions support the multi-select/move flow below.
   async function focusRealTab(url: string) {
     const windowId = myWindowId();
     if (windowId === undefined) return;
@@ -359,33 +375,48 @@ function Dashboard(props: {
     if (!source || idxs.size === 0) return;
     const moved = source.tabs.filter((_, i) => idxs.has(i));
     const remaining = source.tabs.filter((_, i) => !idxs.has(i));
-    await updateWorkspace(source.id, { tabs: remaining });
+    await updateMission(source.id, { tabs: remaining });
 
     if (targetId === currentId() && myWindowId() !== undefined) {
       for (const tab of moved) {
         await browser.tabs.create({ windowId: myWindowId(), url: tab.url });
       }
     } else {
-      const target = workspaces().find((w) => w.id === targetId);
+      const target = missions().find((w) => w.id === targetId);
       if (target)
-        await updateWorkspace(targetId, { tabs: [...target.tabs, ...moved] });
+        await updateMission(targetId, { tabs: [...target.tabs, ...moved] });
     }
     setSelected(new Set<number>());
     await refresh();
   }
 
-  async function handleAddWorkspace() {
-    const workspace = await createWorkspace("Untitled workspace", []);
+  async function handleAddMission() {
+    const mission = await createMission("Untitled mission", []);
     await refresh();
-    setViewedId(workspace.id);
+    showMission(mission.id);
   }
 
   const rootFolders = () => folders().filter((f) => !f.parentId);
   const childFolders = (parentId: string) =>
     folders().filter((f) => f.parentId === parentId);
-  const workspacesIn = (folderId: string) =>
-    workspaces().filter((w) => w.folderId === folderId);
-  const ungroupedWorkspaces = () => workspaces().filter((w) => !w.folderId);
+  const missionsIn = (folderId: string) =>
+    missions().filter((w) => w.folderId === folderId);
+  const ungroupedMissions = () => missions().filter((w) => !w.folderId);
+
+  // Navigating to a mission always leaves folder view, whichever of the
+  // several entry points (sidebar row, command palette, a Project page's
+  // mission list, creating a new one) got you there.
+  function showMission(id: string) {
+    setViewingFolderId(undefined);
+    setViewedId(id);
+  }
+
+  function viewingFolderBreadcrumb(): Array<{ id: string; name: string }> {
+    const folder = viewingFolder();
+    if (!folder?.parentId) return [];
+    const parent = folders().find((f) => f.id === folder.parentId);
+    return parent ? [{ id: parent.id, name: parent.name }] : [];
+  }
 
   // Areas-then-their-Projects, each tagged with its indent depth — for the
   // "Move to folder" flat picker in the header's dropdown, which doesn't
@@ -404,7 +435,7 @@ function Dashboard(props: {
   async function handleMoveToFolder(folderId: string | null) {
     const id = viewedId();
     if (!id) return;
-    await updateWorkspace(id, { folderId });
+    await updateMission(id, { folderId });
     await refresh();
     closeOpenDropdowns();
   }
@@ -441,17 +472,17 @@ function Dashboard(props: {
     await refresh();
     startRenameFolder(folder);
   }
-  async function handleAddWorkspaceIn(folderId: string) {
-    const workspace = await createWorkspace("Untitled workspace", []);
-    await updateWorkspace(workspace.id, { folderId });
+  async function handleAddMissionIn(folderId: string) {
+    const mission = await createMission("Untitled mission", []);
+    await updateMission(mission.id, { folderId });
     await refresh();
-    setViewedId(workspace.id);
+    showMission(mission.id);
   }
   async function handleDeleteFolder(folder: Folder) {
     const hasChildren = folders().some((f) => f.parentId === folder.id);
     const warning = hasChildren
-      ? `Delete "${folder.name}" and the projects inside it? Workspaces stay — they'll just be ungrouped.`
-      : `Delete "${folder.name}"? Any workspaces inside stay — they'll just be ungrouped.`;
+      ? `Delete "${folder.name}" and the projects inside it? Missions stay — they'll just be ungrouped.`
+      : `Delete "${folder.name}"? Any missions inside stay — they'll just be ungrouped.`;
     if (!confirm(warning)) return;
     await deleteFolder(folder.id);
     await refresh();
@@ -490,20 +521,20 @@ function Dashboard(props: {
     await refresh();
   }
 
-  function workspaceRowFor(w: Workspace, depth = 0) {
+  function missionRowFor(w: Mission, depth = 0) {
     return (
       <div
         style={depth ? { "padding-left": `${depth * 0.875}rem` } : undefined}
       >
-        <WorkspaceRow
-          workspace={w}
+        <MissionRow
+          mission={w}
           count={w.tabs.length}
           isViewed={w.id === viewedId()}
           isCurrent={w.id === currentId()}
           openElsewhere={w.id !== currentId() && openIds().has(w.id)}
           anyActive={currentId() !== undefined}
           busy={busy()}
-          onView={() => setViewedId(w.id)}
+          onView={() => showMission(w.id)}
           onOpenAll={() => openAll(w)}
           onDisconnect={handleDisconnectWindow}
         />
@@ -514,7 +545,7 @@ function Dashboard(props: {
   async function handleDeleteViewed() {
     const id = viewedId();
     if (!id) return;
-    await deleteWorkspace(id);
+    await deleteMission(id);
     if (viewedId() === id) setViewedId(currentId());
     await refresh();
     closeOpenDropdowns();
@@ -532,7 +563,7 @@ function Dashboard(props: {
     const trimmed = renameValue().trim();
     setRenaming(false);
     if (!id || !trimmed) return;
-    await updateWorkspace(id, { name: trimmed });
+    await updateMission(id, { name: trimmed });
     await refresh();
   }
 
@@ -546,13 +577,13 @@ function Dashboard(props: {
   async function handleSetColor(color: ColorKey) {
     const id = viewedId();
     if (!id) return;
-    await updateWorkspace(id, { color });
+    await updateMission(id, { color });
     await refresh();
   }
   async function handleSetIcon(icon: IconName | undefined) {
     const id = viewedId();
     if (!id) return;
-    await updateWorkspace(id, { icon });
+    await updateMission(id, { icon });
     await refresh();
   }
 
@@ -561,10 +592,10 @@ function Dashboard(props: {
     closeOpenDropdowns();
   }
 
-  // Detaches this window from its workspace *before* closing its tabs (see
-  // restoreMachine's DISCONNECT), so workspaceWindowMachine's syncTabs
+  // Detaches this window from its mission *before* closing its tabs (see
+  // restoreMachine's DISCONNECT), so missionWindowMachine's syncTabs
   // no-ops on those closures instead of autosaving them — unlike
-  // handleCloseAllTabs, the workspace's saved tab list is left untouched.
+  // handleCloseAllTabs, the mission's saved tab list is left untouched.
   function handleDisconnectWindow() {
     restoreSend({ type: "DISCONNECT" });
     closeOpenDropdowns();
@@ -581,8 +612,8 @@ function Dashboard(props: {
   function closePalette() {
     paletteRef?.close();
   }
-  function goToWorkspace(id: string) {
-    setViewedId(id);
+  function goToMission(id: string) {
+    showMission(id);
     closePalette();
   }
 
@@ -619,13 +650,13 @@ function Dashboard(props: {
     const q = paletteQuery().trim().toLowerCase();
     if (!q) return [];
     const out: PaletteResult[] = [];
-    for (const w of workspaces()) {
+    for (const w of missions()) {
       if (w.name.toLowerCase().includes(q)) {
         out.push({
           kind: "WS",
           title: w.name,
           meta: `${w.tabs.length} tabs`,
-          go: () => goToWorkspace(w.id),
+          go: () => goToMission(w.id),
         });
       }
       for (const t of w.tabs) {
@@ -637,7 +668,7 @@ function Dashboard(props: {
             kind: "TAB",
             title: t.title || t.url,
             meta: w.name,
-            go: () => goToWorkspace(w.id),
+            go: () => goToMission(w.id),
           });
         }
       }
@@ -652,7 +683,7 @@ function Dashboard(props: {
           <nav class="flex w-60 shrink-0 flex-col border-r border-surface-alt2 bg-surface-alt1">
             <div class="flex h-11 shrink-0 items-center gap-2 border-b border-surface-alt2 pr-2.5 pl-3.5">
               <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
-                WORKSPACES
+                MISSIONS
               </span>
               <button
                 type="button"
@@ -665,14 +696,14 @@ function Dashboard(props: {
               <button
                 type="button"
                 title={
-                  atWorkspaceLimit()
-                    ? "You've hit your plan's limit — this workspace won't sync until you upgrade"
+                  atMissionLimit()
+                    ? "You've hit your plan's limit — this mission won't sync until you upgrade"
                     : undefined
                 }
-                onClick={handleAddWorkspace}
+                onClick={handleAddMission}
                 class={
                   "btn btn-square btn-ghost btn-xs" +
-                  (atWorkspaceLimit() ? " text-warning" : "")
+                  (atMissionLimit() ? " text-warning" : "")
                 }
               >
                 <Plus size={14} />
@@ -694,14 +725,16 @@ function Dashboard(props: {
                       folder={area}
                       depth={0}
                       expanded={expandedFolders().has(area.id)}
+                      active={viewingFolderId() === area.id}
                       onToggle={() => toggleExpanded(area.id)}
+                      onOpen={() => setViewingFolderId(area.id)}
                       editing={editingFolderId() === area.id}
                       editingValue={editingFolderName()}
                       onEditingInput={setEditingFolderName}
                       onStartRename={() => startRenameFolder(area)}
                       onCommitRename={commitRenameFolder}
                       onAddProject={() => handleAddProject(area.id)}
-                      onAddWorkspace={() => handleAddWorkspaceIn(area.id)}
+                      onAddMission={() => handleAddMissionIn(area.id)}
                       onDelete={() => handleDeleteFolder(area)}
                     />
                     <Show when={expandedFolders().has(area.id)}>
@@ -712,27 +745,29 @@ function Dashboard(props: {
                               folder={project}
                               depth={1}
                               expanded={expandedFolders().has(project.id)}
+                              active={viewingFolderId() === project.id}
                               onToggle={() => toggleExpanded(project.id)}
+                              onOpen={() => setViewingFolderId(project.id)}
                               editing={editingFolderId() === project.id}
                               editingValue={editingFolderName()}
                               onEditingInput={setEditingFolderName}
                               onStartRename={() => startRenameFolder(project)}
                               onCommitRename={commitRenameFolder}
-                              onAddWorkspace={() =>
-                                handleAddWorkspaceIn(project.id)
+                              onAddMission={() =>
+                                handleAddMissionIn(project.id)
                               }
                               onDelete={() => handleDeleteFolder(project)}
                             />
                             <Show when={expandedFolders().has(project.id)}>
-                              <For each={workspacesIn(project.id)}>
-                                {(w) => workspaceRowFor(w, 2)}
+                              <For each={missionsIn(project.id)}>
+                                {(w) => missionRowFor(w, 2)}
                               </For>
                             </Show>
                           </>
                         )}
                       </For>
-                      <For each={workspacesIn(area.id)}>
-                        {(w) => workspaceRowFor(w, 1)}
+                      <For each={missionsIn(area.id)}>
+                        {(w) => missionRowFor(w, 1)}
                       </For>
                     </Show>
                   </>
@@ -740,16 +775,14 @@ function Dashboard(props: {
               </For>
               <Show
                 when={
-                  rootFolders().length > 0 && ungroupedWorkspaces().length > 0
+                  rootFolders().length > 0 && ungroupedMissions().length > 0
                 }
               >
                 <div class="mt-1 px-2 py-1 font-mono text-[10px] tracking-wider text-surface-txt-faint">
                   UNGROUPED
                 </div>
               </Show>
-              <For each={ungroupedWorkspaces()}>
-                {(w) => workspaceRowFor(w)}
-              </For>
+              <For each={ungroupedMissions()}>{(w) => missionRowFor(w)}</For>
             </div>
           </nav>
         </Show>
@@ -765,188 +798,200 @@ function Dashboard(props: {
               >
                 <PanelLeftOpen size={14} />
               </button>
-              <details class="dropdown shrink-0">
-                <summary class="btn h-8 list-none gap-2 rounded-full border border-surface-alt3 bg-surface-alt1 px-2.75 font-normal shadow-[var(--shadow-card)]">
-                  <WorkspaceDot workspace={viewed()} />
-                  <span class="text-sm font-bold">{viewed()?.name}</span>
-                  <span class="font-mono text-[11px] text-surface-txt-faint">
-                    {viewed()?.tabs.length ?? 0}
+            </Show>
+
+            <Show
+              when={!viewingFolderId()}
+              fallback={
+                <span class="flex-1 truncate text-sm font-semibold">
+                  {viewingFolder()?.name}
+                </span>
+              }
+            >
+              <Show when={!railOpen()}>
+                <details class="dropdown shrink-0">
+                  <summary class="btn h-8 list-none gap-2 rounded-full border border-surface-alt3 bg-surface-alt1 px-2.75 font-normal shadow-[var(--shadow-card)]">
+                    <MissionDot mission={viewed()} />
+                    <span class="text-sm font-bold">{viewed()?.name}</span>
+                    <span class="font-mono text-[11px] text-surface-txt-faint">
+                      {viewed()?.tabs.length ?? 0}
+                    </span>
+                    <ChevronDown size={11} class="text-surface-txt-hint" />
+                  </summary>
+                  <ul class="dropdown-content menu z-50 mt-1 w-58 gap-0.5 rounded bg-surface-alt2 p-1.5 shadow-[var(--shadow-dropdown)]">
+                    <For each={missions()}>
+                      {(w) => (
+                        <li>
+                          <MissionRow
+                            mission={w}
+                            count={w.tabs.length}
+                            isViewed={w.id === viewedId()}
+                            isCurrent={w.id === currentId()}
+                            openElsewhere={
+                              w.id !== currentId() && openIds().has(w.id)
+                            }
+                            anyActive={currentId() !== undefined}
+                            busy={busy()}
+                            onView={() => {
+                              showMission(w.id);
+                              closeOpenDropdowns();
+                            }}
+                            onOpenAll={() => openAll(w)}
+                            onDisconnect={handleDisconnectWindow}
+                          />
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </details>
+              </Show>
+
+              <Show when={railOpen()}>
+                <div class="flex min-w-0 items-baseline gap-2.25 overflow-hidden">
+                  <Show
+                    when={!renaming()}
+                    fallback={
+                      <input
+                        autofocus
+                        class="input input-sm w-48 bg-surface-alt1"
+                        value={renameValue()}
+                        onInput={(e) => setRenameValue(e.currentTarget.value)}
+                        onBlur={commitRename}
+                        onKeyDown={(e) => e.key === "Enter" && commitRename()}
+                      />
+                    }
+                  >
+                    <span class="shrink-0 truncate text-base font-semibold">
+                      {viewed()?.name}
+                    </span>
+                  </Show>
+                  <span class="min-w-0 overflow-hidden truncate font-mono text-[11px] text-surface-txt-faint">
+                    {(viewed()?.tabs.length ?? 0) + " tabs"}
                   </span>
-                  <ChevronDown size={11} class="text-surface-txt-hint" />
+                </div>
+              </Show>
+
+              <Show when={viewed() && !isViewingCurrent()}>
+                <div
+                  class={
+                    "group ml-1 flex min-w-0 shrink items-center gap-1.5 rounded py-0.5 pr-1.5 pl-0.5" +
+                    (current() ? " border border-warning/30" : "")
+                  }
+                >
+                  <button
+                    type="button"
+                    disabled={busy()}
+                    onClick={() => viewed() && openAll(viewed()!)}
+                    class="btn btn-sm shrink-0 gap-1.5 border-none bg-accent text-accent-txt shadow-[var(--shadow-raised)] hover:bg-accent-alt1 disabled:opacity-50"
+                  >
+                    <Show when={current()} fallback={<Plug size={13} />}>
+                      <ArrowRightLeft size={13} />
+                    </Show>
+                    {current()
+                      ? "Switch to this mission"
+                      : "Connect to this mission"}
+                  </button>
+                  <Show when={current()}>
+                    <TriangleAlert size={12} class="shrink-0 text-warning" />
+                    <span class="max-w-0 overflow-hidden whitespace-nowrap text-xs text-warning transition-[max-width] duration-[var(--duration)] group-hover:max-w-40 group-focus-within:max-w-40">
+                      Replaces {current()!.name}'s tabs
+                    </span>
+                  </Show>
+                </div>
+              </Show>
+
+              <Show when={viewed() && isViewingCurrent()}>
+                <button
+                  type="button"
+                  disabled={busy()}
+                  onClick={handleDisconnectWindow}
+                  class="btn btn-sm ml-1 shrink-0 gap-1.5 border border-surface-alt3 text-surface-txt-hint hover:text-warning disabled:opacity-50"
+                >
+                  <Unplug size={13} />
+                  Disconnect
+                </button>
+              </Show>
+
+              <details class="dropdown shrink-0">
+                <summary
+                  title="More actions"
+                  class="btn btn-square btn-sm list-none border border-surface-alt3 bg-surface-alt2 shadow-[var(--shadow-card)]"
+                >
+                  <MoreHorizontal size={15} />
                 </summary>
-                <ul class="dropdown-content menu z-50 mt-1 w-58 gap-0.5 rounded bg-surface-alt2 p-1.5 shadow-[var(--shadow-dropdown)]">
-                  <For each={workspaces()}>
-                    {(w) => (
+                <ul class="dropdown-content menu z-50 mt-1 w-47.5 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]">
+                  <li>
+                    <button type="button" onClick={startRename}>
+                      Rename mission
+                    </button>
+                  </li>
+                  <li>
+                    <button type="button" onClick={openCustomize}>
+                      Customize icon &amp; color
+                    </button>
+                  </li>
+                  <Show when={folders().length > 0}>
+                    <li class="px-2 pt-1.5 pb-0.5 font-mono text-[10px] tracking-wider text-surface-txt-faint">
+                      Move to folder
+                    </li>
+                    <Show when={viewed()?.folderId}>
                       <li>
-                        <WorkspaceRow
-                          workspace={w}
-                          count={w.tabs.length}
-                          isViewed={w.id === viewedId()}
-                          isCurrent={w.id === currentId()}
-                          openElsewhere={
-                            w.id !== currentId() && openIds().has(w.id)
-                          }
-                          anyActive={currentId() !== undefined}
-                          busy={busy()}
-                          onView={() => {
-                            setViewedId(w.id);
-                            closeOpenDropdowns();
-                          }}
-                          onOpenAll={() => openAll(w)}
-                          onDisconnect={handleDisconnectWindow}
-                        />
+                        <button
+                          type="button"
+                          onClick={() => handleMoveToFolder(null)}
+                        >
+                          Ungrouped
+                        </button>
                       </li>
-                    )}
-                  </For>
+                    </Show>
+                    <For each={flattenedFolders()}>
+                      {({ folder, depth }) => (
+                        <Show when={folder.id !== viewed()?.folderId}>
+                          <li>
+                            <button
+                              type="button"
+                              style={{
+                                "padding-left": `${0.75 + depth * 0.875}rem`,
+                              }}
+                              onClick={() => handleMoveToFolder(folder.id)}
+                            >
+                              {folder.name}
+                            </button>
+                          </li>
+                        </Show>
+                      )}
+                    </For>
+                  </Show>
+                  <Show when={isViewingCurrent()}>
+                    <li>
+                      <button
+                        type="button"
+                        disabled={busy()}
+                        onClick={handleCloseAllTabs}
+                      >
+                        Close all tabs
+                      </button>
+                    </li>
+                  </Show>
+                  <Show when={!isViewingCurrent()}>
+                    <li>
+                      <button
+                        type="button"
+                        class="text-danger"
+                        onClick={handleDeleteViewed}
+                      >
+                        Move to Trash
+                      </button>
+                    </li>
+                  </Show>
                 </ul>
               </details>
             </Show>
 
-            <Show when={railOpen()}>
-              <div class="flex min-w-0 items-baseline gap-2.25 overflow-hidden">
-                <Show
-                  when={!renaming()}
-                  fallback={
-                    <input
-                      autofocus
-                      class="input input-sm w-48 bg-surface-alt1"
-                      value={renameValue()}
-                      onInput={(e) => setRenameValue(e.currentTarget.value)}
-                      onBlur={commitRename}
-                      onKeyDown={(e) => e.key === "Enter" && commitRename()}
-                    />
-                  }
-                >
-                  <span class="shrink-0 truncate text-base font-semibold">
-                    {viewed()?.name}
-                  </span>
-                </Show>
-                <span class="min-w-0 overflow-hidden truncate font-mono text-[11px] text-surface-txt-faint">
-                  {(viewed()?.tabs.length ?? 0) + " tabs"}
-                </span>
-              </div>
-            </Show>
-
-            <Show when={viewed() && !isViewingCurrent()}>
-              <div
-                class={
-                  "group ml-1 flex min-w-0 shrink items-center gap-1.5 rounded py-0.5 pr-1.5 pl-0.5" +
-                  (current() ? " border border-warning/30" : "")
-                }
-              >
-                <button
-                  type="button"
-                  disabled={busy()}
-                  onClick={() => viewed() && openAll(viewed()!)}
-                  class="btn btn-sm shrink-0 gap-1.5 border-none bg-accent text-accent-txt shadow-[var(--shadow-raised)] hover:bg-accent-alt1 disabled:opacity-50"
-                >
-                  <Show when={current()} fallback={<Plug size={13} />}>
-                    <ArrowRightLeft size={13} />
-                  </Show>
-                  {current()
-                    ? "Switch to this workspace"
-                    : "Connect to this workspace"}
-                </button>
-                <Show when={current()}>
-                  <TriangleAlert size={12} class="shrink-0 text-warning" />
-                  <span class="max-w-0 overflow-hidden whitespace-nowrap text-xs text-warning transition-[max-width] duration-[var(--duration)] group-hover:max-w-40 group-focus-within:max-w-40">
-                    Replaces {current()!.name}'s tabs
-                  </span>
-                </Show>
-              </div>
-            </Show>
-
-            <Show when={viewed() && isViewingCurrent()}>
-              <button
-                type="button"
-                disabled={busy()}
-                onClick={handleDisconnectWindow}
-                class="btn btn-sm ml-1 shrink-0 gap-1.5 border border-surface-alt3 text-surface-txt-hint hover:text-warning disabled:opacity-50"
-              >
-                <Unplug size={13} />
-                Disconnect
-              </button>
-            </Show>
-
-            <details class="dropdown shrink-0">
-              <summary
-                title="More actions"
-                class="btn btn-square btn-sm list-none border border-surface-alt3 bg-surface-alt2 shadow-[var(--shadow-card)]"
-              >
-                <MoreHorizontal size={15} />
-              </summary>
-              <ul class="dropdown-content menu z-50 mt-1 w-47.5 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]">
-                <li>
-                  <button type="button" onClick={startRename}>
-                    Rename workspace
-                  </button>
-                </li>
-                <li>
-                  <button type="button" onClick={openCustomize}>
-                    Customize icon &amp; color
-                  </button>
-                </li>
-                <Show when={folders().length > 0}>
-                  <li class="px-2 pt-1.5 pb-0.5 font-mono text-[10px] tracking-wider text-surface-txt-faint">
-                    Move to folder
-                  </li>
-                  <Show when={viewed()?.folderId}>
-                    <li>
-                      <button
-                        type="button"
-                        onClick={() => handleMoveToFolder(null)}
-                      >
-                        Ungrouped
-                      </button>
-                    </li>
-                  </Show>
-                  <For each={flattenedFolders()}>
-                    {({ folder, depth }) => (
-                      <Show when={folder.id !== viewed()?.folderId}>
-                        <li>
-                          <button
-                            type="button"
-                            style={{
-                              "padding-left": `${0.75 + depth * 0.875}rem`,
-                            }}
-                            onClick={() => handleMoveToFolder(folder.id)}
-                          >
-                            {folder.name}
-                          </button>
-                        </li>
-                      </Show>
-                    )}
-                  </For>
-                </Show>
-                <Show when={isViewingCurrent()}>
-                  <li>
-                    <button
-                      type="button"
-                      disabled={busy()}
-                      onClick={handleCloseAllTabs}
-                    >
-                      Close all tabs
-                    </button>
-                  </li>
-                </Show>
-                <Show when={!isViewingCurrent()}>
-                  <li>
-                    <button
-                      type="button"
-                      class="text-danger"
-                      onClick={handleDeleteViewed}
-                    >
-                      Move to Trash
-                    </button>
-                  </li>
-                </Show>
-              </ul>
-            </details>
-
             <span class="flex-1" />
             <button
               type="button"
-              title="Search workspaces"
+              title="Search missions"
               onClick={openPalette}
               class="btn btn-sm shrink-0 border border-surface-alt3 bg-surface-alt1 shadow-[var(--shadow-card)]"
             >
@@ -957,138 +1002,157 @@ function Dashboard(props: {
             </button>
           </div>
 
-          <div class="min-h-0 flex-1 overflow-y-auto p-3.5">
-            <Show
-              when={viewed() && viewed()!.tabs.length > 0}
-              fallback={
-                <p class="text-sm text-surface-txt-hint">
-                  No tabs in this workspace.
-                </p>
-              }
-            >
-              <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                <For each={viewed()!.tabs}>
-                  {(tab, i) => (
-                    <TabRow
-                      tab={tab}
-                      index={i()}
-                      selected={selected().has(i())}
-                      selectable={!isViewingCurrent()}
-                      onToggle={() => toggleSelected(i())}
-                      onOpen={() => focusRealTab(tab.url)}
-                      onSaveAsResource={() => handleSaveTabAsResource(tab)}
-                    />
-                  )}
-                </For>
-              </section>
-            </Show>
+          <Show
+            when={!viewingFolderId()}
+            fallback={
+              <FolderPage
+                folder={viewingFolder()!}
+                breadcrumb={viewingFolderBreadcrumb()}
+                missions={() => missionsIn(viewingFolderId()!)}
+                projects={
+                  viewingFolder() && !viewingFolder()!.parentId
+                    ? () => childFolders(viewingFolderId()!)
+                    : undefined
+                }
+                onOpenMission={goToMission}
+                onOpenProject={setViewingFolderId}
+                onAddMission={() => handleAddMissionIn(viewingFolderId()!)}
+              />
+            }
+          >
+            <div class="min-h-0 flex-1 overflow-y-auto p-3.5">
+              <Show
+                when={viewed() && viewed()!.tabs.length > 0}
+                fallback={
+                  <p class="text-sm text-surface-txt-hint">
+                    No tabs in this mission.
+                  </p>
+                }
+              >
+                <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                  <For each={viewed()!.tabs}>
+                    {(tab, i) => (
+                      <TabRow
+                        tab={tab}
+                        index={i()}
+                        selected={selected().has(i())}
+                        selectable={!isViewingCurrent()}
+                        onToggle={() => toggleSelected(i())}
+                        onOpen={() => focusRealTab(tab.url)}
+                        onSaveAsResource={() => handleSaveTabAsResource(tab)}
+                      />
+                    )}
+                  </For>
+                </section>
+              </Show>
 
-            <Show when={viewed()}>
-              <div class="mt-5">
-                <div class="mb-1.5 flex items-center gap-2">
-                  <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
-                    RESOURCES
-                  </span>
-                  <button
-                    type="button"
-                    title="Add resource"
-                    onClick={openAddResource}
-                    class="btn btn-square btn-ghost btn-xs"
+              <Show when={viewed()}>
+                <div class="mt-5">
+                  <div class="mb-1.5 flex items-center gap-2">
+                    <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
+                      RESOURCES
+                    </span>
+                    <button
+                      type="button"
+                      title="Add resource"
+                      onClick={openAddResource}
+                      class="btn btn-square btn-ghost btn-xs"
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
+
+                  <Show when={addingResource()}>
+                    <form
+                      onSubmit={handleAddResource}
+                      class="mb-2 flex flex-col gap-1.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5"
+                    >
+                      <input
+                        autofocus
+                        placeholder="https://…"
+                        class="input input-sm bg-surface-alt2"
+                        value={resourceUrl()}
+                        onInput={(e) => setResourceUrl(e.currentTarget.value)}
+                      />
+                      <input
+                        placeholder="Note (optional)"
+                        class="input input-sm bg-surface-alt2"
+                        value={resourceNote()}
+                        onInput={(e) => setResourceNote(e.currentTarget.value)}
+                      />
+                      <div class="flex justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setAddingResource(false)}
+                          class="btn btn-ghost btn-xs"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          class="btn btn-xs border-none bg-accent text-accent-txt hover:bg-accent-alt1"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </form>
+                  </Show>
+
+                  <Show
+                    when={resourcesForViewed().length > 0}
+                    fallback={
+                      <p class="text-sm text-surface-txt-hint">
+                        No saved resources.
+                      </p>
+                    }
                   >
-                    <Plus size={12} />
-                  </button>
-                </div>
-
-                <Show when={addingResource()}>
-                  <form
-                    onSubmit={handleAddResource}
-                    class="mb-2 flex flex-col gap-1.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5"
-                  >
-                    <input
-                      autofocus
-                      placeholder="https://…"
-                      class="input input-sm bg-surface-alt2"
-                      value={resourceUrl()}
-                      onInput={(e) => setResourceUrl(e.currentTarget.value)}
-                    />
-                    <input
-                      placeholder="Note (optional)"
-                      class="input input-sm bg-surface-alt2"
-                      value={resourceNote()}
-                      onInput={(e) => setResourceNote(e.currentTarget.value)}
-                    />
-                    <div class="flex justify-end gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setAddingResource(false)}
-                        class="btn btn-ghost btn-xs"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        class="btn btn-xs border-none bg-accent text-accent-txt hover:bg-accent-alt1"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </form>
-                </Show>
-
-                <Show
-                  when={resourcesForViewed().length > 0}
-                  fallback={
-                    <p class="text-sm text-surface-txt-hint">
-                      No saved resources.
-                    </p>
-                  }
-                >
-                  <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                    <For each={resourcesForViewed()}>
-                      {(r) => (
-                        <div class="group flex items-center gap-2.5 border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0">
-                          <LinkIcon
-                            size={13}
-                            class="shrink-0 text-surface-txt-faint"
-                          />
-                          <Show
-                            when={r.url}
-                            fallback={
-                              <span class="min-w-0 flex-1 truncate text-sm">
-                                {r.note}
-                              </span>
-                            }
-                          >
-                            <a
-                              href={r.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              class="min-w-0 flex-1 truncate text-sm hover:underline"
+                    <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                      <For each={resourcesForViewed()}>
+                        {(r) => (
+                          <div class="group flex items-center gap-2.5 border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0">
+                            <LinkIcon
+                              size={13}
+                              class="shrink-0 text-surface-txt-faint"
+                            />
+                            <Show
+                              when={r.url}
+                              fallback={
+                                <span class="min-w-0 flex-1 truncate text-sm">
+                                  {r.note}
+                                </span>
+                              }
                             >
-                              {r.note || r.url}
-                            </a>
-                          </Show>
-                          <Show when={r.note && r.url}>
-                            <span class="max-w-[30%] shrink-0 truncate font-mono text-[11px] text-surface-txt-faint">
-                              {r.url}
-                            </span>
-                          </Show>
-                          <button
-                            type="button"
-                            title="Remove"
-                            onClick={() => handleDeleteResource(r.id)}
-                            class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
-                          >
-                            <X size={11} />
-                          </button>
-                        </div>
-                      )}
-                    </For>
-                  </section>
-                </Show>
-              </div>
-            </Show>
-          </div>
+                              <a
+                                href={r.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="min-w-0 flex-1 truncate text-sm hover:underline"
+                              >
+                                {r.note || r.url}
+                              </a>
+                            </Show>
+                            <Show when={r.note && r.url}>
+                              <span class="max-w-[30%] shrink-0 truncate font-mono text-[11px] text-surface-txt-faint">
+                                {r.url}
+                              </span>
+                            </Show>
+                            <button
+                              type="button"
+                              title="Remove"
+                              onClick={() => handleDeleteResource(r.id)}
+                              class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+                            >
+                              <X size={11} />
+                            </button>
+                          </div>
+                        )}
+                      </For>
+                    </section>
+                  </Show>
+                </div>
+              </Show>
+            </div>
+          </Show>
         </main>
       </div>
 
@@ -1098,7 +1162,7 @@ function Dashboard(props: {
             {selected().size} tab{selected().size === 1 ? "" : "s"} selected
           </span>
           <span class="h-4.5 w-px bg-surface-alt4" />
-          <For each={workspaces().filter((w) => w.id !== viewedId())}>
+          <For each={missions().filter((w) => w.id !== viewedId())}>
             {(w) => (
               <button
                 type="button"
@@ -1130,7 +1194,7 @@ function Dashboard(props: {
             autofocus
             value={paletteQuery()}
             onInput={(e) => setPaletteQuery(e.currentTarget.value)}
-            placeholder="Jump to a workspace or tab…"
+            placeholder="Jump to a mission or tab…"
             class="min-w-0 flex-1 bg-transparent text-[15px] outline-none"
           />
           <span class="rounded border border-surface-alt4 px-1.25 font-mono text-[11px] text-surface-txt-hint">
@@ -1191,7 +1255,7 @@ function Dashboard(props: {
                 class={
                   "h-6 w-6 rounded-full " +
                   COLOR_CLASS[key] +
-                  (workspaceColorKey(viewed()) === key
+                  (missionColorKey(viewed()) === key
                     ? " ring-2 ring-offset-2 ring-offset-surface-alt2 ring-surface-txt"
                     : "")
                 }
@@ -1241,7 +1305,7 @@ function Dashboard(props: {
 }
 
 function App() {
-  const [workspaces, setWorkspaces] = createSignal<Workspace[]>([]);
+  const [missions, setMissions] = createSignal<Mission[]>([]);
   const [folders, setFolders] = createSignal<Folder[]>([]);
   const [resources, setResources] = createSignal<Resource[]>([]);
   const [windowMap, setWindowMap] = createSignal<Record<number, string>>({});
@@ -1250,8 +1314,8 @@ function App() {
     createSignal<StartupBehavior>("none");
   const [theme, setTheme] = createSignal<Theme>("baseline");
   const [manualPullEnabled, setManualPullEnabled] = createSignal(false);
-  const [nav, setNav] = createSignal<"workspaces" | "trash" | "settings">(
-    "workspaces",
+  const [nav, setNav] = createSignal<"missions" | "trash" | "settings">(
+    "missions",
   );
   const [state, send] = useMachine(restoreMachine);
   const [syncState, syncSend] = useMachine(syncMachine);
@@ -1268,14 +1332,14 @@ function App() {
     const count = syncState.context.lastPullCount;
     if (count === undefined) return "";
     return count > 0
-      ? `Pulled ${count} workspace${count === 1 ? "" : "s"}`
+      ? `Pulled ${count} mission${count === 1 ? "" : "s"}`
       : "Already up to date";
   }
 
   function onSignedIn() {
     refreshEntitlements().then(setEntitlements);
     syncSend({ type: "PULL" });
-    reconcileSyncStatus().then(refresh);
+    reconcileMissionSyncStatus().then(refresh);
     reconcileFolderSyncStatus().then(refresh);
     reconcileResourceSyncStatus().then(refresh);
   }
@@ -1299,43 +1363,43 @@ function App() {
     const windowId = myWindowId();
     return windowId !== undefined ? windowMap()[windowId] : undefined;
   };
-  const current = () => workspaces().find((w) => w.id === currentId());
+  const current = () => missions().find((w) => w.id === currentId());
 
-  // A trashed workspace is still in storage.local (and still has whatever
+  // A trashed mission is still in storage.local (and still has whatever
   // syncStatus it had before deletion) but shouldn't appear in the normal
-  // workspace list, count against the plan limit display, or trigger sync
-  // issue banners — create_workspace's own count already excludes it
+  // mission list, count against the plan limit display, or trigger sync
+  // issue banners — create_mission's own count already excludes it
   // server-side (supabase/migrations' trash_and_purge migration), so this
   // keeps the dashboard's numbers matching what the server actually counts.
-  const activeWorkspaces = () => workspaces().filter((w) => !w.deletedAt);
-  const trashedWorkspaces = () => workspaces().filter((w) => !!w.deletedAt);
+  const activeMissions = () => missions().filter((w) => !w.deletedAt);
+  const trashedMissions = () => missions().filter((w) => !!w.deletedAt);
   const trashRetention = () =>
     trashRetentionDays(entitlements()?.accessExpiresAt);
 
-  // Account-level usage, driven by actual per-workspace sync status (see
+  // Account-level usage, driven by actual per-mission sync status (see
   // docs/workspace-sync-semantics.md) rather than re-deriving "at limit"
-  // from entitlements — a workspace only counts here once it's actually
+  // from entitlements — a mission only counts here once it's actually
   // failed to sync for a plan reason, not just because a count crossed a
   // threshold with nothing having been rejected yet.
   const syncedCount = () =>
-    activeWorkspaces().filter((w) => w.syncStatus === "synced").length;
+    activeMissions().filter((w) => w.syncStatus === "synced").length;
   const blockedCount = () =>
-    activeWorkspaces().filter(
+    activeMissions().filter(
       (w) => w.syncStatus === "limit-reached" || w.syncStatus === "expired",
     ).length;
-  const hasExpiredWorkspace = () =>
-    activeWorkspaces().some((w) => w.syncStatus === "expired");
+  const hasExpiredMission = () =>
+    activeMissions().some((w) => w.syncStatus === "expired");
 
-  // blockedCount only catches a workspace that actually *failed* a
-  // create_workspace call — but pullRemoteWorkspaces (utils/workspaces.ts)
+  // blockedCount only catches a mission that actually *failed* a
+  // create_mission call — but pullRemoteMissions (utils/missions.ts)
   // marks anything with a real server row "synced" regardless of the
-  // account's *current* entitlement, and create_workspace only enforces
+  // account's *current* entitlement, and create_mission only enforces
   // the limit at insert time, never retroactively. So an account can sit
-  // at, say, 11 synced workspaces against a 3-workspace plan — nothing
+  // at, say, 11 synced missions against a 3-mission plan — nothing
   // "failed", so blockedCount stays 0 — with no signal anywhere that
-  // new workspaces won't sync from here. This fills that gap.
+  // new missions won't sync from here. This fills that gap.
   const overLimitCount = () => {
-    const max = entitlements()?.maxWorkspaces;
+    const max = entitlements()?.maxMissions;
     return max !== undefined && syncedCount() > max ? syncedCount() - max : 0;
   };
   const hasSyncIssue = () => blockedCount() > 0 || overLimitCount() > 0;
@@ -1352,17 +1416,17 @@ function App() {
   });
 
   async function refresh() {
-    setWorkspaces(await getWorkspaces());
+    setMissions(await getMissions());
     setFolders(await getFolders());
     setResources(await getResources());
-    setWindowMap(await getWindowWorkspaceMap());
+    setWindowMap(await getWindowMissionMap());
   }
 
   onMount(async () => {
     const win = await browser.windows.getCurrent();
     if (win.id !== undefined) {
       setMyWindowId(win.id);
-      await ensureWorkspaceForWindow(win.id);
+      await ensureMissionForWindow(win.id);
     }
     await refresh();
 
@@ -1486,16 +1550,16 @@ function App() {
   // demand — the escape hatch the "Manual sync pull" setting exists for.
   function handlePullNow() {
     syncSend({ type: "PULL" });
-    reconcileSyncStatus().then(refresh);
+    reconcileMissionSyncStatus().then(refresh);
   }
 
-  async function handleRestoreWorkspace(id: string) {
-    await restoreWorkspace(id);
+  async function handleRestoreMission(id: string) {
+    await restoreMission(id);
     await refresh();
   }
 
-  async function handlePermanentlyDeleteWorkspace(id: string) {
-    await permanentlyDeleteWorkspace(id);
+  async function handlePermanentlyDeleteMission(id: string) {
+    await permanentlyDeleteMission(id);
     await refresh();
   }
 
@@ -1508,17 +1572,17 @@ function App() {
   });
 
   // The pinned dashboard tab is this window's only always-visible surface,
-  // so it's where "which workspace is this window" needs to be obvious
+  // so it's where "which mission is this window" needs to be obvious
   // without opening the dashboard: tab title + a favicon colored to match
-  // the workspace's own dot color (same palette as the sidebar).
+  // the mission's own dot color (same palette as the sidebar).
   createEffect(() => {
-    const workspace = current();
+    const mission = current();
     theme(); // recompute the resolved color when the palette changes
-    document.title = workspace ? `${workspace.name} — cntxt` : "cntxt";
+    document.title = mission ? `${mission.name} — cntxt` : "cntxt";
     const favicon = document.getElementById(
       "favicon",
     ) as HTMLLinkElement | null;
-    if (favicon) favicon.href = faviconHrefFor(workspace);
+    if (favicon) favicon.href = faviconHrefFor(mission);
   });
 
   return (
@@ -1668,8 +1732,8 @@ function App() {
                             : "text-surface-txt-hint"
                         }
                       >
-                        {syncedCount()} of {entitlements()!.maxWorkspaces}{" "}
-                        workspaces synced
+                        {syncedCount()} of {entitlements()!.maxMissions}{" "}
+                        missions synced
                       </span>
                     </li>
                   </Show>
@@ -1688,7 +1752,7 @@ function App() {
                               : undefined
                           }
                         />
-                        Pull workspaces now
+                        Pull missions now
                       </button>
                     </li>
                     <Show when={syncMessage()}>
@@ -1729,14 +1793,14 @@ function App() {
                 <TriangleAlert size={14} class="mt-0.5 shrink-0 text-warning" />
                 <p class="flex-1 text-surface-txt-hint">
                   <span class="font-medium text-surface-txt">
-                    {hasExpiredWorkspace()
+                    {hasExpiredMission()
                       ? "Your plan has expired."
                       : "You've hit your plan's limit."}
                   </span>{" "}
-                  {blockedCount()} workspace{blockedCount() === 1 ? "" : "s"}{" "}
+                  {blockedCount()} mission{blockedCount() === 1 ? "" : "s"}{" "}
                   {blockedCount() === 1 ? "isn't" : "aren't"} syncing.{" "}
-                  {hasExpiredWorkspace() ? "Renew" : "Upgrade"} to keep
-                  everything backed up.
+                  {hasExpiredMission() ? "Renew" : "Upgrade"} to keep everything
+                  backed up.
                 </p>
                 <button
                   type="button"
@@ -1755,9 +1819,9 @@ function App() {
                   <span class="font-medium text-surface-txt">
                     You're over your plan's limit.
                   </span>{" "}
-                  {syncedCount()} workspaces are synced, but your plan covers{" "}
-                  {entitlements()?.maxWorkspaces}. New workspaces won't sync
-                  until you're back under the limit or you upgrade.
+                  {syncedCount()} missions are synced, but your plan covers{" "}
+                  {entitlements()?.maxMissions}. New missions won't sync until
+                  you're back under the limit or you upgrade.
                 </p>
                 <button
                   type="button"
@@ -1773,10 +1837,10 @@ function App() {
               <Match when={nav() === "trash"}>
                 <div class="flex flex-1 items-stretch overflow-hidden">
                   <TrashPanel
-                    workspaces={trashedWorkspaces}
+                    missions={trashedMissions}
                     retentionDays={trashRetention}
-                    onRestore={handleRestoreWorkspace}
-                    onDeleteForever={handlePermanentlyDeleteWorkspace}
+                    onRestore={handleRestoreMission}
+                    onDeleteForever={handlePermanentlyDeleteMission}
                   />
                 </div>
               </Match>
@@ -1792,9 +1856,9 @@ function App() {
                   />
                 </div>
               </Match>
-              <Match when={nav() === "workspaces"}>
+              <Match when={nav() === "missions"}>
                 <Dashboard
-                  workspaces={activeWorkspaces}
+                  missions={activeMissions}
                   folders={folders}
                   resources={resources}
                   currentId={currentId}
