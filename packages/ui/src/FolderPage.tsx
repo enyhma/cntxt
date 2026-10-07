@@ -1,16 +1,16 @@
 import { For, Show, type Accessor } from "solid-js";
 import { Plus } from "lucide-solid";
-import { MissionDot } from "./MissionDot";
+import { QuestDot } from "./QuestDot";
 
 // Area/Project landing page — the main pane shows this instead of a
-// mission's tabs when the sidebar's FolderHeader name (not its chevron) is
+// quest's tabs when the sidebar's FolderHeader name (not its chevron) is
 // clicked. `projects` is only passed for an Area page (an Area's own
 // children); `sections` is only passed for a Project page (a Project's
 // depth-2 folders) — a folder only ever has one or the other.
 export function FolderPage(props: {
   folder: { id: string; name: string };
   breadcrumb: Array<{ id: string; name: string }>;
-  missions: Accessor<
+  quests: Accessor<
     Array<{
       id: string;
       name: string;
@@ -26,8 +26,8 @@ export function FolderPage(props: {
   >;
   onOpenSection?: (id: string) => void;
   onAddSection?: () => void;
-  onOpenMission: (id: string) => void;
-  onAddMission: () => void;
+  onOpenQuest: (id: string) => void;
+  onAddQuest: () => void;
 }) {
   const projectsList = () => props.projects?.() ?? [];
   const sectionsList = () => props.sections?.() ?? [];
@@ -113,27 +113,27 @@ export function FolderPage(props: {
             </span>
             <button
               type="button"
-              title="New mission"
-              onClick={props.onAddMission}
+              title="New quest"
+              onClick={props.onAddQuest}
               class="btn btn-square btn-ghost btn-xs"
             >
               <Plus size={12} />
             </button>
           </div>
           <Show
-            when={props.missions().length > 0}
+            when={props.quests().length > 0}
             fallback={
-              <p class="text-sm text-surface-txt-hint">No missions yet.</p>
+              <p class="text-sm text-surface-txt-hint">No quests yet.</p>
             }
           >
-            <For each={props.missions()}>
+            <For each={props.quests()}>
               {(m) => (
                 <button
                   type="button"
-                  onClick={() => props.onOpenMission(m.id)}
+                  onClick={() => props.onOpenQuest(m.id)}
                   class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 text-left shadow-[var(--shadow-card)] hover:bg-surface-alt2"
                 >
-                  <MissionDot mission={m} />
+                  <QuestDot quest={m} />
                   <span class="min-w-0 flex-1 truncate text-sm font-medium">
                     {m.name}
                   </span>

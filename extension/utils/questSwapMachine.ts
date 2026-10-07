@@ -1,12 +1,12 @@
 import { assign, fromPromise, setup } from "xstate";
 import { closeMatchingTabs, openMissingTabs } from "./tabOps";
-import { updateMission } from "./missions";
-import type { Mission, Phase } from "./missions";
+import { updateQuest } from "./quests";
+import type { Quest, Phase } from "./quests";
 
 type Mode = "activate" | "complete";
 
 type Context = {
-  mission: Mission | null;
+  quest: Quest | null;
   windowId: number | null;
   mode: Mode | null;
   // The phase named in the triggering event — the one to activate, or the
@@ -20,23 +20,23 @@ type Context = {
 };
 
 type Event =
-  | { type: "ACTIVATE_PHASE"; mission: Mission; phaseId: string }
-  | { type: "COMPLETE_PHASE"; mission: Mission; phaseId: string };
+  | { type: "ACTIVATE_PHASE"; quest: Quest; phaseId: string }
+  | { type: "COMPLETE_PHASE"; quest: Quest; phaseId: string };
 
-function phaseIdOfUrl(mission: Mission, url: string | undefined) {
+function phaseIdOfUrl(quest: Quest, url: string | undefined) {
   if (!url) return undefined;
-  return mission.tabs.find((t) => t.url === url)?.phaseId;
+  return quest.tabs.find((t) => t.url === url)?.phaseId;
 }
 
 async function closeForEvent(input: {
-  mission: Mission;
+  quest: Quest;
   mode: Mode;
   eventPhaseId: string;
 }): Promise<number | null> {
   const win = await browser.windows.getCurrent();
   if (win.id === undefined) return null;
   await closeMatchingTabs(win.id, (tab) => {
-    const tabPhaseId = phaseIdOfUrl(input.mission, tab.url);
+    const tabPhaseId = phaseIdOfUrl(input.quest, tab.url);
     // Activating a phase closes every *other* phase's tabs, leaving
     // unphased tabs (phaseId undefined) and this phase's own tabs alone.
     // Completing a phase closes only that phase's own tabs.
@@ -49,18 +49,18 @@ async function closeForEvent(input: {
 
 async function openAndPersist(input: {
   windowId: number | null;
-  mission: Mission;
+  quest: Quest;
   openPhaseId: string | null;
   nextPhases: Phase[];
   nextActivePhaseId: string | undefined;
 }) {
   if (input.windowId !== null && input.openPhaseId !== null) {
-    const tabs = input.mission.tabs.filter(
+    const tabs = input.quest.tabs.filter(
       (t) => t.phaseId === input.openPhaseId,
     );
     await openMissingTabs(input.windowId, tabs);
   }
-  await updateMission(input.mission.id, {
+  await updateQuest(input.quest.id, {
     phases: input.nextPhases,
     activePhaseId: input.nextActivePhaseId,
   });
@@ -75,14 +75,14 @@ async function openAndPersist(input: {
  * close-all, no window detach/reattach) enough that one shared machine
  * would need branchy context instead of two small ones.
  */
-export const phaseMachine = setup({
+export const questSwapMachine = setup({
   types: {} as { context: Context; events: Event },
   actors: {
     closeForEvent: fromPromise(
       ({
         input,
       }: {
-        input: { mission: Mission; mode: Mode; eventPhaseId: string };
+        input: { quest: Quest; mode: Mode; eventPhaseId: string };
       }) => closeForEvent(input),
     ),
     openAndPersist: fromPromise(
@@ -91,7 +91,7 @@ export const phaseMachine = setup({
       }: {
         input: {
           windowId: number | null;
-          mission: Mission;
+          quest: Quest;
           openPhaseId: string | null;
           nextPhases: Phase[];
           nextActivePhaseId: string | undefined;
@@ -101,7 +101,7 @@ export const phaseMachine = setup({
   },
 }).createMachine({
   context: {
-    mission: null,
+    quest: null,
     windowId: null,
     mode: null,
     eventPhaseId: null,
@@ -116,7 +116,7 @@ export const phaseMachine = setup({
         ACTIVATE_PHASE: {
           target: "closingTabs",
           actions: assign(({ event }) => {
-            const phases = (event.mission.phases ?? []).map((p) =>
+            const phases = (event.quest.phases ?? []).map((p) =>
               p.id === event.phaseId
                 ? { ...p, status: "active" as const }
                 : p.status === "active"
@@ -124,7 +124,7 @@ export const phaseMachine = setup({
                   : p,
             );
             return {
-              mission: event.mission,
+              quest: event.quest,
               mode: "activate" as const,
               eventPhaseId: event.phaseId,
               openPhaseId: event.phaseId,
@@ -136,7 +136,7 @@ export const phaseMachine = setup({
         COMPLETE_PHASE: {
           target: "closingTabs",
           actions: assign(({ event }) => {
-            const phases = event.mission.phases ?? [];
+            const phases = event.quest.phases ?? [];
             const idx = phases.findIndex((p) => p.id === event.phaseId);
             const next = phases
               .slice(idx + 1)
@@ -149,7 +149,7 @@ export const phaseMachine = setup({
                   : p,
             );
             return {
-              mission: event.mission,
+              quest: event.quest,
               mode: "complete" as const,
               eventPhaseId: event.phaseId,
               openPhaseId: next?.id ?? null,
@@ -164,7 +164,7 @@ export const phaseMachine = setup({
       invoke: {
         src: "closeForEvent",
         input: ({ context }) => ({
-          mission: context.mission!,
+          quest: context.quest!,
           mode: context.mode!,
           eventPhaseId: context.eventPhaseId!,
         }),
@@ -179,7 +179,7 @@ export const phaseMachine = setup({
         src: "openAndPersist",
         input: ({ context }) => ({
           windowId: context.windowId ?? null,
-          mission: context.mission!,
+          quest: context.quest!,
           openPhaseId: context.openPhaseId,
           nextPhases: context.nextPhases!,
           nextActivePhaseId: context.nextActivePhaseId,

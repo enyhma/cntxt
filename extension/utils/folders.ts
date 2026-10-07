@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { getMissions, updateMission } from "./missions";
+import { getQuests, updateQuest } from "./quests";
 
 // Area/Project hierarchy: an Area is a folder with parentId null, a Project
 // is a folder whose parent is an Area. See
@@ -12,10 +12,10 @@ export type Folder = {
   color?: string;
   createdAt: number;
   updatedAt: number;
-  // Unlike Mission, there's no entitlement RPC here (folders aren't
+  // Unlike Quest, there's no entitlement RPC here (folders aren't
   // quota-gated), so there's no "limit-reached"/"expired" status to map to
   // — an RLS rejection (e.g. lapsed access) just falls into "offline" like
-  // any other write failure. See the same gap noted for pushDirtyMissions.
+  // any other write failure. See the same gap noted for pushDirtyQuests.
   syncStatus?: "synced" | "syncing" | "offline" | "signed-out";
 };
 
@@ -37,7 +37,7 @@ async function setSyncStatus(id: string, syncStatus: Folder["syncStatus"]) {
   );
 }
 
-// Best-effort, fire-and-forget — same contract as registerMission: never
+// Best-effort, fire-and-forget — same contract as registerQuest: never
 // awaited by createFolder, so a creation can never block on network/auth.
 async function registerFolder(folder: Folder) {
   if (!supabase) return;
@@ -79,7 +79,7 @@ export async function createFolder(
   return folder;
 }
 
-// Mirrors reconcileMissionSyncStatus in utils/missions.ts.
+// Mirrors reconcileQuestSyncStatus in utils/quests.ts.
 export async function reconcileFolderSyncStatus() {
   const folders = await getFolders();
   for (const f of folders) {
@@ -87,7 +87,7 @@ export async function reconcileFolderSyncStatus() {
   }
 }
 
-// Mirrors pullRemoteMissions: last-write-wins merge by updated_at.
+// Mirrors pullRemoteQuests: last-write-wins merge by updated_at.
 export async function pullRemoteFolders(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
@@ -125,8 +125,8 @@ export async function pullRemoteFolders(): Promise<number> {
   return applied;
 }
 
-// Mirrors pushDirtyMissions, including the same lastPushedAt dedup
-// contract — shares its map with missions since ids are UUIDs from two
+// Mirrors pushDirtyQuests, including the same lastPushedAt dedup
+// contract — shares its map with quests since ids are UUIDs from two
 // different tables and can't collide.
 export async function pushDirtyFolders(
   lastPushedAt: Record<string, number>,
@@ -171,7 +171,7 @@ export async function updateFolder(
   );
 }
 
-// Hard delete — no trash tier for folders (unlike missions), nothing in
+// Hard delete — no trash tier for folders (unlike quests), nothing in
 // the PRD asks for one yet. Mirrors the server's "on delete cascade"
 // (descendant folders) and "on delete set null" (workspaces.folder_id)
 // locally so the UI doesn't show stale nesting until the next pull
@@ -194,10 +194,10 @@ export async function deleteFolder(id: string) {
 
   await setFolders(folders.filter((f) => !toRemove.has(f.id)));
 
-  const missions = await getMissions();
-  for (const m of missions) {
+  const quests = await getQuests();
+  for (const m of quests) {
     if (m.folderId && toRemove.has(m.folderId)) {
-      await updateMission(m.id, { folderId: null });
+      await updateQuest(m.id, { folderId: null });
     }
   }
 

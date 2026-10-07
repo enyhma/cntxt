@@ -1,10 +1,10 @@
 import { Show } from "solid-js";
 import { AppWindow, ArrowRightLeft, Plug, Unplug } from "lucide-solid";
-import { MissionDot } from "./MissionDot";
+import { QuestDot } from "./QuestDot";
 import { SyncBadge, type SyncStatus } from "./SyncBadge";
 
-export function MissionRow(props: {
-  mission: {
+export function QuestRow(props: {
+  quest: {
     id: string;
     name: string;
     color?: string;
@@ -31,16 +31,16 @@ export function MissionRow(props: {
           : " border-l-transparent text-surface-txt-hint")
       }
     >
-      <MissionDot
-        mission={props.mission}
+      <QuestDot
+        quest={props.quest}
         ring={props.isCurrent}
         title={props.isCurrent ? "Active" : undefined}
       />
-      <span class="min-w-0 flex-1 truncate text-sm">{props.mission.name}</span>
+      <span class="min-w-0 flex-1 truncate text-sm">{props.quest.name}</span>
       <span class="font-mono text-[11px] text-surface-txt-faint">
         {props.count}
       </span>
-      <SyncBadge status={props.mission.syncStatus} />
+      <SyncBadge status={props.quest.syncStatus} />
       <Show when={props.isCurrent}>
         <button
           type="button"

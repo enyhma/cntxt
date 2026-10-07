@@ -1,8 +1,8 @@
-import type { MissionTab } from "./missions";
+import type { QuestTab } from "./quests";
 
 export const DASHBOARD_URL = browser.runtime.getURL("/dashboard.html");
 
-export async function snapshotTabs(windowId: number): Promise<MissionTab[]> {
+export async function snapshotTabs(windowId: number): Promise<QuestTab[]> {
   const tabs = await browser.tabs.query({ windowId });
   return tabs
     .filter((t) => t.url !== DASHBOARD_URL)

@@ -10,10 +10,10 @@ const STATUS_LABEL: Record<PhaseStatus, string> = {
   done: "DONE",
 };
 
-// The stage-gated roadmap: ordered phase cards above a mission's tab list.
-// Absent/empty phases (handled by the caller, not here) means a mission has
+// The stage-gated roadmap: ordered phase cards above a quest's tab list.
+// Absent/empty phases (handled by the caller, not here) means a quest has
 // no roadmap at all — this only ever renders once there's at least one.
-export function RoadmapPanel(props: {
+export function QuestBoardPanel(props: {
   phases: Accessor<Phase[]>;
   tabCount: (phaseId: string) => number;
   busy: boolean;
@@ -64,7 +64,7 @@ export function RoadmapPanel(props: {
 
       <Show when={props.phases().length === 0}>
         <p class="text-sm text-surface-txt-hint">
-          No roadmap — add a phase to stage-gate this mission's tabs.
+          No roadmap — add a phase to stage-gate this quest's tabs.
         </p>
       </Show>
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">

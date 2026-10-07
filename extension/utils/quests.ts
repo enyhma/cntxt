@@ -2,45 +2,45 @@ import { supabase } from "./supabase";
 
 // Unset on a tab = not part of any phase's roadmap — always shown,
 // regardless of which phase is active. Identity across a resync is by URL
-// (see missionWindowMachine.ts's syncTabs), matching how the rest of this
+// (see windowSyncMachine.ts's syncTabs), matching how the rest of this
 // codebase already treats tab identity; a known, pre-existing weak spot is
 // a duplicate open tab with the same URL, not something this adds.
-export type MissionTab = { url: string; title: string; phaseId?: string };
+export type QuestTab = { url: string; title: string; phaseId?: string };
 
 export type PhaseStatus = "pending" | "active" | "done";
 export type Phase = { id: string; name: string; status: PhaseStatus };
 
 // See docs/workspace-sync-semantics.md for what each state means and how
-// the dashboard should render it. Undefined (legacy missions predating
+// the dashboard should render it. Undefined (legacy quests predating
 // this field) is treated the same as "syncing" — unknown, pending a check.
 export type SyncStatus =
   "synced" | "syncing" | "offline" | "signed-out" | "limit-reached" | "expired";
 
-export type Mission = {
+export type Quest = {
   id: string;
   name: string;
-  tabs: MissionTab[];
+  tabs: QuestTab[];
   createdAt: number;
   updatedAt: number;
-  // Explicit picks from the dashboard's customize dialog; a mission
+  // Explicit picks from the dashboard's customize dialog; a quest
   // without either falls back to a hash-derived color and the default
   // cntxt mark (see App.tsx's colorFor/faviconHrefFor).
   color?: string;
   icon?: string;
   syncStatus?: SyncStatus;
-  // Null/undefined = ungrouped, exactly like every mission today. Set via
-  // utils/folders.ts, never required — "every window is a mission" stays
+  // Null/undefined = ungrouped, exactly like every quest today. Set via
+  // utils/folders.ts, never required — "every window is a quest" stays
   // true with no folder involved at all.
   folderId?: string | null;
-  // Set by deleteMission, cleared by restoreMission — a mission in
+  // Set by deleteQuest, cleared by restoreQuest — a quest in
   // the trash, not actually removed from storage.local yet. Kept so the
   // dashboard can show a Trash view and so this soft-delete propagates
   // through the same push/pull path as any other edit (see
   // supabase/migrations' trash_and_purge migration and
   // purgeExpiredLocalTrash below).
   deletedAt?: number;
-  // Absent/empty = no roadmap — the mission behaves exactly as it does
-  // today, a flat tab list. Set via phaseMachine.ts (utils/phaseMachine.ts),
+  // Absent/empty = no roadmap — the quest behaves exactly as it does
+  // today, a flat tab list. Set via questSwapMachine.ts (utils/questSwapMachine.ts),
   // never required.
   phases?: Phase[];
   activePhaseId?: string;
@@ -61,98 +61,96 @@ export function trashRetentionDays(
 
 // Kept as "workspaces" — this is the storage.local key for already-installed
 // users' data. Renaming it would silently orphan every existing local
-// mission with no user-facing benefit; the concept is Mission everywhere
+// quest with no user-facing benefit; the concept is Quest everywhere
 // else, this string is just storage wire-compat.
 const STORAGE_KEY = "workspaces";
 
-export async function getMissions(): Promise<Mission[]> {
+export async function getQuests(): Promise<Quest[]> {
   const result = await browser.storage.local.get(STORAGE_KEY);
-  return (result[STORAGE_KEY] as Mission[] | undefined) ?? [];
+  return (result[STORAGE_KEY] as Quest[] | undefined) ?? [];
 }
 
-async function setMissions(missions: Mission[]) {
-  await browser.storage.local.set({ [STORAGE_KEY]: missions });
+async function setQuests(quests: Quest[]) {
+  await browser.storage.local.set({ [STORAGE_KEY]: quests });
 }
 
-export async function createMission(
+export async function createQuest(
   name: string,
-  tabs: MissionTab[],
-): Promise<Mission> {
-  const mission: Mission = {
+  tabs: QuestTab[],
+): Promise<Quest> {
+  const quest: Quest = {
     id: crypto.randomUUID(),
     name,
     tabs,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
-  const missions = await getMissions();
-  await setMissions([...missions, mission]);
-  registerMission(mission);
-  return mission;
+  const quests = await getQuests();
+  await setQuests([...quests, quest]);
+  registerQuest(quest);
+  return quest;
 }
 
 async function setSyncStatus(id: string, syncStatus: SyncStatus) {
-  const missions = await getMissions();
-  await setMissions(
-    missions.map((m) => (m.id === id ? { ...m, syncStatus } : m)),
-  );
+  const quests = await getQuests();
+  await setQuests(quests.map((m) => (m.id === id ? { ...m, syncStatus } : m)));
 }
 
-// Best-effort: registers the mission under the account's entitlement
+// Best-effort: registers the quest under the account's entitlement
 // limit so it counts as synced. Never awaited by callers and never blocks
 // or fails loudly — offline, signed out, or already at the plan's limit
-// all just mean this mission stays local-only, exactly as it does today,
-// so opening a browser window (ensureMissionForWindow calls this too)
+// all just mean this quest stays local-only, exactly as it does today,
+// so opening a browser window (ensureQuestForWindow calls this too)
 // can never break because of an entitlement or network check. See
 // docs/architecture-sync.md's "open question" about entitlement checks
 // with no click to intercept. The result is recorded as `syncStatus` (see
 // docs/workspace-sync-semantics.md) purely so the dashboard can show it —
 // it's still never awaited or surfaced as an error by callers.
-async function registerMission(mission: Mission) {
+async function registerQuest(quest: Quest) {
   if (!supabase) return;
-  await setSyncStatus(mission.id, "syncing");
+  await setSyncStatus(quest.id, "syncing");
   // Table/RPC/param names are the Supabase schema's own identifiers — still
   // literally "workspace" there on purpose (see the rename plan: renaming
   // the backend is a separate, riskier migration).
   const { error } = await supabase.rpc("create_workspace", {
-    p_name: mission.name,
-    p_tabs: mission.tabs,
-    p_id: mission.id,
+    p_name: quest.name,
+    p_tabs: quest.tabs,
+    p_id: quest.id,
   });
   if (!error) {
-    await setSyncStatus(mission.id, "synced");
+    await setSyncStatus(quest.id, "synced");
     return;
   }
-  console.debug("mission not synced:", error.message);
+  console.debug("quest not synced:", error.message);
   // 23505 = unique_violation: this id already made it to the server from an
   // earlier call whose response was never seen (e.g. the extension closed
   // mid-request) — that's a success, not a failure.
   if (error.code === "23505") {
-    await setSyncStatus(mission.id, "synced");
+    await setSyncStatus(quest.id, "synced");
   } else if (error.message === "not authenticated") {
-    await setSyncStatus(mission.id, "signed-out");
+    await setSyncStatus(quest.id, "signed-out");
   } else if (error.message === "access expired") {
-    await setSyncStatus(mission.id, "expired");
+    await setSyncStatus(quest.id, "expired");
   } else if (error.message === "workspace limit reached") {
-    await setSyncStatus(mission.id, "limit-reached");
+    await setSyncStatus(quest.id, "limit-reached");
   } else {
-    await setSyncStatus(mission.id, "offline");
+    await setSyncStatus(quest.id, "offline");
   }
 }
 
-// Re-checks every mission that isn't confirmed `synced` — turns a
+// Re-checks every quest that isn't confirmed `synced` — turns a
 // stuck "syncing" (extension closed mid-request) or a stale "limit-reached"
 // (user just upgraded) into an accurate status, and backfills a real status
-// onto missions created before this field existed. Call on dashboard
+// onto quests created before this field existed. Call on dashboard
 // mount and whenever the session refreshes, alongside refreshEntitlements.
-export async function reconcileMissionSyncStatus() {
-  const missions = await getMissions();
-  for (const m of missions) {
-    if (m.syncStatus !== "synced") await registerMission(m);
+export async function reconcileQuestSyncStatus() {
+  const quests = await getQuests();
+  for (const m of quests) {
+    if (m.syncStatus !== "synced") await registerQuest(m);
   }
 }
 
-// Fetches this account's missions from Supabase and merges them into
+// Fetches this account's quests from Supabase and merges them into
 // storage.local: a row missing locally (fresh/empty profile, new device) is
 // added; a row that exists locally is overwritten only if the server's
 // updated_at is strictly newer than the local copy's — last-write-wins per
@@ -163,7 +161,7 @@ export async function reconcileMissionSyncStatus() {
 // token refresh, and periodically (see utils/sync.ts). Throws on a fetch
 // error instead of swallowing it — a caller that only sees "0 applied"
 // otherwise can't tell "already up to date" from "the request failed."
-export async function pullRemoteMissions(): Promise<number> {
+export async function pullRemoteQuests(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
     .from("workspaces")
@@ -173,17 +171,17 @@ export async function pullRemoteMissions(): Promise<number> {
   if (error) throw new Error(error.message);
   if (!data) return 0;
 
-  const local = await getMissions();
+  const local = await getQuests();
   const localById = new Map(local.map((m) => [m.id, m]));
   let applied = 0;
   const next = [...local];
 
   for (const row of data) {
     const existing = localById.get(row.id);
-    const remote: Mission = {
+    const remote: Quest = {
       id: row.id,
       name: row.name,
-      tabs: (row.tabs as MissionTab[] | null) ?? [],
+      tabs: (row.tabs as QuestTab[] | null) ?? [],
       createdAt: Date.parse(row.created_at),
       updatedAt: Date.parse(row.updated_at),
       deletedAt: row.deleted_at ? Date.parse(row.deleted_at) : undefined,
@@ -202,12 +200,12 @@ export async function pullRemoteMissions(): Promise<number> {
     }
   }
 
-  if (applied > 0) await setMissions(next);
+  if (applied > 0) await setQuests(next);
   return applied;
 }
 
 // Mirrors the server's purge_trashed_workspaces() locally, so a trashed
-// mission's countdown hitting zero removes it from the dashboard
+// quest's countdown hitting zero removes it from the dashboard
 // immediately rather than lagging behind the next hourly cron tick. Purely
 // a local-storage cleanup — the actual server row (and the guarantee that
 // it's gone even if this device never reconnects) is the migration's job,
@@ -217,34 +215,34 @@ export async function purgeExpiredLocalTrash(
   accessExpiresAt: string | null | undefined,
 ): Promise<void> {
   const cutoffMs = trashRetentionDays(accessExpiresAt) * 24 * 60 * 60 * 1000;
-  const local = await getMissions();
+  const local = await getQuests();
   const kept = local.filter(
     (m) => !m.deletedAt || Date.now() - m.deletedAt < cutoffMs,
   );
-  if (kept.length !== local.length) await setMissions(kept);
+  if (kept.length !== local.length) await setQuests(kept);
 }
 
-// Pushes every locally-edited, already-synced mission up to Supabase —
+// Pushes every locally-edited, already-synced quest up to Supabase —
 // M6's push half (docs/architecture-sync.md → "Push: local change →
-// Supabase"). Only `syncStatus === "synced"` missions are eligible: a
-// brand-new mission reaches the server via create_workspace
-// (registerMission above), not this path, since that RPC is what enforces
+// Supabase"). Only `syncStatus === "synced"` quests are eligible: a
+// brand-new quest reaches the server via create_workspace
+// (registerQuest above), not this path, since that RPC is what enforces
 // the entitlement limit; this only ever runs `update`, never `insert`.
 // `lastPushedAt` (kept in utils/sync.ts's machine context, not persisted) is
-// how a caller avoids re-pushing a mission whose local updatedAt hasn't
+// how a caller avoids re-pushing a quest whose local updatedAt hasn't
 // moved since the last successful push — without it, the "write the
 // server's updatedAt back to local storage" step below would itself trigger
 // another storage.onChanged, pushing the same content forever. Uses
 // `.update().eq("id", ...)` rather than `.upsert()`: workspaces.user_id has
 // no column default, so an upsert's (unused but still validated) insert
 // branch would fail a not-null check on a row that already exists.
-export async function pushDirtyMissions(
+export async function pushDirtyQuests(
   lastPushedAt: Record<string, number>,
 ): Promise<Record<string, number>> {
   if (!supabase) return lastPushedAt;
   const next = { ...lastPushedAt };
 
-  for (const m of await getMissions()) {
+  for (const m of await getQuests()) {
     if (m.syncStatus !== "synced") continue;
     if (m.updatedAt <= (next[m.id] ?? 0)) continue;
 
@@ -265,8 +263,8 @@ export async function pushDirtyMissions(
 
     const serverUpdatedAt = Date.parse(data.updated_at);
     next[m.id] = serverUpdatedAt;
-    const fresh = await getMissions();
-    await setMissions(
+    const fresh = await getQuests();
+    await setQuests(
       fresh.map((x) =>
         x.id === m.id ? { ...x, updatedAt: serverUpdatedAt } : x,
       ),
@@ -276,11 +274,11 @@ export async function pushDirtyMissions(
   return next;
 }
 
-export async function updateMission(
+export async function updateQuest(
   id: string,
   patch: Partial<
     Pick<
-      Mission,
+      Quest,
       | "name"
       | "tabs"
       | "color"
@@ -291,31 +289,31 @@ export async function updateMission(
     >
   >,
 ) {
-  const missions = await getMissions();
-  await setMissions(
-    missions.map((m) =>
+  const quests = await getQuests();
+  await setQuests(
+    quests.map((m) =>
       m.id === id ? { ...m, ...patch, updatedAt: Date.now() } : m,
     ),
   );
 }
 
-// Soft delete: moves the mission to the Trash instead of removing it,
+// Soft delete: moves the quest to the Trash instead of removing it,
 // local-first like every other write here — it never blocks on a server
-// round-trip. `updatedAt` bumps too, so pushDirtyMissions picks this up
+// round-trip. `updatedAt` bumps too, so pushDirtyQuests picks this up
 // like any other edit and propagates deletedAt to the server.
-export async function deleteMission(id: string) {
-  const missions = await getMissions();
-  await setMissions(
-    missions.map((m) =>
+export async function deleteQuest(id: string) {
+  const quests = await getQuests();
+  await setQuests(
+    quests.map((m) =>
       m.id === id ? { ...m, deletedAt: Date.now(), updatedAt: Date.now() } : m,
     ),
   );
 }
 
-export async function restoreMission(id: string) {
-  const missions = await getMissions();
-  await setMissions(
-    missions.map((m) =>
+export async function restoreQuest(id: string) {
+  const quests = await getQuests();
+  await setQuests(
+    quests.map((m) =>
       m.id === id ? { ...m, deletedAt: undefined, updatedAt: Date.now() } : m,
     ),
   );
@@ -324,10 +322,10 @@ export async function restoreMission(id: string) {
 // The Trash view's explicit, irreversible "Delete forever" — unlike every
 // other mutation here, this doesn't wait for the next push cycle: it fires
 // a real delete at Supabase immediately (best-effort, same fire-and-forget
-// style as registerMission — offline or signed out just means the
+// style as registerQuest — offline or signed out just means the
 // server-side row is left for purge_trashed_workspaces to catch later).
-export async function permanentlyDeleteMission(id: string) {
-  const missions = await getMissions();
-  await setMissions(missions.filter((m) => m.id !== id));
+export async function permanentlyDeleteQuest(id: string) {
+  const quests = await getQuests();
+  await setQuests(quests.filter((m) => m.id !== id));
   await supabase?.from("workspaces").delete().eq("id", id);
 }

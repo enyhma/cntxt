@@ -1,16 +1,14 @@
 import { getSettings } from "./settings";
-import { getWindowMissionMap, setWindowMission } from "./session";
-import { createMission } from "./missions";
+import { getWindowQuestMap, setWindowQuest } from "./session";
+import { createQuest } from "./quests";
 import { snapshotTabs } from "./tabs";
 
 /**
- * Ensures the given window is mapped to a mission, creating one if needed.
+ * Ensures the given window is mapped to a quest, creating one if needed.
  * Idempotent: safe to call from both the background script and the dashboard page.
  */
-export async function ensureMissionForWindow(
-  windowId: number,
-): Promise<string> {
-  const map = await getWindowMissionMap();
+export async function ensureQuestForWindow(windowId: number): Promise<string> {
+  const map = await getWindowQuestMap();
   const existing = map[windowId];
   if (existing) return existing;
 
@@ -23,13 +21,13 @@ export async function ensureMissionForWindow(
       settings.lastActiveWorkspaceId,
     );
     if (!alreadyOpenElsewhere) {
-      await setWindowMission(windowId, settings.lastActiveWorkspaceId);
+      await setWindowQuest(windowId, settings.lastActiveWorkspaceId);
       return settings.lastActiveWorkspaceId;
     }
   }
 
   const tabs = await snapshotTabs(windowId);
-  const mission = await createMission("Untitled", tabs);
-  await setWindowMission(windowId, mission.id);
-  return mission.id;
+  const quest = await createQuest("Untitled", tabs);
+  await setWindowQuest(windowId, quest.id);
+  return quest.id;
 }

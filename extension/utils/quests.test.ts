@@ -12,21 +12,21 @@ const from = vi.fn(() => ({ select, update, delete: del }));
 vi.mock("./supabase", () => ({ supabase: { rpc, from } }));
 
 const {
-  createMission,
-  deleteMission,
-  getMissions,
-  permanentlyDeleteMission,
-  pullRemoteMissions,
+  createQuest,
+  deleteQuest,
+  getQuests,
+  permanentlyDeleteQuest,
+  pullRemoteQuests,
   purgeExpiredLocalTrash,
-  pushDirtyMissions,
-  restoreMission,
+  pushDirtyQuests,
+  restoreQuest,
   trashRetentionDays,
-  updateMission,
-} = await import("./missions");
+  updateQuest,
+} = await import("./quests");
 
 beforeEach(() => {
   fakeBrowser.reset();
-  // Default to a successful registerMission RPC — createMission fires
+  // Default to a successful registerQuest RPC — createQuest fires
   // this off without awaiting it, so any test that doesn't care about sync
   // status still needs it to resolve instead of leaving a dangling,
   // unhandled rejection. Tests asserting specific RPC error mapping
@@ -42,23 +42,23 @@ beforeEach(() => {
 });
 
 async function syncStatusOf(id: string) {
-  const missions = await getMissions();
-  return missions.find((m) => m.id === id)?.syncStatus;
+  const quests = await getQuests();
+  return quests.find((m) => m.id === id)?.syncStatus;
 }
 
-it("marks a mission synced once the RPC succeeds", async () => {
+it("marks a quest synced once the RPC succeeds", async () => {
   rpc.mockResolvedValue({ error: null });
-  const mission = await createMission("A", []);
+  const quest = await createQuest("A", []);
   await vi.waitFor(async () =>
-    expect(await syncStatusOf(mission.id)).toBe("synced"),
+    expect(await syncStatusOf(quest.id)).toBe("synced"),
   );
 });
 
 it("maps a 'workspace limit reached' RPC error to limit-reached", async () => {
   rpc.mockResolvedValue({ error: { message: "workspace limit reached" } });
-  const mission = await createMission("A", []);
+  const quest = await createQuest("A", []);
   await vi.waitFor(async () =>
-    expect(await syncStatusOf(mission.id)).toBe("limit-reached"),
+    expect(await syncStatusOf(quest.id)).toBe("limit-reached"),
   );
 });
 
@@ -66,13 +66,13 @@ it("treats a unique-violation (already synced from an earlier call) as synced", 
   rpc.mockResolvedValue({
     error: { code: "23505", message: "duplicate key value" },
   });
-  const mission = await createMission("A", []);
+  const quest = await createQuest("A", []);
   await vi.waitFor(async () =>
-    expect(await syncStatusOf(mission.id)).toBe("synced"),
+    expect(await syncStatusOf(quest.id)).toBe("synced"),
   );
 });
 
-it("pullRemoteMissions adds a remote mission missing from local storage", async () => {
+it("pullRemoteQuests adds a remote quest missing from local storage", async () => {
   select.mockResolvedValue({
     data: [
       {
@@ -85,9 +85,9 @@ it("pullRemoteMissions adds a remote mission missing from local storage", async 
     ],
     error: null,
   });
-  expect(await pullRemoteMissions()).toBe(1);
-  const missions = await getMissions();
-  expect(missions).toEqual([
+  expect(await pullRemoteQuests()).toBe(1);
+  const quests = await getQuests();
+  expect(quests).toEqual([
     {
       id: "remote-1",
       name: "From another device",
@@ -99,9 +99,9 @@ it("pullRemoteMissions adds a remote mission missing from local storage", async 
   ]);
 });
 
-it("pullRemoteMissions keeps a local edit that is newer than the server's row", async () => {
+it("pullRemoteQuests keeps a local edit that is newer than the server's row", async () => {
   rpc.mockResolvedValue({ error: null });
-  const local = await createMission("Local edit", []);
+  const local = await createQuest("Local edit", []);
   select.mockResolvedValue({
     data: [
       {
@@ -114,16 +114,16 @@ it("pullRemoteMissions keeps a local edit that is newer than the server's row", 
     ],
     error: null,
   });
-  expect(await pullRemoteMissions()).toBe(0);
-  const missions = await getMissions();
-  expect(missions).toHaveLength(1);
-  expect(missions[0]?.name).toBe("Local edit");
+  expect(await pullRemoteQuests()).toBe(0);
+  const quests = await getQuests();
+  expect(quests).toHaveLength(1);
+  expect(quests[0]?.name).toBe("Local edit");
 });
 
-it("pullRemoteMissions overwrites a local copy that is older than the server's row", async () => {
+it("pullRemoteQuests overwrites a local copy that is older than the server's row", async () => {
   rpc.mockResolvedValue({ error: null });
-  const local = await createMission("Local edit", []);
-  await updateMission(local.id, { color: "accent" });
+  const local = await createQuest("Local edit", []);
+  await updateQuest(local.id, { color: "accent" });
   select.mockResolvedValue({
     data: [
       {
@@ -136,35 +136,35 @@ it("pullRemoteMissions overwrites a local copy that is older than the server's r
     ],
     error: null,
   });
-  expect(await pullRemoteMissions()).toBe(1);
-  const missions = await getMissions();
-  expect(missions).toHaveLength(1);
-  expect(missions[0]?.name).toBe("Edited on another device");
+  expect(await pullRemoteQuests()).toBe(1);
+  const quests = await getQuests();
+  expect(quests).toHaveLength(1);
+  expect(quests[0]?.name).toBe("Edited on another device");
   // color/icon are dashboard-local picks with no server column — a remote
-  // row overwriting the rest of the mission shouldn't erase those.
-  expect(missions[0]?.color).toBe("accent");
+  // row overwriting the rest of the quest shouldn't erase those.
+  expect(quests[0]?.color).toBe("accent");
 });
 
-it("pullRemoteMissions throws on a fetch error instead of silently returning 0", async () => {
+it("pullRemoteQuests throws on a fetch error instead of silently returning 0", async () => {
   select.mockResolvedValue({ data: null, error: { message: "network" } });
-  await expect(pullRemoteMissions()).rejects.toThrow("network");
-  expect(await getMissions()).toEqual([]);
+  await expect(pullRemoteQuests()).rejects.toThrow("network");
+  expect(await getQuests()).toEqual([]);
 });
 
-describe("pushDirtyMissions", () => {
-  it("pushes a synced mission whose local edit is newer than lastPushedAt", async () => {
+describe("pushDirtyQuests", () => {
+  it("pushes a synced quest whose local edit is newer than lastPushedAt", async () => {
     rpc.mockResolvedValue({ error: null });
-    const mission = await createMission("A", []);
+    const quest = await createQuest("A", []);
     await vi.waitFor(async () =>
-      expect(await syncStatusOf(mission.id)).toBe("synced"),
+      expect(await syncStatusOf(quest.id)).toBe("synced"),
     );
-    await updateMission(mission.id, { name: "Renamed" });
+    await updateQuest(quest.id, { name: "Renamed" });
 
     single.mockResolvedValue({
       data: { updated_at: "2030-01-01T00:00:00Z" },
       error: null,
     });
-    const lastPushedAt = await pushDirtyMissions({});
+    const lastPushedAt = await pushDirtyQuests({});
 
     expect(update).toHaveBeenCalledWith({
       name: "Renamed",
@@ -174,61 +174,61 @@ describe("pushDirtyMissions", () => {
       phases: [],
       active_phase_id: null,
     });
-    expect(lastPushedAt[mission.id]).toBe(Date.parse("2030-01-01T00:00:00Z"));
-    const missions = await getMissions();
-    expect(missions[0]?.updatedAt).toBe(Date.parse("2030-01-01T00:00:00Z"));
+    expect(lastPushedAt[quest.id]).toBe(Date.parse("2030-01-01T00:00:00Z"));
+    const quests = await getQuests();
+    expect(quests[0]?.updatedAt).toBe(Date.parse("2030-01-01T00:00:00Z"));
   });
 
-  it("skips a mission whose local updatedAt hasn't moved since lastPushedAt", async () => {
+  it("skips a quest whose local updatedAt hasn't moved since lastPushedAt", async () => {
     rpc.mockResolvedValue({ error: null });
-    const mission = await createMission("A", []);
+    const quest = await createQuest("A", []);
     await vi.waitFor(async () =>
-      expect(await syncStatusOf(mission.id)).toBe("synced"),
+      expect(await syncStatusOf(quest.id)).toBe("synced"),
     );
 
-    await pushDirtyMissions({ [mission.id]: Date.now() + 1000 });
+    await pushDirtyQuests({ [quest.id]: Date.now() + 1000 });
     expect(update).not.toHaveBeenCalled();
   });
 
-  it("skips a mission that was never synced to the server", async () => {
+  it("skips a quest that was never synced to the server", async () => {
     rpc.mockResolvedValue({ error: { message: "not authenticated" } });
-    await createMission("Local only", []);
+    await createQuest("Local only", []);
     await vi.waitFor(async () => {
-      const [m] = await getMissions();
+      const [m] = await getQuests();
       expect(m?.syncStatus).toBe("signed-out");
     });
 
-    await pushDirtyMissions({});
+    await pushDirtyQuests({});
     expect(update).not.toHaveBeenCalled();
   });
 
   it("throws on an update error, leaving already-pushed ids in the returned map", async () => {
     rpc.mockResolvedValue({ error: null });
-    const mission = await createMission("A", []);
+    const quest = await createQuest("A", []);
     await vi.waitFor(async () =>
-      expect(await syncStatusOf(mission.id)).toBe("synced"),
+      expect(await syncStatusOf(quest.id)).toBe("synced"),
     );
-    await updateMission(mission.id, { name: "Renamed" });
+    await updateQuest(quest.id, { name: "Renamed" });
 
     single.mockResolvedValue({ data: null, error: { message: "network" } });
-    await expect(pushDirtyMissions({})).rejects.toThrow("network");
+    await expect(pushDirtyQuests({})).rejects.toThrow("network");
   });
 
   it("includes deleted_at in the update payload so trashing propagates", async () => {
     rpc.mockResolvedValue({ error: null });
-    const mission = await createMission("A", []);
+    const quest = await createQuest("A", []);
     await vi.waitFor(async () =>
-      expect(await syncStatusOf(mission.id)).toBe("synced"),
+      expect(await syncStatusOf(quest.id)).toBe("synced"),
     );
-    await deleteMission(mission.id);
+    await deleteQuest(quest.id);
 
     single.mockResolvedValue({
       data: { updated_at: "2030-01-01T00:00:00Z" },
       error: null,
     });
-    await pushDirtyMissions({});
+    await pushDirtyQuests({});
 
-    const [m] = await getMissions();
+    const [m] = await getQuests();
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         deleted_at: new Date(m!.deletedAt!).toISOString(),
@@ -252,68 +252,68 @@ describe("trashRetentionDays", () => {
   });
 });
 
-describe("deleteMission / restoreMission", () => {
-  it("deleteMission sets deletedAt instead of removing the mission", async () => {
-    const mission = await createMission("A", []);
-    await deleteMission(mission.id);
-    const missions = await getMissions();
-    expect(missions).toHaveLength(1);
-    expect(missions[0]?.deletedAt).toBeDefined();
+describe("deleteQuest / restoreQuest", () => {
+  it("deleteQuest sets deletedAt instead of removing the quest", async () => {
+    const quest = await createQuest("A", []);
+    await deleteQuest(quest.id);
+    const quests = await getQuests();
+    expect(quests).toHaveLength(1);
+    expect(quests[0]?.deletedAt).toBeDefined();
   });
 
-  it("restoreMission clears deletedAt", async () => {
-    const mission = await createMission("A", []);
-    await deleteMission(mission.id);
-    await restoreMission(mission.id);
-    const [m] = await getMissions();
+  it("restoreQuest clears deletedAt", async () => {
+    const quest = await createQuest("A", []);
+    await deleteQuest(quest.id);
+    await restoreQuest(quest.id);
+    const [m] = await getQuests();
     expect(m?.deletedAt).toBeUndefined();
   });
 });
 
-describe("permanentlyDeleteMission", () => {
-  it("removes the mission locally and issues a best-effort server delete", async () => {
-    const mission = await createMission("A", []);
-    await permanentlyDeleteMission(mission.id);
-    expect(await getMissions()).toEqual([]);
+describe("permanentlyDeleteQuest", () => {
+  it("removes the quest locally and issues a best-effort server delete", async () => {
+    const quest = await createQuest("A", []);
+    await permanentlyDeleteQuest(quest.id);
+    expect(await getQuests()).toEqual([]);
     expect(del).toHaveBeenCalled();
-    expect(deleteEq).toHaveBeenCalledWith("id", mission.id);
+    expect(deleteEq).toHaveBeenCalledWith("id", quest.id);
   });
 });
 
 describe("purgeExpiredLocalTrash", () => {
-  it("removes a mission trashed past the free 7-day window", async () => {
-    const mission = await createMission("A", []);
-    await deleteMission(mission.id);
-    const [m] = await getMissions();
+  it("removes a quest trashed past the free 7-day window", async () => {
+    const quest = await createQuest("A", []);
+    await deleteQuest(quest.id);
+    const [m] = await getQuests();
     m!.deletedAt = Date.now() - 8 * 24 * 60 * 60 * 1000;
     await browser.storage.local.set({ workspaces: [m] });
 
     await purgeExpiredLocalTrash(null);
-    expect(await getMissions()).toEqual([]);
+    expect(await getQuests()).toEqual([]);
   });
 
-  it("keeps a mission trashed within the window", async () => {
-    const mission = await createMission("A", []);
-    await deleteMission(mission.id);
+  it("keeps a quest trashed within the window", async () => {
+    const quest = await createQuest("A", []);
+    await deleteQuest(quest.id);
 
     await purgeExpiredLocalTrash(null);
-    expect(await getMissions()).toHaveLength(1);
+    expect(await getQuests()).toHaveLength(1);
   });
 
-  it("keeps a mission trashed 10 days ago for a paid account (30-day window)", async () => {
-    const mission = await createMission("A", []);
-    await deleteMission(mission.id);
-    const [m] = await getMissions();
+  it("keeps a quest trashed 10 days ago for a paid account (30-day window)", async () => {
+    const quest = await createQuest("A", []);
+    await deleteQuest(quest.id);
+    const [m] = await getQuests();
     m!.deletedAt = Date.now() - 10 * 24 * 60 * 60 * 1000;
     await browser.storage.local.set({ workspaces: [m] });
 
     await purgeExpiredLocalTrash("2099-01-01T00:00:00Z");
-    expect(await getMissions()).toHaveLength(1);
+    expect(await getQuests()).toHaveLength(1);
   });
 
-  it("never touches an active (non-trashed) mission", async () => {
-    await createMission("A", []);
+  it("never touches an active (non-trashed) quest", async () => {
+    await createQuest("A", []);
     await purgeExpiredLocalTrash(null);
-    expect(await getMissions()).toHaveLength(1);
+    expect(await getQuests()).toHaveLength(1);
   });
 });

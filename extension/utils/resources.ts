@@ -8,7 +8,7 @@ import { supabase } from "./supabase";
 // pushDirtyResources: creation registers itself immediately (like
 // registerWorkspace/registerFolder), and there's nothing left to push later.
 //
-// A resource is parented to exactly one of a Mission (workspaceId — the
+// A resource is parented to exactly one of a Quest (workspaceId — the
 // original "save this open tab" flow) or a Section (folderId — a depth-2
 // folder, "save this permanently" flow added later). Both optional rather
 // than a tagged union so the Supabase row shape maps straight across:

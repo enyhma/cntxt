@@ -1,15 +1,15 @@
 import { assign, fromPromise, setup } from "xstate";
-import { removeWindowMission, setWindowMission } from "./session";
+import { removeWindowQuest, setWindowQuest } from "./session";
 import { closeMatchingTabs, openMissingTabs } from "./tabOps";
-import type { Mission } from "./missions";
+import type { Quest } from "./quests";
 
 type Context = {
-  mission: Mission | null;
+  quest: Quest | null;
   windowId: number | null;
   detach: boolean;
 };
 type Event =
-  | { type: "RESTORE"; mission: Mission }
+  | { type: "RESTORE"; quest: Quest }
   | { type: "CLOSE_TABS" }
   | { type: "DISCONNECT" };
 
@@ -20,32 +20,32 @@ async function closeCurrentTabs(input: {
   if (win.id === undefined) return null;
 
   if (input.detach) {
-    // Detach the outgoing mission before closing its tabs, so the
+    // Detach the outgoing quest before closing its tabs, so the
     // background script's live tab-sync doesn't attribute the closures to
     // it and zero out its saved tab list — we're leaving it, not clearing
     // it. (Plain "close all tabs" skips this: staying attached is what
-    // makes that sync correctly record the mission as now empty.) Used by
-    // both RESTORE (reattaches to a new mission right after) and
+    // makes that sync correctly record the quest as now empty.) Used by
+    // both RESTORE (reattaches to a new quest right after) and
     // DISCONNECT (doesn't reattach at all).
-    await removeWindowMission(win.id);
+    await removeWindowQuest(win.id);
   }
 
   await closeMatchingTabs(win.id, () => true);
   return win.id;
 }
 
-async function openMissionTabs(input: {
+async function openQuestTabs(input: {
   windowId: number | null;
-  mission: Mission | null;
+  quest: Quest | null;
 }) {
-  if (input.windowId === null || input.mission === null) return;
-  await setWindowMission(input.windowId, input.mission.id);
-  await openMissingTabs(input.windowId, input.mission.tabs);
+  if (input.windowId === null || input.quest === null) return;
+  await setWindowQuest(input.windowId, input.quest.id);
+  await openMissingTabs(input.windowId, input.quest.tabs);
 }
 
 /**
  * Shared "busy" gate for the two window-mutating dashboard actions: closing
- * the current mission's tabs, and restoring another mission into this
+ * the current quest's tabs, and restoring another quest into this
  * window (which is a close, then an open). Mutually exclusive so a
  * double-click can't overlap two of these operations.
  */
@@ -55,12 +55,12 @@ export const restoreMachine = setup({
     closeCurrentTabs: fromPromise(({ input }: { input: { detach: boolean } }) =>
       closeCurrentTabs(input),
     ),
-    openMissionTabs: fromPromise(({ input }: { input: Context }) =>
-      openMissionTabs(input),
+    openQuestTabs: fromPromise(({ input }: { input: Context }) =>
+      openQuestTabs(input),
     ),
   },
 }).createMachine({
-  context: { mission: null, windowId: null, detach: false },
+  context: { quest: null, windowId: null, detach: false },
   initial: "idle",
   states: {
     idle: {
@@ -68,17 +68,17 @@ export const restoreMachine = setup({
         RESTORE: {
           target: "closingTabs",
           actions: assign({
-            mission: ({ event }) => event.mission,
+            quest: ({ event }) => event.quest,
             detach: true,
           }),
         },
         CLOSE_TABS: {
           target: "closingTabs",
-          actions: assign({ mission: null, detach: false }),
+          actions: assign({ quest: null, detach: false }),
         },
         DISCONNECT: {
           target: "closingTabs",
-          actions: assign({ mission: null, detach: true }),
+          actions: assign({ quest: null, detach: true }),
         },
       },
     },
@@ -94,7 +94,7 @@ export const restoreMachine = setup({
     },
     openingTabs: {
       invoke: {
-        src: "openMissionTabs",
+        src: "openQuestTabs",
         input: ({ context }) => context,
         onDone: "idle",
       },

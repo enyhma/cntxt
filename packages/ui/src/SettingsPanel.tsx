@@ -27,7 +27,7 @@ export function SettingsPanel(props: {
             }
           >
             <option value="none">Start fresh</option>
-            <option value="lastUsed">Resume last used mission</option>
+            <option value="lastUsed">Resume last used quest</option>
           </select>
         </label>
         <label class="flex flex-col gap-1.5 text-sm">
@@ -56,9 +56,9 @@ export function SettingsPanel(props: {
           <span class="flex flex-col gap-0.5">
             <span>Manual sync pull (experimental)</span>
             <span class="text-xs text-surface-txt-hint">
-              Adds a "Pull missions now" option to the account menu, to fetch
-              from your account on demand instead of waiting for sign-in or a
-              token refresh.
+              Adds a "Pull quests now" option to the account menu, to fetch from
+              your account on demand instead of waiting for sign-in or a token
+              refresh.
             </span>
           </span>
         </label>
