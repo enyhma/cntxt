@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { fakeBrowser } from "wxt/testing/fake-browser";
 import { setWindowMission } from "./session";
 import { missionWindowMachine } from "./missionWindowMachine";
-import { createMission, getMissions } from "./missions";
+import { createMission, getMissions, updateMission } from "./missions";
 
 beforeEach(() => {
   fakeBrowser.reset();
@@ -49,6 +49,58 @@ describe("missionWindowMachine", () => {
     const missions = await getMissions();
     const updated = missions.find((m) => m.id === mission.id);
     expect(updated?.tabs).toEqual([{ url: "https://a.example/", title: "" }]);
+  });
+
+  it("tags a newly-opened tab with the currently active phase", async () => {
+    const win = (await browser.windows.create({ focused: true }))!;
+    const mission = await createMission("Roadmap", []);
+    await updateMission(mission.id, {
+      phases: [{ id: "p1", name: "Research", status: "active" }],
+      activePhaseId: "p1",
+    });
+    await setWindowMission(win.id!, mission.id);
+
+    const actor = createActor(missionWindowMachine, {
+      input: { windowId: win.id! },
+    }).start();
+    await flushAsyncWork();
+
+    await browser.tabs.create({ windowId: win.id, url: "https://a.example/" });
+    actor.send({ type: "TABS_CHANGED" });
+    await flushAsyncWork();
+
+    const [updated] = (await getMissions()).filter((m) => m.id === mission.id);
+    expect(updated?.tabs).toEqual([
+      { url: "https://a.example/", title: "", phaseId: "p1" },
+    ]);
+  });
+
+  it("keeps a tab's existing phaseId across a resync instead of re-tagging it", async () => {
+    const win = (await browser.windows.create({ focused: true }))!;
+    const mission = await createMission("Roadmap", [
+      { url: "https://a.example/", title: "A", phaseId: "p1" },
+    ]);
+    await updateMission(mission.id, {
+      phases: [
+        { id: "p1", name: "Research", status: "done" },
+        { id: "p2", name: "Draft", status: "active" },
+      ],
+      activePhaseId: "p2",
+    });
+    await setWindowMission(win.id!, mission.id);
+    await browser.tabs.create({ windowId: win.id, url: "https://a.example/" });
+
+    const actor = createActor(missionWindowMachine, {
+      input: { windowId: win.id! },
+    }).start();
+    await flushAsyncWork();
+    actor.send({ type: "TABS_CHANGED" });
+    await flushAsyncWork();
+
+    const [updated] = (await getMissions()).filter((m) => m.id === mission.id);
+    expect(updated?.tabs).toEqual([
+      { url: "https://a.example/", title: "", phaseId: "p1" },
+    ]);
   });
 
   it("stops on WINDOW_CLOSED", async () => {

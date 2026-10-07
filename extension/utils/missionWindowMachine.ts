@@ -1,7 +1,7 @@
 import { setup } from "xstate";
 import { getWindowMissionMap } from "./session";
 import { snapshotTabs } from "./tabs";
-import { updateMission } from "./missions";
+import { getMissions, updateMission } from "./missions";
 
 type Context = { windowId: number };
 type Event = { type: "TABS_CHANGED" } | { type: "WINDOW_CLOSED" };
@@ -10,7 +10,22 @@ async function syncTabs(windowId: number) {
   const map = await getWindowMissionMap();
   const missionId = map[windowId];
   if (!missionId) return;
-  await updateMission(missionId, { tabs: await snapshotTabs(windowId) });
+  const mission = (await getMissions()).find((m) => m.id === missionId);
+  if (!mission) return;
+
+  // Re-reads activePhaseId fresh every sync, same staleness reason as the
+  // window->mission mapping above: the dashboard can activate a different
+  // phase independently of this actor. A tab already known keeps its
+  // phaseId (identity by URL — see the MissionTab type comment); only a
+  // genuinely new tab gets tagged with whatever phase is active right now.
+  const existingByUrl = new Map(mission.tabs.map((t) => [t.url, t]));
+  const tabs = (await snapshotTabs(windowId)).map((t) => {
+    const existing = existingByUrl.get(t.url);
+    return existing
+      ? { ...existing, title: t.title }
+      : { ...t, phaseId: mission.activePhaseId };
+  });
+  await updateMission(missionId, { tabs });
 }
 
 /**

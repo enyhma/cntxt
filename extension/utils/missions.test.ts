@@ -171,6 +171,8 @@ describe("pushDirtyMissions", () => {
       tabs: [],
       deleted_at: null,
       folder_id: null,
+      phases: [],
+      active_phase_id: null,
     });
     expect(lastPushedAt[mission.id]).toBe(Date.parse("2030-01-01T00:00:00Z"));
     const missions = await getMissions();

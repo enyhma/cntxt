@@ -1,6 +1,14 @@
 import { supabase } from "./supabase";
 
-export type MissionTab = { url: string; title: string };
+// Unset on a tab = not part of any phase's roadmap — always shown,
+// regardless of which phase is active. Identity across a resync is by URL
+// (see missionWindowMachine.ts's syncTabs), matching how the rest of this
+// codebase already treats tab identity; a known, pre-existing weak spot is
+// a duplicate open tab with the same URL, not something this adds.
+export type MissionTab = { url: string; title: string; phaseId?: string };
+
+export type PhaseStatus = "pending" | "active" | "done";
+export type Phase = { id: string; name: string; status: PhaseStatus };
 
 // See docs/workspace-sync-semantics.md for what each state means and how
 // the dashboard should render it. Undefined (legacy missions predating
@@ -31,6 +39,11 @@ export type Mission = {
   // supabase/migrations' trash_and_purge migration and
   // purgeExpiredLocalTrash below).
   deletedAt?: number;
+  // Absent/empty = no roadmap — the mission behaves exactly as it does
+  // today, a flat tab list. Set via phaseMachine.ts (utils/phaseMachine.ts),
+  // never required.
+  phases?: Phase[];
+  activePhaseId?: string;
 };
 
 // Mirrors purge_trashed_workspaces()'s retention window in the trash_and_purge
@@ -154,7 +167,9 @@ export async function pullRemoteMissions(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
     .from("workspaces")
-    .select("id, name, tabs, created_at, updated_at, deleted_at, folder_id");
+    .select(
+      "id, name, tabs, created_at, updated_at, deleted_at, folder_id, phases, active_phase_id",
+    );
   if (error) throw new Error(error.message);
   if (!data) return 0;
 
@@ -173,6 +188,8 @@ export async function pullRemoteMissions(): Promise<number> {
       updatedAt: Date.parse(row.updated_at),
       deletedAt: row.deleted_at ? Date.parse(row.deleted_at) : undefined,
       folderId: row.folder_id,
+      phases: (row.phases as Phase[] | null) ?? undefined,
+      activePhaseId: row.active_phase_id ?? undefined,
       syncStatus: "synced",
     };
     if (!existing) {
@@ -238,6 +255,8 @@ export async function pushDirtyMissions(
         tabs: m.tabs,
         deleted_at: m.deletedAt ? new Date(m.deletedAt).toISOString() : null,
         folder_id: m.folderId ?? null,
+        phases: m.phases ?? [],
+        active_phase_id: m.activePhaseId ?? null,
       })
       .eq("id", m.id)
       .select("updated_at")
@@ -260,7 +279,16 @@ export async function pushDirtyMissions(
 export async function updateMission(
   id: string,
   patch: Partial<
-    Pick<Mission, "name" | "tabs" | "color" | "icon" | "folderId">
+    Pick<
+      Mission,
+      | "name"
+      | "tabs"
+      | "color"
+      | "icon"
+      | "folderId"
+      | "phases"
+      | "activePhaseId"
+    >
   >,
 ) {
   const missions = await getMissions();

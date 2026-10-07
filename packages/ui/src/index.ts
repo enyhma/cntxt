@@ -5,6 +5,7 @@ export * from "./icon";
 export * from "./MissionDot";
 export * from "./SyncBadge";
 export * from "./MissionRow";
+export * from "./RoadmapPanel";
 export * from "./TabRow";
 export * from "./SettingsPanel";
 export * from "./TrashPanel";

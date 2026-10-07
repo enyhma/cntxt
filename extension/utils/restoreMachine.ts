@@ -1,6 +1,6 @@
 import { assign, fromPromise, setup } from "xstate";
 import { removeWindowMission, setWindowMission } from "./session";
-import { DASHBOARD_URL } from "./tabs";
+import { closeMatchingTabs, openMissingTabs } from "./tabOps";
 import type { Mission } from "./missions";
 
 type Context = {
@@ -30,12 +30,7 @@ async function closeCurrentTabs(input: {
     await removeWindowMission(win.id);
   }
 
-  const tabs = await browser.tabs.query({ windowId: win.id });
-  const ids = tabs
-    .filter((t) => t.url !== DASHBOARD_URL)
-    .map((t) => t.id)
-    .filter((id): id is number => id !== undefined);
-  if (ids.length > 0) await browser.tabs.remove(ids);
+  await closeMatchingTabs(win.id, () => true);
   return win.id;
 }
 
@@ -45,9 +40,7 @@ async function openMissionTabs(input: {
 }) {
   if (input.windowId === null || input.mission === null) return;
   await setWindowMission(input.windowId, input.mission.id);
-  for (const tab of input.mission.tabs) {
-    await browser.tabs.create({ windowId: input.windowId, url: tab.url });
-  }
+  await openMissingTabs(input.windowId, input.mission.tabs);
 }
 
 /**

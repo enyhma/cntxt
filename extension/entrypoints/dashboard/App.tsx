@@ -14,6 +14,7 @@ import {
 } from "solid-js";
 import { ensureMissionForWindow } from "@/utils/attach";
 import { restoreMachine } from "@/utils/restoreMachine";
+import { phaseMachine } from "@/utils/phaseMachine";
 import { syncMachine } from "@/utils/sync";
 import { getWindowMissionMap } from "@/utils/session";
 import {
@@ -93,6 +94,7 @@ import {
   FolderPage,
   MissionDot,
   MissionRow,
+  RoadmapPanel,
   missionColorKey,
   missionDotClass,
 } from "@cntxt/ui";
@@ -273,6 +275,8 @@ function Dashboard(props: {
   refresh: () => Promise<void>;
   restoreState: ReturnType<typeof useMachine<typeof restoreMachine>>[0];
   restoreSend: ReturnType<typeof useMachine<typeof restoreMachine>>[1];
+  phaseState: ReturnType<typeof useMachine<typeof phaseMachine>>[0];
+  phaseSend: ReturnType<typeof useMachine<typeof phaseMachine>>[1];
 }) {
   const {
     missions,
@@ -286,6 +290,8 @@ function Dashboard(props: {
     refresh,
     restoreState,
     restoreSend,
+    phaseState,
+    phaseSend,
   } = props;
 
   // Advisory only — a stale or missing cache never blocks anything by
@@ -342,7 +348,26 @@ function Dashboard(props: {
   const viewed = () => missions().find((w) => w.id === viewedId());
   const isViewingCurrent = () =>
     viewedId() !== undefined && viewedId() === currentId();
-  const busy = () => !restoreState.matches("idle");
+  const busy = () =>
+    !restoreState.matches("idle") || !phaseState.matches("idle");
+
+  function handleActivatePhase(phaseId: string) {
+    const mission = viewed();
+    if (mission) phaseSend({ type: "ACTIVATE_PHASE", mission, phaseId });
+  }
+  function handleCompletePhase(phaseId: string) {
+    const mission = viewed();
+    if (mission) phaseSend({ type: "COMPLETE_PHASE", mission, phaseId });
+  }
+  async function handleAddPhase(name: string) {
+    const mission = viewed();
+    if (!mission) return;
+    const phase = { id: crypto.randomUUID(), name, status: "pending" as const };
+    await updateMission(mission.id, {
+      phases: [...(mission.phases ?? []), phase],
+    });
+    await refresh();
+  }
 
   function setRail(v: boolean) {
     try {
@@ -1112,6 +1137,18 @@ function Dashboard(props: {
             }
           >
             <div class="min-h-0 flex-1 overflow-y-auto p-3.5">
+              <Show when={viewed()}>
+                <RoadmapPanel
+                  phases={() => viewed()!.phases ?? []}
+                  tabCount={(phaseId) =>
+                    viewed()!.tabs.filter((t) => t.phaseId === phaseId).length
+                  }
+                  busy={busy()}
+                  onActivate={handleActivatePhase}
+                  onComplete={handleCompletePhase}
+                  onAddPhase={handleAddPhase}
+                />
+              </Show>
               <Show
                 when={viewed() && viewed()!.tabs.length > 0}
                 fallback={
@@ -1443,6 +1480,7 @@ function App() {
     "missions",
   );
   const [state, send] = useMachine(restoreMachine);
+  const [phaseState, phaseSend] = useMachine(phaseMachine);
   const [syncState, syncSend] = useMachine(syncMachine);
 
   // See docs/implementation-plan-sync.md M6: syncMachine owns pull/push
@@ -1994,6 +2032,8 @@ function App() {
                   refresh={refresh}
                   restoreState={state}
                   restoreSend={send}
+                  phaseState={phaseState}
+                  phaseSend={phaseSend}
                 />
               </Match>
             </Switch>
