@@ -30,6 +30,7 @@ import { useSupabaseSession } from "@cntxt/supabase";
 import { creemMonthlyCheckoutUrl, creemYearlyCheckoutUrl } from "@/utils/creem";
 import { type Entitlements, refreshEntitlements } from "@/utils/entitlements";
 import {
+  AppWindow,
   ArrowRight,
   ArrowRightLeft,
   ChevronDown,
@@ -175,6 +176,16 @@ function FolderHeader(props: {
   onAddProject?: () => void;
   onAddSection?: () => void;
   onDelete: () => void;
+  // Project-only: the same connect/switch/disconnect affordance a Quest
+  // row has (QuestRow.tsx) — a Project is window-bound too (see
+  // attach.ts's ensureBindingForWindow), so it needs a way to open its own
+  // tabs into the current window without going through its folder page.
+  isCurrent?: boolean;
+  openElsewhere?: boolean;
+  anyActive?: boolean;
+  busy?: boolean;
+  onOpenAll?: () => void;
+  onDisconnect?: () => void;
 }) {
   return (
     <div
@@ -250,6 +261,47 @@ function FolderHeader(props: {
             <Plus size={11} />
           </button>
         </Show>
+        <Show when={props.onOpenAll}>
+          <Show when={props.isCurrent}>
+            <button
+              type="button"
+              title="Disconnect"
+              disabled={props.busy}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onDisconnect?.();
+              }}
+              class="btn btn-square btn-ghost btn-xs text-surface-txt-hint hover:text-warning disabled:opacity-40"
+            >
+              <Unplug size={11} />
+            </button>
+          </Show>
+          <Show when={!props.isCurrent}>
+            <Show
+              when={!props.openElsewhere}
+              fallback={
+                <span title="Open elsewhere" class="shrink-0">
+                  <AppWindow size={11} class="text-surface-txt-faint" />
+                </span>
+              }
+            >
+              <button
+                type="button"
+                title={props.anyActive ? "Switch here" : "Connect here"}
+                disabled={props.busy}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onOpenAll?.();
+                }}
+                class="btn btn-square btn-ghost btn-xs text-accent disabled:opacity-40"
+              >
+                <Show when={props.anyActive} fallback={<Plug size={11} />}>
+                  <ArrowRightLeft size={11} />
+                </Show>
+              </button>
+            </Show>
+          </Show>
+        </Show>
         <button
           type="button"
           title="Delete"
@@ -319,6 +371,27 @@ function Dashboard(props: {
   // quest's tabs until something navigates back to a quest.
   const [viewingFolderId, setViewingFolderId] = createSignal<string>();
   const viewingFolder = () => folders().find((f) => f.id === viewingFolderId());
+
+  // Set via a Project's "Project tabs" entry point (its FolderPage header
+  // button, or its sidebar row's connect affordance) — the main pane shows
+  // that Project's own live tabs instead of a quest's or a folder page
+  // until something navigates elsewhere.
+  const [viewedProjectId, setViewedProjectId] = createSignal<string>();
+  const viewedProject = () => folders().find((f) => f.id === viewedProjectId());
+
+  // A Project's live tabs are either its own base tabs, or — once a child
+  // Quest has been swapped in via questSwapMachine — that Quest's tabs
+  // instead. Mirrors utils/projectLiveTabs.ts's resolveProjectLiveTarget,
+  // but as a pure read over already-loaded signals rather than storage.
+  function projectLiveTabs(project: Folder) {
+    if (project.activeQuestId) {
+      return quests().find((q) => q.id === project.activeQuestId)?.tabs ?? [];
+    }
+    return project.tabs ?? [];
+  }
+  function projectLiveTabCount(project: Folder) {
+    return projectLiveTabs(project).length;
+  }
 
   onMount(() => {
     try {
@@ -455,12 +528,22 @@ function Dashboard(props: {
     quests().filter((w) => w.folderId === folderId);
   const ungroupedQuests = () => quests().filter((w) => !w.folderId);
 
-  // Navigating to a quest always leaves folder view, whichever of the
-  // several entry points (sidebar row, command palette, a Project page's
-  // quest list, creating a new one) got you there.
+  // Navigating to a quest always leaves folder view and any Project
+  // tabs view, whichever of the several entry points (sidebar row, command
+  // palette, a Project page's quest list, creating a new one) got you here.
   function showQuest(id: string) {
     setViewingFolderId(undefined);
+    setViewedProjectId(undefined);
     setViewedId(id);
+  }
+
+  function showProjectTabs(id: string) {
+    setViewingFolderId(undefined);
+    setViewedProjectId(id);
+  }
+  function openProject(project: Folder) {
+    restoreSend({ type: "RESTORE", target: { kind: "project", project } });
+    showProjectTabs(project.id);
   }
 
   function viewingFolderBreadcrumb(): Array<{ id: string; name: string }> {
@@ -613,6 +696,68 @@ function Dashboard(props: {
     await deleteResource(id);
     await refresh();
   }
+
+  // A Project's sidebar block: its own FolderHeader row (with the
+  // connect/switch/disconnect affordance, since it's window-bound too) plus
+  // its child Sections and Quests. Used both for a Project nested under an
+  // Area (depth 1) and for a standalone, ad-hoc Project (depth 0, see
+  // standaloneProjects below) — same structure either way.
+  function projectBlock(project: Folder, depth: number) {
+    return (
+      <>
+        <FolderHeader
+          folder={project}
+          depth={depth}
+          expanded={expandedFolders().has(project.id)}
+          active={viewingFolderId() === project.id}
+          onToggle={() => toggleExpanded(project.id)}
+          onOpen={() => setViewingFolderId(project.id)}
+          editing={editingFolderId() === project.id}
+          editingValue={editingFolderName()}
+          onEditingInput={setEditingFolderName}
+          onStartRename={() => startRenameFolder(project)}
+          onCommitRename={commitRenameFolder}
+          onAddQuest={() => handleAddQuestIn(project.id)}
+          onAddSection={() => handleAddSection(project.id)}
+          onDelete={() => handleDeleteFolder(project)}
+          isCurrent={project.id === currentId()}
+          openElsewhere={
+            project.id !== currentId() && openIds().has(project.id)
+          }
+          anyActive={currentId() !== undefined}
+          busy={busy()}
+          onOpenAll={() => openProject(project)}
+          onDisconnect={handleDisconnectWindow}
+        />
+        <Show when={expandedFolders().has(project.id)}>
+          <For each={childFolders(project.id)}>
+            {(section) => (
+              <FolderHeader
+                folder={section}
+                depth={depth + 1}
+                expanded={false}
+                active={viewingFolderId() === section.id}
+                onToggle={() => {}}
+                onOpen={() => setViewingFolderId(section.id)}
+                editing={editingFolderId() === section.id}
+                editingValue={editingFolderName()}
+                onEditingInput={setEditingFolderName}
+                onStartRename={() => startRenameFolder(section)}
+                onCommitRename={commitRenameFolder}
+                onDelete={() => handleDeleteFolder(section)}
+              />
+            )}
+          </For>
+          <For each={questsIn(project.id)}>
+            {(w) => questRowFor(w, depth + 1)}
+          </For>
+        </Show>
+      </>
+    );
+  }
+
+  const standaloneProjects = () =>
+    folders().filter((f) => f.kind === "project" && !f.parentId);
 
   function questRowFor(w: Quest, depth = 0) {
     return (
@@ -842,53 +987,7 @@ function Dashboard(props: {
                     />
                     <Show when={expandedFolders().has(area.id)}>
                       <For each={childFolders(area.id)}>
-                        {(project) => (
-                          <>
-                            <FolderHeader
-                              folder={project}
-                              depth={1}
-                              expanded={expandedFolders().has(project.id)}
-                              active={viewingFolderId() === project.id}
-                              onToggle={() => toggleExpanded(project.id)}
-                              onOpen={() => setViewingFolderId(project.id)}
-                              editing={editingFolderId() === project.id}
-                              editingValue={editingFolderName()}
-                              onEditingInput={setEditingFolderName}
-                              onStartRename={() => startRenameFolder(project)}
-                              onCommitRename={commitRenameFolder}
-                              onAddQuest={() => handleAddQuestIn(project.id)}
-                              onAddSection={() => handleAddSection(project.id)}
-                              onDelete={() => handleDeleteFolder(project)}
-                            />
-                            <Show when={expandedFolders().has(project.id)}>
-                              <For each={childFolders(project.id)}>
-                                {(section) => (
-                                  <FolderHeader
-                                    folder={section}
-                                    depth={2}
-                                    expanded={false}
-                                    active={viewingFolderId() === section.id}
-                                    onToggle={() => {}}
-                                    onOpen={() =>
-                                      setViewingFolderId(section.id)
-                                    }
-                                    editing={editingFolderId() === section.id}
-                                    editingValue={editingFolderName()}
-                                    onEditingInput={setEditingFolderName}
-                                    onStartRename={() =>
-                                      startRenameFolder(section)
-                                    }
-                                    onCommitRename={commitRenameFolder}
-                                    onDelete={() => handleDeleteFolder(section)}
-                                  />
-                                )}
-                              </For>
-                              <For each={questsIn(project.id)}>
-                                {(w) => questRowFor(w, 2)}
-                              </For>
-                            </Show>
-                          </>
-                        )}
+                        {(project) => projectBlock(project, 1)}
                       </For>
                       <For each={questsIn(area.id)}>
                         {(w) => questRowFor(w, 1)}
@@ -897,6 +996,14 @@ function Dashboard(props: {
                   </>
                 )}
               </For>
+              <Show when={standaloneProjects().length > 0}>
+                <div class="mt-1 px-2 py-1 font-mono text-[10px] tracking-wider text-surface-txt-faint">
+                  PROJECTS
+                </div>
+                <For each={standaloneProjects()}>
+                  {(p) => projectBlock(p, 0)}
+                </For>
+              </Show>
               <Show
                 when={rootFolders().length > 0 && ungroupedQuests().length > 0}
               >
@@ -922,14 +1029,22 @@ function Dashboard(props: {
               </button>
             </Show>
 
-            <Show
-              when={!viewingFolderId()}
-              fallback={
-                <span class="flex-1 truncate text-sm font-semibold">
-                  {viewingFolder()?.name}
-                </span>
-              }
-            >
+            <Show when={viewingFolderId()}>
+              <span class="flex-1 truncate text-sm font-semibold">
+                {viewingFolder()?.name}
+              </span>
+            </Show>
+
+            <Show when={!viewingFolderId() && viewedProject()}>
+              <span class="flex-1 truncate text-sm font-semibold">
+                {viewedProject()?.name}
+              </span>
+              <span class="font-mono text-[11px] text-surface-txt-faint">
+                {projectLiveTabCount(viewedProject()!)} tabs
+              </span>
+            </Show>
+
+            <Show when={!viewingFolderId() && !viewedProject()}>
               <Show when={!railOpen()}>
                 <details class="dropdown shrink-0">
                   <summary class="btn h-8 list-none gap-2 rounded-full border border-surface-alt3 bg-surface-alt1 px-2.75 font-normal shadow-[var(--shadow-card)]">
@@ -1137,38 +1252,131 @@ function Dashboard(props: {
             </button>
           </div>
 
-          <Show
-            when={!viewingFolderId()}
-            fallback={
-              <FolderPage
-                folder={viewingFolder()!}
-                breadcrumb={viewingFolderBreadcrumb()}
-                quests={() => questsIn(viewingFolderId()!)}
-                projects={
-                  viewingFolder() && !viewingFolder()!.parentId
-                    ? () => childFolders(viewingFolderId()!)
-                    : undefined
+          <Show when={viewingFolderId()}>
+            <FolderPage
+              folder={viewingFolder()!}
+              breadcrumb={viewingFolderBreadcrumb()}
+              quests={() => questsIn(viewingFolderId()!)}
+              projects={
+                viewingFolder()?.kind === "area"
+                  ? () => childFolders(viewingFolderId()!)
+                  : undefined
+              }
+              onOpenProject={setViewingFolderId}
+              sections={
+                viewingFolder()?.kind === "project"
+                  ? () =>
+                      childFolders(viewingFolderId()!).map((s) => ({
+                        id: s.id,
+                        name: s.name,
+                        resourceCount: resources().filter(
+                          (r) => r.folderId === s.id,
+                        ).length,
+                      }))
+                  : undefined
+              }
+              onOpenSection={setViewingFolderId}
+              onAddSection={() => handleAddSection(viewingFolderId()!)}
+              onOpenQuest={goToQuest}
+              onAddQuest={() => handleAddQuestIn(viewingFolderId()!)}
+              onOpenTabs={
+                viewingFolder()?.kind === "project"
+                  ? () => showProjectTabs(viewingFolderId()!)
+                  : undefined
+              }
+              tabCount={
+                viewingFolder()?.kind === "project"
+                  ? projectLiveTabCount(viewingFolder()!)
+                  : undefined
+              }
+            />
+          </Show>
+
+          <Show when={!viewingFolderId() && viewedProject()}>
+            <div class="min-h-0 flex-1 overflow-y-auto p-3.5">
+              <QuestBoardPanel
+                quests={() =>
+                  questsIn(viewedProject()!.id).map((q) => ({
+                    id: q.id,
+                    name: q.name,
+                    status: q.status,
+                    tabCount: q.tabs.length,
+                  }))
                 }
-                onOpenProject={setViewingFolderId}
-                sections={
-                  viewingFolder() && viewingFolder()!.parentId
-                    ? () =>
-                        childFolders(viewingFolderId()!).map((s) => ({
-                          id: s.id,
-                          name: s.name,
-                          resourceCount: resources().filter(
-                            (r) => r.folderId === s.id,
-                          ).length,
-                        }))
-                    : undefined
-                }
-                onOpenSection={setViewingFolderId}
-                onAddSection={() => handleAddSection(viewingFolderId()!)}
-                onOpenQuest={goToQuest}
-                onAddQuest={() => handleAddQuestIn(viewingFolderId()!)}
+                busy={busy()}
+                onActivate={(questId) => {
+                  const quest = quests().find((q) => q.id === questId);
+                  if (quest) {
+                    questSwapSend({
+                      type: "ACTIVATE_QUEST",
+                      project: viewedProject()!,
+                      quest,
+                    });
+                  }
+                }}
+                onComplete={(questId) => {
+                  const quest = quests().find((q) => q.id === questId);
+                  if (quest) {
+                    questSwapSend({
+                      type: "COMPLETE_QUEST",
+                      project: viewedProject()!,
+                      quest,
+                    });
+                  }
+                }}
+                onAddQuest={async (name) => {
+                  const project = viewedProject();
+                  if (!project) return;
+                  const order = questsIn(project.id).length;
+                  const quest = await createQuest(name, []);
+                  await updateQuest(quest.id, { folderId: project.id, order });
+                  await refresh();
+                }}
               />
-            }
-          >
+              <Show
+                when={projectLiveTabs(viewedProject()!).length > 0}
+                fallback={
+                  <p class="text-sm text-surface-txt-hint">
+                    No tabs in this project.
+                  </p>
+                }
+              >
+                <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                  <For each={projectLiveTabs(viewedProject()!)}>
+                    {(tab) => (
+                      <div class="flex items-center gap-2.5 truncate border-b border-surface-alt2 px-3.5 py-2.5 text-sm last:border-b-0">
+                        <span class="min-w-0 flex-1 truncate">
+                          {tab.title || tab.url}
+                        </span>
+                      </div>
+                    )}
+                  </For>
+                </section>
+              </Show>
+              <div class="mt-3.5 flex gap-2">
+                <button
+                  type="button"
+                  disabled={busy()}
+                  onClick={handleCloseAllTabs}
+                  class="btn btn-sm border border-surface-alt3 disabled:opacity-50"
+                >
+                  Close all tabs
+                </button>
+                <Show when={viewedProjectId() === currentId()}>
+                  <button
+                    type="button"
+                    disabled={busy()}
+                    onClick={handleDisconnectWindow}
+                    class="btn btn-sm border border-surface-alt3 disabled:opacity-50"
+                  >
+                    Disconnect
+                  </button>
+                </Show>
+              </div>
+            </div>
+          </Show>
+
+          <Show when={!viewingFolderId() && !viewedProject()}>
             <div class="min-h-0 flex-1 overflow-y-auto p-3.5">
               <Show when={viewed() && projectOf(viewed()!.folderId)}>
                 <QuestBoardPanel

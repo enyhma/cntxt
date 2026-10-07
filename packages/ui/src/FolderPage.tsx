@@ -28,6 +28,10 @@ export function FolderPage(props: {
   onAddSection?: () => void;
   onOpenQuest: (id: string) => void;
   onAddQuest: () => void;
+  // Only set for a Project (kind === "project") — the way into its own
+  // live-tabs view, separate from this organizational page.
+  onOpenTabs?: () => void;
+  tabCount?: number;
 }) {
   const projectsList = () => props.projects?.() ?? [];
   const sectionsList = () => props.sections?.() ?? [];
@@ -41,7 +45,18 @@ export function FolderPage(props: {
               <For each={props.breadcrumb}>{(b) => <span>{b.name}</span>}</For>
             </div>
           </Show>
-          <h1 class="text-lg font-semibold">{props.folder.name}</h1>
+          <div class="flex items-center gap-2.5">
+            <h1 class="text-lg font-semibold">{props.folder.name}</h1>
+            <Show when={props.onOpenTabs}>
+              <button
+                type="button"
+                onClick={props.onOpenTabs}
+                class="btn btn-xs gap-1 border border-surface-alt3"
+              >
+                Project tabs ({props.tabCount ?? 0})
+              </button>
+            </Show>
+          </div>
         </div>
 
         <Show when={props.projects && projectsList().length > 0}>
