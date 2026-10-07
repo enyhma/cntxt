@@ -31,7 +31,10 @@ async function syncStatusOf(id: string) {
 }
 
 it("marks a resource synced once the insert succeeds", async () => {
-  const resource = await addResource("ws-1", { url: "https://a.com" });
+  const resource = await addResource(
+    { workspaceId: "ws-1" },
+    { url: "https://a.com" },
+  );
   await vi.waitFor(async () =>
     expect(await syncStatusOf(resource.id)).toBe("synced"),
   );
@@ -39,7 +42,10 @@ it("marks a resource synced once the insert succeeds", async () => {
 
 it("falls back to offline on an unrecognized insert error", async () => {
   insert.mockResolvedValue({ error: { message: "network down" } });
-  const resource = await addResource("ws-1", { note: "read later" });
+  const resource = await addResource(
+    { workspaceId: "ws-1" },
+    { note: "read later" },
+  );
   await vi.waitFor(async () =>
     expect(await syncStatusOf(resource.id)).toBe("offline"),
   );
@@ -49,7 +55,10 @@ it("treats a unique-violation as already synced", async () => {
   insert.mockResolvedValue({
     error: { code: "23505", message: "duplicate key value" },
   });
-  const resource = await addResource("ws-1", { url: "https://a.com" });
+  const resource = await addResource(
+    { workspaceId: "ws-1" },
+    { url: "https://a.com" },
+  );
   await vi.waitFor(async () =>
     expect(await syncStatusOf(resource.id)).toBe("synced"),
   );
@@ -57,7 +66,10 @@ it("treats a unique-violation as already synced", async () => {
 
 it("reconcileResourceSyncStatus retries anything not already synced", async () => {
   insert.mockResolvedValueOnce({ error: { message: "network down" } });
-  const resource = await addResource("ws-1", { url: "https://a.com" });
+  const resource = await addResource(
+    { workspaceId: "ws-1" },
+    { url: "https://a.com" },
+  );
   await vi.waitFor(async () =>
     expect(await syncStatusOf(resource.id)).toBe("offline"),
   );
@@ -90,7 +102,10 @@ it("pullRemoteResources adds a remote resource missing locally", async () => {
 });
 
 it("pullRemoteResources doesn't duplicate a resource already stored locally", async () => {
-  const resource = await addResource("ws-1", { url: "https://a.com" });
+  const resource = await addResource(
+    { workspaceId: "ws-1" },
+    { url: "https://a.com" },
+  );
   select.mockResolvedValue({
     data: [
       {
@@ -112,9 +127,51 @@ it("pullRemoteResources doesn't duplicate a resource already stored locally", as
 
 describe("deleteResource", () => {
   it("removes it locally and fires a remote delete", async () => {
-    const resource = await addResource("ws-1", { url: "https://a.com" });
+    const resource = await addResource(
+      { workspaceId: "ws-1" },
+      { url: "https://a.com" },
+    );
     await deleteResource(resource.id);
     expect(await getResources()).toEqual([]);
     expect(deleteEq).toHaveBeenCalledWith("id", resource.id);
+  });
+});
+
+describe("folder-parented resources (Sections)", () => {
+  it("inserts with folder_id set and workspace_id null", async () => {
+    const resource = await addResource(
+      { folderId: "section-1" },
+      { url: "https://a.com" },
+    );
+    expect(resource.folderId).toBe("section-1");
+    expect(resource.workspaceId).toBeUndefined();
+    await vi.waitFor(() =>
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({ workspace_id: null, folder_id: "section-1" }),
+      ),
+    );
+  });
+
+  it("pullRemoteResources maps a remote folder_id onto Resource.folderId", async () => {
+    select.mockResolvedValue({
+      data: [
+        {
+          id: "remote-1",
+          workspace_id: null,
+          folder_id: "section-1",
+          type: "link",
+          url: "https://example.com",
+          note: null,
+          created_at: new Date(0).toISOString(),
+        },
+      ],
+      error: null,
+    });
+
+    const applied = await pullRemoteResources();
+    expect(applied).toBe(1);
+    const [r] = await getResources();
+    expect(r?.folderId).toBe("section-1");
+    expect(r?.workspaceId).toBeUndefined();
   });
 });

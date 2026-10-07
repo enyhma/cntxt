@@ -7,9 +7,17 @@ import { supabase } from "./supabase";
 // just added or removed — so there's no updated_at column and no
 // pushDirtyResources: creation registers itself immediately (like
 // registerWorkspace/registerFolder), and there's nothing left to push later.
+//
+// A resource is parented to exactly one of a Mission (workspaceId — the
+// original "save this open tab" flow) or a Section (folderId — a depth-2
+// folder, "save this permanently" flow added later). Both optional rather
+// than a tagged union so the Supabase row shape maps straight across:
+// exactly one column is ever non-null, enforced at the call site
+// (addResource), not the type.
 export type Resource = {
   id: string;
-  workspaceId: string;
+  workspaceId?: string;
+  folderId?: string;
   type: "link";
   url?: string;
   note?: string;
@@ -42,7 +50,8 @@ async function registerResource(resource: Resource) {
   await setSyncStatus(resource.id, "syncing");
   const { error } = await supabase.from("resources").insert({
     id: resource.id,
-    workspace_id: resource.workspaceId,
+    workspace_id: resource.workspaceId ?? null,
+    folder_id: resource.folderId ?? null,
     type: resource.type,
     url: resource.url,
     note: resource.note,
@@ -62,12 +71,13 @@ async function registerResource(resource: Resource) {
 }
 
 export async function addResource(
-  workspaceId: string,
+  parent: { workspaceId?: string; folderId?: string },
   fields: { url?: string; note?: string },
 ): Promise<Resource> {
   const resource: Resource = {
     id: crypto.randomUUID(),
-    workspaceId,
+    workspaceId: parent.workspaceId,
+    folderId: parent.folderId,
     type: "link",
     url: fields.url,
     note: fields.note,
@@ -93,7 +103,7 @@ export async function pullRemoteResources(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
     .from("resources")
-    .select("id, workspace_id, type, url, note, created_at");
+    .select("id, workspace_id, folder_id, type, url, note, created_at");
   if (error) throw new Error(error.message);
   if (!data) return 0;
 
@@ -103,7 +113,8 @@ export async function pullRemoteResources(): Promise<number> {
     .filter((row) => !localIds.has(row.id))
     .map((row): Resource => ({
       id: row.id,
-      workspaceId: row.workspace_id,
+      workspaceId: row.workspace_id ?? undefined,
+      folderId: row.folder_id ?? undefined,
       type: row.type as Resource["type"],
       url: row.url ?? undefined,
       note: row.note ?? undefined,

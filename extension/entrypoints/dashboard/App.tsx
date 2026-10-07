@@ -169,8 +169,9 @@ function FolderHeader(props: {
   onEditingInput: (v: string) => void;
   onStartRename: () => void;
   onCommitRename: () => void;
-  onAddMission: () => void;
+  onAddMission?: () => void;
   onAddProject?: () => void;
+  onAddSection?: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -227,14 +228,26 @@ function FolderHeader(props: {
             <FolderPlus size={11} />
           </button>
         </Show>
-        <button
-          type="button"
-          title="New mission"
-          onClick={props.onAddMission}
-          class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
-        >
-          <Plus size={11} />
-        </button>
+        <Show when={props.onAddSection}>
+          <button
+            type="button"
+            title="New section"
+            onClick={props.onAddSection}
+            class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
+          >
+            <LinkIcon size={11} />
+          </button>
+        </Show>
+        <Show when={props.onAddMission}>
+          <button
+            type="button"
+            title="New mission"
+            onClick={props.onAddMission}
+            class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
+          >
+            <Plus size={11} />
+          </button>
+        </Show>
         <button
           type="button"
           title="Delete"
@@ -440,6 +453,36 @@ function Dashboard(props: {
     closeOpenDropdowns();
   }
 
+  // Sections (depth-2 folders, one level under a Project) across every
+  // Area/Project — flat, with each one's Project name as context, for the
+  // "Save to section" picker on a resource row.
+  function flattenedSections(): Array<{
+    section: Folder;
+    projectName: string;
+  }> {
+    const out: Array<{ section: Folder; projectName: string }> = [];
+    for (const area of rootFolders()) {
+      for (const project of childFolders(area.id)) {
+        for (const section of childFolders(project.id)) {
+          out.push({ section, projectName: project.name });
+        }
+      }
+    }
+    return out;
+  }
+
+  // Copies (not moves — see the type comment on Resource in utils/resources.ts)
+  // a Mission-scoped resource into a Section, so it survives that Mission
+  // being deleted.
+  async function handleSaveResourceToSection(
+    resource: Resource,
+    folderId: string,
+  ) {
+    await addResource({ folderId }, { url: resource.url, note: resource.note });
+    await refresh();
+    closeOpenDropdowns();
+  }
+
   function toggleExpanded(id: string) {
     const next = new Set(expandedFolders());
     if (next.has(id)) next.delete(id);
@@ -468,6 +511,14 @@ function Dashboard(props: {
   }
   async function handleAddProject(parentId: string) {
     const folder = await createFolder("Untitled project", parentId);
+    setExpandedFolders(new Set(expandedFolders()).add(parentId).add(folder.id));
+    await refresh();
+    startRenameFolder(folder);
+  }
+  // Sections are depth-2 folders (parent is a Project) — same tree, one
+  // level deeper, since nothing in the schema enforces only two levels.
+  async function handleAddSection(parentId: string) {
+    const folder = await createFolder("Untitled section", parentId);
     setExpandedFolders(new Set(expandedFolders()).add(parentId).add(folder.id));
     await refresh();
     startRenameFolder(folder);
@@ -507,13 +558,16 @@ function Dashboard(props: {
     const note = resourceNote().trim();
     setAddingResource(false);
     if (!id || (!url && !note)) return;
-    await addResource(id, { url: url || undefined, note: note || undefined });
+    await addResource(
+      { workspaceId: id },
+      { url: url || undefined, note: note || undefined },
+    );
     await refresh();
   }
   async function handleSaveTabAsResource(tab: { url: string; title: string }) {
     const id = viewedId();
     if (!id) return;
-    await addResource(id, { url: tab.url, note: tab.title });
+    await addResource({ workspaceId: id }, { url: tab.url, note: tab.title });
     await refresh();
   }
   async function handleDeleteResource(id: string) {
@@ -756,9 +810,32 @@ function Dashboard(props: {
                               onAddMission={() =>
                                 handleAddMissionIn(project.id)
                               }
+                              onAddSection={() => handleAddSection(project.id)}
                               onDelete={() => handleDeleteFolder(project)}
                             />
                             <Show when={expandedFolders().has(project.id)}>
+                              <For each={childFolders(project.id)}>
+                                {(section) => (
+                                  <FolderHeader
+                                    folder={section}
+                                    depth={2}
+                                    expanded={false}
+                                    active={viewingFolderId() === section.id}
+                                    onToggle={() => {}}
+                                    onOpen={() =>
+                                      setViewingFolderId(section.id)
+                                    }
+                                    editing={editingFolderId() === section.id}
+                                    editingValue={editingFolderName()}
+                                    onEditingInput={setEditingFolderName}
+                                    onStartRename={() =>
+                                      startRenameFolder(section)
+                                    }
+                                    onCommitRename={commitRenameFolder}
+                                    onDelete={() => handleDeleteFolder(section)}
+                                  />
+                                )}
+                              </For>
                               <For each={missionsIn(project.id)}>
                                 {(w) => missionRowFor(w, 2)}
                               </For>
@@ -1014,8 +1091,22 @@ function Dashboard(props: {
                     ? () => childFolders(viewingFolderId()!)
                     : undefined
                 }
-                onOpenMission={goToMission}
                 onOpenProject={setViewingFolderId}
+                sections={
+                  viewingFolder() && viewingFolder()!.parentId
+                    ? () =>
+                        childFolders(viewingFolderId()!).map((s) => ({
+                          id: s.id,
+                          name: s.name,
+                          resourceCount: resources().filter(
+                            (r) => r.folderId === s.id,
+                          ).length,
+                        }))
+                    : undefined
+                }
+                onOpenSection={setViewingFolderId}
+                onAddSection={() => handleAddSection(viewingFolderId()!)}
+                onOpenMission={goToMission}
                 onAddMission={() => handleAddMissionIn(viewingFolderId()!)}
               />
             }
@@ -1135,6 +1226,40 @@ function Dashboard(props: {
                               <span class="max-w-[30%] shrink-0 truncate font-mono text-[11px] text-surface-txt-faint">
                                 {r.url}
                               </span>
+                            </Show>
+                            <Show when={flattenedSections().length > 0}>
+                              <details class="dropdown dropdown-end shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                                <summary
+                                  title="Save to section"
+                                  class="btn btn-square btn-ghost btn-xs list-none text-surface-txt-hint"
+                                >
+                                  <FolderPlus size={12} />
+                                </summary>
+                                <ul class="dropdown-content menu z-50 mt-1 w-52 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]">
+                                  <For each={flattenedSections()}>
+                                    {({ section, projectName }) => (
+                                      <li>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleSaveResourceToSection(
+                                              r,
+                                              section.id,
+                                            )
+                                          }
+                                        >
+                                          <span class="truncate">
+                                            {section.name}
+                                          </span>
+                                          <span class="shrink-0 font-mono text-[10px] text-surface-txt-faint">
+                                            {projectName}
+                                          </span>
+                                        </button>
+                                      </li>
+                                    )}
+                                  </For>
+                                </ul>
+                              </details>
                             </Show>
                             <button
                               type="button"
