@@ -435,36 +435,15 @@ function Dashboard(props: {
   const busy = () =>
     !restoreState.matches("idle") || !questSwapState.matches("idle");
 
-  // A quest's roadmap board shows when the *viewed* quest itself belongs to
-  // a Project — its siblings (quests sharing that same folderId) are the
-  // roadmap's cards. An ungrouped or Area-level quest has no such roster.
+  // Whether a quest belongs to a Project — used to tell a standalone quest
+  // (no sibling roster, completes via restoreMachine) apart from a
+  // Project-nested one (completes/reactivates via questSwapMachine, from
+  // the Project's own roadmap board, not from the quest's own view).
   function projectOf(folderId: string | null | undefined) {
     const folder = folderId
       ? folders().find((f) => f.id === folderId)
       : undefined;
     return folder?.kind === "project" ? folder : undefined;
-  }
-  function handleActivateQuest(questId: string) {
-    const project = projectOf(viewed()?.folderId);
-    const quest = quests().find((q) => q.id === questId);
-    if (project && quest) {
-      questSwapSend({ type: "ACTIVATE_QUEST", project, quest });
-    }
-  }
-  function handleCompleteQuest(questId: string) {
-    const project = projectOf(viewed()?.folderId);
-    const quest = quests().find((q) => q.id === questId);
-    if (project && quest) {
-      questSwapSend({ type: "COMPLETE_QUEST", project, quest });
-    }
-  }
-  async function handleAddQuestToProject(name: string) {
-    const project = projectOf(viewed()?.folderId);
-    if (!project) return;
-    const order = questsIn(project.id).length;
-    const quest = await createQuest(name, []);
-    await updateQuest(quest.id, { folderId: project.id, order });
-    await refresh();
   }
 
   function setRail(v: boolean) {
@@ -1491,22 +1470,6 @@ function Dashboard(props: {
 
           <Show when={!viewingFolderId() && !viewedProject()}>
             <div class="min-h-0 flex-1 overflow-y-auto p-3.5">
-              <Show when={viewed() && projectOf(viewed()!.folderId)}>
-                <QuestBoardPanel
-                  quests={() =>
-                    questsIn(projectOf(viewed()!.folderId)!.id).map((q) => ({
-                      id: q.id,
-                      name: q.name,
-                      status: q.status,
-                      tabCount: q.tabs.length,
-                    }))
-                  }
-                  busy={busy()}
-                  onActivate={handleActivateQuest}
-                  onComplete={handleCompleteQuest}
-                  onAddQuest={handleAddQuestToProject}
-                />
-              </Show>
               <Show
                 when={viewed() && viewed()!.tabs.length > 0}
                 fallback={
