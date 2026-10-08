@@ -331,7 +331,6 @@ function Dashboard(props: {
   folders: Accessor<Folder[]>;
   resources: Accessor<Resource[]>;
   currentId: Accessor<string | undefined>;
-  current: Accessor<Quest | undefined>;
   openIds: Accessor<Set<string>>;
   myWindowId: Accessor<number | undefined>;
   entitlements: Accessor<Entitlements | undefined>;
@@ -346,7 +345,6 @@ function Dashboard(props: {
     folders,
     resources,
     currentId,
-    current,
     openIds,
     myWindowId,
     entitlements,
@@ -434,6 +432,15 @@ function Dashboard(props: {
     viewedId() !== undefined && viewedId() === currentId();
   const busy = () =>
     !restoreState.matches("idle") || !questSwapState.matches("idle");
+
+  // Whichever Project or Quest is actually live in this window right now —
+  // used by the connect/switch buttons (on both a Quest's and a Project's
+  // header) to know what they'd be replacing, regardless of which kind it
+  // currently is. (`current`, a prop, stays Quest-only — it's only used for
+  // the document title/favicon.)
+  const currentThing = (): { name: string } | undefined =>
+    quests().find((w) => w.id === currentId()) ??
+    folders().find((f) => f.id === currentId());
 
   // Whether a quest belongs to a Project — used to tell a standalone quest
   // (no sibling roster, completes via restoreMachine) apart from a
@@ -634,14 +641,21 @@ function Dashboard(props: {
     await refresh();
     showQuest(quest.id);
   }
-  async function handleDeleteFolder(folder: Folder) {
+  async function handleDeleteFolder(folder: Folder): Promise<boolean> {
     const hasChildren = folders().some((f) => f.parentId === folder.id);
     const warning = hasChildren
       ? `Delete "${folder.name}" and the projects inside it? Quests stay — they'll just be ungrouped.`
       : `Delete "${folder.name}"? Any quests inside stay — they'll just be ungrouped.`;
-    if (!confirm(warning)) return;
+    if (!confirm(warning)) return false;
     await deleteFolder(folder.id);
     await refresh();
+    return true;
+  }
+  async function handleDeleteViewedProject() {
+    const project = viewedProject();
+    if (!project) return;
+    if (await handleDeleteFolder(project)) setViewedProjectId(undefined);
+    closeOpenDropdowns();
   }
 
   const resourcesForViewed = () =>
@@ -1085,12 +1099,109 @@ function Dashboard(props: {
             </Show>
 
             <Show when={!viewingFolderId() && viewedProject()}>
-              <span class="flex-1 truncate text-sm font-semibold">
-                {viewedProject()?.name}
-              </span>
+              <Show
+                when={editingFolderId() !== viewedProject()!.id}
+                fallback={
+                  <input
+                    autofocus
+                    class="input input-sm w-48 bg-surface-alt1"
+                    value={editingFolderName()}
+                    onInput={(e) => setEditingFolderName(e.currentTarget.value)}
+                    onBlur={commitRenameFolder}
+                    onKeyDown={(e) => e.key === "Enter" && commitRenameFolder()}
+                  />
+                }
+              >
+                <span class="flex-1 truncate text-sm font-semibold">
+                  {viewedProject()?.name}
+                </span>
+              </Show>
               <span class="font-mono text-[11px] text-surface-txt-faint">
                 {projectLiveTabCount(viewedProject()!)} tabs
               </span>
+
+              <Show when={viewedProjectId() !== currentId()}>
+                <div
+                  class={
+                    "group ml-1 flex min-w-0 shrink items-center gap-1.5 rounded py-0.5 pr-1.5 pl-0.5" +
+                    (currentThing() ? " border border-warning/30" : "")
+                  }
+                >
+                  <button
+                    type="button"
+                    disabled={busy()}
+                    onClick={() => openProject(viewedProject()!)}
+                    class="btn btn-sm shrink-0 gap-1.5 border-none bg-accent text-accent-txt shadow-[var(--shadow-raised)] hover:bg-accent-alt1 disabled:opacity-50"
+                  >
+                    <Show when={currentThing()} fallback={<Plug size={13} />}>
+                      <ArrowRightLeft size={13} />
+                    </Show>
+                    {currentThing()
+                      ? "Switch to this project"
+                      : "Connect to this project"}
+                  </button>
+                  <Show when={currentThing()}>
+                    <TriangleAlert size={12} class="shrink-0 text-warning" />
+                    <span class="max-w-0 overflow-hidden whitespace-nowrap text-xs text-warning transition-[max-width] duration-[var(--duration)] group-hover:max-w-40 group-focus-within:max-w-40">
+                      Replaces {currentThing()!.name}'s tabs
+                    </span>
+                  </Show>
+                </div>
+              </Show>
+
+              <Show when={viewedProjectId() === currentId()}>
+                <button
+                  type="button"
+                  disabled={busy()}
+                  onClick={handleDisconnectWindow}
+                  class="btn btn-sm ml-1 shrink-0 gap-1.5 border border-surface-alt3 text-surface-txt-hint hover:text-warning disabled:opacity-50"
+                >
+                  <Unplug size={13} />
+                  Disconnect
+                </button>
+              </Show>
+
+              <details class="dropdown shrink-0">
+                <summary
+                  title="More actions"
+                  class="btn btn-square btn-sm list-none border border-surface-alt3 bg-surface-alt2 shadow-[var(--shadow-card)]"
+                >
+                  <MoreHorizontal size={15} />
+                </summary>
+                <ul class="dropdown-content menu z-50 mt-1 w-47.5 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]">
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        startRenameFolder(viewedProject()!);
+                        closeOpenDropdowns();
+                      }}
+                    >
+                      Rename project
+                    </button>
+                  </li>
+                  <Show when={viewedProjectId() === currentId()}>
+                    <li>
+                      <button
+                        type="button"
+                        disabled={busy()}
+                        onClick={handleCloseAllTabs}
+                      >
+                        Close all tabs
+                      </button>
+                    </li>
+                  </Show>
+                  <li>
+                    <button
+                      type="button"
+                      class="text-danger"
+                      onClick={handleDeleteViewedProject}
+                    >
+                      Delete project
+                    </button>
+                  </li>
+                </ul>
+              </details>
             </Show>
 
             <Show when={!viewingFolderId() && !viewedProject()}>
@@ -1161,7 +1272,7 @@ function Dashboard(props: {
                 <div
                   class={
                     "group ml-1 flex min-w-0 shrink items-center gap-1.5 rounded py-0.5 pr-1.5 pl-0.5" +
-                    (current() ? " border border-warning/30" : "")
+                    (currentThing() ? " border border-warning/30" : "")
                   }
                 >
                   <button
@@ -1170,17 +1281,17 @@ function Dashboard(props: {
                     onClick={() => viewed() && openAll(viewed()!)}
                     class="btn btn-sm shrink-0 gap-1.5 border-none bg-accent text-accent-txt shadow-[var(--shadow-raised)] hover:bg-accent-alt1 disabled:opacity-50"
                   >
-                    <Show when={current()} fallback={<Plug size={13} />}>
+                    <Show when={currentThing()} fallback={<Plug size={13} />}>
                       <ArrowRightLeft size={13} />
                     </Show>
-                    {current()
+                    {currentThing()
                       ? "Switch to this quest"
                       : "Connect to this quest"}
                   </button>
-                  <Show when={current()}>
+                  <Show when={currentThing()}>
                     <TriangleAlert size={12} class="shrink-0 text-warning" />
                     <span class="max-w-0 overflow-hidden whitespace-nowrap text-xs text-warning transition-[max-width] duration-[var(--duration)] group-hover:max-w-40 group-focus-within:max-w-40">
-                      Replaces {current()!.name}'s tabs
+                      Replaces {currentThing()!.name}'s tabs
                     </span>
                   </Show>
                 </div>
@@ -1378,26 +1489,6 @@ function Dashboard(props: {
                   </For>
                 </section>
               </Show>
-              <div class="mt-3.5 flex gap-2">
-                <button
-                  type="button"
-                  disabled={busy()}
-                  onClick={handleCloseAllTabs}
-                  class="btn btn-sm border border-surface-alt3 disabled:opacity-50"
-                >
-                  Close all tabs
-                </button>
-                <Show when={viewedProjectId() === currentId()}>
-                  <button
-                    type="button"
-                    disabled={busy()}
-                    onClick={handleDisconnectWindow}
-                    class="btn btn-sm border border-surface-alt3 disabled:opacity-50"
-                  >
-                    Disconnect
-                  </button>
-                </Show>
-              </div>
 
               <div class="mt-5">
                 <div class="mb-1.5 flex items-center gap-2">
@@ -1779,10 +1870,8 @@ function App() {
     const binding = windowId !== undefined ? windowMap()[windowId] : undefined;
     return binding ? bindingId(binding) : undefined;
   };
-  // A window bound to a Project (not yet nested in/showing a Quest) has no
-  // "current quest" to resolve to here — that's correct, not a gap: there's
-  // no Quest-shaped UI to show instead until the Project's own tabs view
-  // lands in a later step.
+  // Quest-only: used for the document title/favicon, which stays keyed off
+  // a live Quest specifically, same as before Project became window-bound.
   const current = () => quests().find((w) => w.id === currentId());
 
   // A trashed quest is still in storage.local (and still has whatever
@@ -2282,7 +2371,6 @@ function App() {
                   folders={folders}
                   resources={resources}
                   currentId={currentId}
-                  current={current}
                   openIds={openIds}
                   myWindowId={myWindowId}
                   entitlements={entitlements}
