@@ -35,7 +35,8 @@ import {
   ArrowRightLeft,
   ChevronDown,
   ChevronRight,
-  FolderOpen as ProjectIcon,
+  FolderClosed as ProjectClosedIcon,
+  FolderOpen as ProjectOpenIcon,
   FolderPlus,
   Layers as AreaIcon,
   Link as LinkIcon,
@@ -208,7 +209,20 @@ function FolderHeader(props: {
       <Show
         when={props.folder.kind === "area"}
         fallback={
-          <ProjectIcon size={12} class="shrink-0 text-surface-txt-faint" />
+          <Show
+            when={props.active}
+            fallback={
+              <ProjectClosedIcon
+                size={12}
+                class="shrink-0 text-surface-txt-faint"
+              />
+            }
+          >
+            <ProjectOpenIcon
+              size={12}
+              class="shrink-0 text-surface-txt-faint"
+            />
+          </Show>
         }
       >
         <AreaIcon size={12} class="shrink-0 text-surface-txt-faint" />
