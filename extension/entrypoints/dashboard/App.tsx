@@ -141,6 +141,30 @@ function faviconHrefFor(quest: Quest | undefined): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
+// A global-navbar search result to hand off into Dashboard's own view
+// state (see its jumpTo prop) — "area" targets a folder page, the other two
+// target the same views their sidebar rows do.
+type JumpTarget =
+  | { kind: "quest"; id: string }
+  | { kind: "project"; id: string }
+  | { kind: "area"; id: string };
+
+// A Project's live tabs are either its own base tabs, or — once a child
+// Quest has been swapped in via questSwapMachine — that Quest's tabs
+// instead. Mirrors utils/projectLiveTabs.ts's resolveProjectLiveTarget, but
+// as a pure read over already-loaded data rather than storage. Module-level
+// (not a Dashboard-local closure) so the global navbar's search can use it
+// too, without depending on Dashboard being mounted.
+function projectLiveTabs(project: Folder, quests: Quest[]) {
+  if (project.activeQuestId) {
+    return quests.find((q) => q.id === project.activeQuestId)?.tabs ?? [];
+  }
+  return project.tabs ?? [];
+}
+function projectLiveTabCount(project: Folder, quests: Quest[]) {
+  return projectLiveTabs(project, quests).length;
+}
+
 function closeOpenDropdowns() {
   document
     .querySelectorAll<HTMLDetailsElement>("details.dropdown[open]")
@@ -339,6 +363,8 @@ function Dashboard(props: {
   restoreSend: ReturnType<typeof useMachine<typeof restoreMachine>>[1];
   questSwapState: ReturnType<typeof useMachine<typeof questSwapMachine>>[0];
   questSwapSend: ReturnType<typeof useMachine<typeof questSwapMachine>>[1];
+  jumpTo: Accessor<JumpTarget | undefined>;
+  onJumped: () => void;
 }) {
   const {
     quests,
@@ -371,8 +397,6 @@ function Dashboard(props: {
   const [editingFolderId, setEditingFolderId] = createSignal<string>();
   const [editingFolderName, setEditingFolderName] = createSignal("");
   const [selected, setSelected] = createSignal<Set<number>>(new Set());
-  const [paletteQuery, setPaletteQuery] = createSignal("");
-  let paletteRef: HTMLDialogElement | undefined;
   let customizeRef: HTMLDialogElement | undefined;
 
   // Set when the sidebar's FolderHeader *name* (not its chevron) is
@@ -387,20 +411,6 @@ function Dashboard(props: {
   // until something navigates elsewhere.
   const [viewedProjectId, setViewedProjectId] = createSignal<string>();
   const viewedProject = () => folders().find((f) => f.id === viewedProjectId());
-
-  // A Project's live tabs are either its own base tabs, or — once a child
-  // Quest has been swapped in via questSwapMachine — that Quest's tabs
-  // instead. Mirrors utils/projectLiveTabs.ts's resolveProjectLiveTarget,
-  // but as a pure read over already-loaded signals rather than storage.
-  function projectLiveTabs(project: Folder) {
-    if (project.activeQuestId) {
-      return quests().find((q) => q.id === project.activeQuestId)?.tabs ?? [];
-    }
-    return project.tabs ?? [];
-  }
-  function projectLiveTabCount(project: Folder) {
-    return projectLiveTabs(project).length;
-  }
 
   onMount(() => {
     try {
@@ -542,6 +552,21 @@ function Dashboard(props: {
     restoreSend({ type: "RESTORE", target: { kind: "project", project } });
     showProjectTabs(project.id);
   }
+
+  // The global navbar's search lives in App(), outside this component (so
+  // it works from the Trash/Settings tabs too, where Dashboard isn't even
+  // mounted) — it hands off a selected result via this prop instead of
+  // calling showQuest/showProjectTabs/setViewingFolderId directly. Reacts
+  // whether Dashboard was already mounted or just mounted because of this
+  // jump, since it's a plain effect over the prop's value.
+  createEffect(() => {
+    const target = props.jumpTo();
+    if (!target) return;
+    if (target.kind === "quest") showQuest(target.id);
+    else if (target.kind === "project") showProjectTabs(target.id);
+    else setViewingFolderId(target.id);
+    props.onJumped();
+  });
 
   function viewingFolderBreadcrumb(): Array<{ id: string; name: string }> {
     const folder = viewingFolder();
@@ -912,125 +937,6 @@ function Dashboard(props: {
     closeOpenDropdowns();
   }
 
-  function openPalette() {
-    // An open details.dropdown breaks the dialog's ::backdrop dimming in
-    // Chromium (both compete for the top layer), so clear any open menu
-    // before showing the modal.
-    closeOpenDropdowns();
-    setPaletteQuery("");
-    paletteRef?.showModal();
-  }
-  function closePalette() {
-    paletteRef?.close();
-  }
-  function goToQuest(id: string) {
-    showQuest(id);
-    closePalette();
-  }
-  function goToProject(id: string) {
-    showProjectTabs(id);
-    closePalette();
-  }
-
-  onMount(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        openPalette();
-      } else if (e.key === "Escape") {
-        closeOpenDropdowns();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    onCleanup(() => window.removeEventListener("keydown", onKey));
-
-    const onClickAway = (e: MouseEvent) => {
-      document
-        .querySelectorAll<HTMLDetailsElement>("details.dropdown[open]")
-        .forEach((d) => {
-          if (!d.contains(e.target as Node)) d.removeAttribute("open");
-        });
-    };
-    document.addEventListener("click", onClickAway);
-    onCleanup(() => document.removeEventListener("click", onClickAway));
-  });
-
-  type PaletteResult = {
-    kind: "QT" | "PR" | "AR" | "TAB";
-    title: string;
-    meta: string;
-    go: () => void;
-  };
-  // Global across the whole hierarchy — Quests, Projects (including their
-  // own live tabs), and Areas — not scoped to whichever one is currently
-  // being viewed.
-  function paletteResults(): PaletteResult[] {
-    const q = paletteQuery().trim().toLowerCase();
-    if (!q) return [];
-    const out: PaletteResult[] = [];
-    for (const w of quests()) {
-      if (w.name.toLowerCase().includes(q)) {
-        out.push({
-          kind: "QT",
-          title: w.name,
-          meta: `${w.tabs.length} tabs`,
-          go: () => goToQuest(w.id),
-        });
-      }
-      for (const t of w.tabs) {
-        if (
-          t.title.toLowerCase().includes(q) ||
-          t.url.toLowerCase().includes(q)
-        ) {
-          out.push({
-            kind: "TAB",
-            title: t.title || t.url,
-            meta: w.name,
-            go: () => goToQuest(w.id),
-          });
-        }
-      }
-    }
-    for (const f of folders()) {
-      if (f.kind !== "project") {
-        if (f.name.toLowerCase().includes(q)) {
-          out.push({
-            kind: "AR",
-            title: f.name,
-            meta: "Area",
-            go: () => {
-              setViewingFolderId(f.id);
-              closePalette();
-            },
-          });
-        }
-        continue;
-      }
-      if (f.name.toLowerCase().includes(q)) {
-        out.push({
-          kind: "PR",
-          title: f.name,
-          meta: `${projectLiveTabCount(f)} tabs`,
-          go: () => goToProject(f.id),
-        });
-      }
-      for (const t of projectLiveTabs(f)) {
-        if (
-          t.title.toLowerCase().includes(q) ||
-          t.url.toLowerCase().includes(q)
-        ) {
-          out.push({
-            kind: "TAB",
-            title: t.title || t.url,
-            meta: f.name,
-            go: () => goToProject(f.id),
-          });
-        }
-      }
-    }
-    return out.slice(0, 20);
-  }
-
   return (
     <>
       <div class="flex min-h-0 flex-1 items-stretch overflow-hidden">
@@ -1161,7 +1067,7 @@ function Dashboard(props: {
                 </span>
               </Show>
               <span class="font-mono text-[11px] text-surface-txt-faint">
-                {projectLiveTabCount(viewedProject()!)} tabs
+                {projectLiveTabCount(viewedProject()!, quests())} tabs
               </span>
 
               <Show when={viewedProjectId() !== currentId()}>
@@ -1443,17 +1349,6 @@ function Dashboard(props: {
             </Show>
 
             <span class="flex-1" />
-            <button
-              type="button"
-              title="Search everything"
-              onClick={openPalette}
-              class="btn btn-sm shrink-0 border border-surface-alt3 bg-surface-alt1 shadow-[var(--shadow-card)]"
-            >
-              <Search size={13} />
-              <span class="rounded border border-surface-alt3 bg-surface-alt2 px-1.25 font-mono text-[11px]">
-                ⌘K
-              </span>
-            </button>
           </div>
 
           <Show when={viewingFolderId()}>
@@ -1467,7 +1362,7 @@ function Dashboard(props: {
                   : undefined
               }
               onOpenProject={showProjectTabs}
-              onOpenQuest={goToQuest}
+              onOpenQuest={showQuest}
               onAddQuest={() => handleAddQuestIn(viewingFolderId()!)}
             />
           </Show>
@@ -1514,7 +1409,7 @@ function Dashboard(props: {
                 }}
               />
               <Show
-                when={projectLiveTabs(viewedProject()!).length > 0}
+                when={projectLiveTabs(viewedProject()!, quests()).length > 0}
                 fallback={
                   <p class="text-sm text-surface-txt-hint">
                     No tabs in this project.
@@ -1522,7 +1417,7 @@ function Dashboard(props: {
                 }
               >
                 <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                  <For each={projectLiveTabs(viewedProject()!)}>
+                  <For each={projectLiveTabs(viewedProject()!, quests())}>
                     {(tab) => (
                       <div class="flex items-center gap-2.5 truncate border-b border-surface-alt2 px-3.5 py-2.5 text-sm last:border-b-0">
                         <span class="min-w-0 flex-1 truncate">
@@ -1731,47 +1626,6 @@ function Dashboard(props: {
       </Show>
 
       <dialog
-        ref={paletteRef}
-        onClick={(e) => e.target === e.currentTarget && closePalette()}
-        class="m-auto w-full max-w-[560px] rounded border border-surface-alt4 bg-surface-alt2 p-0 text-surface-txt shadow-[var(--shadow-modal)] backdrop:bg-black/55"
-      >
-        <div class="flex items-center gap-2.5 border-b border-surface-alt3 px-3.5 py-3">
-          <Search size={14} class="text-surface-txt-hint" />
-          <input
-            autofocus
-            value={paletteQuery()}
-            onInput={(e) => setPaletteQuery(e.currentTarget.value)}
-            placeholder="Jump to a quest, project, area, or tab…"
-            class="min-w-0 flex-1 bg-transparent text-[15px] outline-none"
-          />
-          <span class="rounded border border-surface-alt4 px-1.25 font-mono text-[11px] text-surface-txt-hint">
-            esc
-          </span>
-        </div>
-        <div class="max-h-[50vh] overflow-y-auto p-1.5">
-          <For each={paletteResults()}>
-            {(r) => (
-              <div
-                onClick={r.go}
-                class="flex cursor-pointer items-center gap-2.5 rounded px-2.5 py-2 hover:bg-surface-alt3"
-              >
-                <span class="badge badge-sm shrink-0 font-mono">{r.kind}</span>
-                <span class="min-w-0 flex-1 truncate text-sm">{r.title}</span>
-                <span class="shrink-0 font-mono text-[11px] text-surface-txt-faint">
-                  {r.meta}
-                </span>
-              </div>
-            )}
-          </For>
-          <Show when={paletteQuery().trim() && paletteResults().length === 0}>
-            <p class="p-5.5 text-center text-sm text-surface-txt-hint">
-              No matches.
-            </p>
-          </Show>
-        </div>
-      </dialog>
-
-      <dialog
         ref={customizeRef}
         onClick={(e) => e.target === e.currentTarget && closeCustomize()}
         class="m-auto w-full max-w-[340px] rounded border border-surface-alt4 bg-surface-alt2 p-4 text-surface-txt shadow-[var(--shadow-modal)] backdrop:bg-black/55"
@@ -1867,6 +1721,137 @@ function App() {
   const [state, send] = useMachine(restoreMachine);
   const [questSwapState, questSwapSend] = useMachine(questSwapMachine);
   const [syncState, syncSend] = useMachine(syncMachine);
+
+  // The search palette lives here, not inside Dashboard, so it works from
+  // the Trash/Settings tabs too — Dashboard only mounts for nav()==="quests".
+  const [paletteQuery, setPaletteQuery] = createSignal("");
+  let paletteRef: HTMLDialogElement | undefined;
+  // A selected result hands off to Dashboard's own view state via this prop
+  // instead of reaching into it directly — see Dashboard's jumpTo prop.
+  const [jumpTo, setJumpTo] = createSignal<JumpTarget>();
+
+  function openPalette() {
+    // An open details.dropdown breaks the dialog's ::backdrop dimming in
+    // Chromium (both compete for the top layer), so clear any open menu
+    // before showing the modal.
+    closeOpenDropdowns();
+    setPaletteQuery("");
+    paletteRef?.showModal();
+  }
+  function closePalette() {
+    paletteRef?.close();
+  }
+  function goToQuest(id: string) {
+    setNav("quests");
+    setJumpTo({ kind: "quest", id });
+    closePalette();
+  }
+  function goToProject(id: string) {
+    setNav("quests");
+    setJumpTo({ kind: "project", id });
+    closePalette();
+  }
+  function goToArea(id: string) {
+    setNav("quests");
+    setJumpTo({ kind: "area", id });
+    closePalette();
+  }
+
+  onMount(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        openPalette();
+      } else if (e.key === "Escape") {
+        closeOpenDropdowns();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    onCleanup(() => window.removeEventListener("keydown", onKey));
+
+    const onClickAway = (e: MouseEvent) => {
+      document
+        .querySelectorAll<HTMLDetailsElement>("details.dropdown[open]")
+        .forEach((d) => {
+          if (!d.contains(e.target as Node)) d.removeAttribute("open");
+        });
+    };
+    document.addEventListener("click", onClickAway);
+    onCleanup(() => document.removeEventListener("click", onClickAway));
+  });
+
+  type PaletteResult = {
+    kind: "QT" | "PR" | "AR" | "TAB";
+    title: string;
+    meta: string;
+    go: () => void;
+  };
+  // Global across the whole hierarchy — Quests, Projects (including their
+  // own live tabs), and Areas — not scoped to whichever one is currently
+  // being viewed, and reachable from any nav tab (Quests/Trash/Settings).
+  function paletteResults(): PaletteResult[] {
+    const q = paletteQuery().trim().toLowerCase();
+    if (!q) return [];
+    const out: PaletteResult[] = [];
+    for (const w of quests()) {
+      if (w.name.toLowerCase().includes(q)) {
+        out.push({
+          kind: "QT",
+          title: w.name,
+          meta: `${w.tabs.length} tabs`,
+          go: () => goToQuest(w.id),
+        });
+      }
+      for (const t of w.tabs) {
+        if (
+          t.title.toLowerCase().includes(q) ||
+          t.url.toLowerCase().includes(q)
+        ) {
+          out.push({
+            kind: "TAB",
+            title: t.title || t.url,
+            meta: w.name,
+            go: () => goToQuest(w.id),
+          });
+        }
+      }
+    }
+    for (const f of folders()) {
+      if (f.kind !== "project") {
+        if (f.name.toLowerCase().includes(q)) {
+          out.push({
+            kind: "AR",
+            title: f.name,
+            meta: "Area",
+            go: () => goToArea(f.id),
+          });
+        }
+        continue;
+      }
+      if (f.name.toLowerCase().includes(q)) {
+        out.push({
+          kind: "PR",
+          title: f.name,
+          meta: `${projectLiveTabCount(f, quests())} tabs`,
+          go: () => goToProject(f.id),
+        });
+      }
+      for (const t of projectLiveTabs(f, quests())) {
+        if (
+          t.title.toLowerCase().includes(q) ||
+          t.url.toLowerCase().includes(q)
+        ) {
+          out.push({
+            kind: "TAB",
+            title: t.title || t.url,
+            meta: f.name,
+            go: () => goToProject(f.id),
+          });
+        }
+      }
+    }
+    return out.slice(0, 20);
+  }
 
   // See docs/implementation-plan-sync.md M6: syncMachine owns pull/push
   // timing, this just renders its current snapshot. A pull/push failure and
@@ -2265,6 +2250,17 @@ function App() {
                 </For>
               </div>
               <span class="flex-1" />
+              <button
+                type="button"
+                title="Search everything"
+                onClick={openPalette}
+                class="btn btn-sm h-8 shrink-0 border border-surface-alt3 bg-surface-alt1 shadow-[var(--shadow-card)]"
+              >
+                <Search size={13} />
+                <span class="rounded border border-surface-alt3 bg-surface-alt2 px-1.25 font-mono text-[11px]">
+                  ⌘K
+                </span>
+              </button>
               <details class="dropdown dropdown-end">
                 <summary class="btn btn-sm h-8 list-none gap-1.75 border-none bg-transparent font-normal text-surface-txt-hint hover:text-surface-txt">
                   <span class="whitespace-nowrap">{session()?.user.email}</span>
@@ -2423,10 +2419,59 @@ function App() {
                   restoreSend={send}
                   questSwapState={questSwapState}
                   questSwapSend={questSwapSend}
+                  jumpTo={jumpTo}
+                  onJumped={() => setJumpTo(undefined)}
                 />
               </Match>
             </Switch>
           </div>
+
+          <dialog
+            ref={paletteRef}
+            onClick={(e) => e.target === e.currentTarget && closePalette()}
+            class="m-auto w-full max-w-[560px] rounded border border-surface-alt4 bg-surface-alt2 p-0 text-surface-txt shadow-[var(--shadow-modal)] backdrop:bg-black/55"
+          >
+            <div class="flex items-center gap-2.5 border-b border-surface-alt3 px-3.5 py-3">
+              <Search size={14} class="text-surface-txt-hint" />
+              <input
+                autofocus
+                value={paletteQuery()}
+                onInput={(e) => setPaletteQuery(e.currentTarget.value)}
+                placeholder="Jump to a quest, project, area, or tab…"
+                class="min-w-0 flex-1 bg-transparent text-[15px] outline-none"
+              />
+              <span class="rounded border border-surface-alt4 px-1.25 font-mono text-[11px] text-surface-txt-hint">
+                esc
+              </span>
+            </div>
+            <div class="max-h-[50vh] overflow-y-auto p-1.5">
+              <For each={paletteResults()}>
+                {(r) => (
+                  <div
+                    onClick={r.go}
+                    class="flex cursor-pointer items-center gap-2.5 rounded px-2.5 py-2 hover:bg-surface-alt3"
+                  >
+                    <span class="badge badge-sm shrink-0 font-mono">
+                      {r.kind}
+                    </span>
+                    <span class="min-w-0 flex-1 truncate text-sm">
+                      {r.title}
+                    </span>
+                    <span class="shrink-0 font-mono text-[11px] text-surface-txt-faint">
+                      {r.meta}
+                    </span>
+                  </div>
+                )}
+              </For>
+              <Show
+                when={paletteQuery().trim() && paletteResults().length === 0}
+              >
+                <p class="p-5.5 text-center text-sm text-surface-txt-hint">
+                  No matches.
+                </p>
+              </Show>
+            </div>
+          </dialog>
         </Show>
       </Show>
     </>
