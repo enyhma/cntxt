@@ -1913,29 +1913,42 @@ function App() {
   const trashedQuests = () => quests().filter((w) => !!w.deletedAt);
   const trashRetention = () =>
     trashRetentionDays(entitlements()?.accessExpiresAt);
+  // Folders have no trash tier (deleteFolder is a hard delete), so every
+  // Project-kind one counts as "active" for usage purposes.
+  const projects = () => folders().filter((f) => f.kind === "project");
 
-  // Account-level usage, driven by actual per-quest sync status (see
-  // docs/workspace-sync-semantics.md) rather than re-deriving "at limit"
-  // from entitlements — a quest only counts here once it's actually
-  // failed to sync for a plan reason, not just because a count crossed a
-  // threshold with nothing having been rejected yet.
-  const syncedCount = () =>
+  // Account-level usage, driven by actual per-item sync status (see
+  // docs/quest-sync-semantics.md) rather than re-deriving "at limit" from
+  // entitlements — an item only counts here once it's actually failed to
+  // sync for a plan reason, not just because a count crossed a threshold
+  // with nothing having been rejected yet. Quests and Projects share one
+  // quota pool server-side (count_workspace_like() — see
+  // supabase/migrations/20261007170000_project_quest_restructure.sql), so
+  // both are counted together here too.
+  const syncedQuestCount = () =>
     activeQuests().filter((w) => w.syncStatus === "synced").length;
+  const syncedProjectCount = () =>
+    projects().filter((f) => f.syncStatus === "synced").length;
+  const syncedCount = () => syncedQuestCount() + syncedProjectCount();
   const blockedCount = () =>
     activeQuests().filter(
       (w) => w.syncStatus === "limit-reached" || w.syncStatus === "expired",
+    ).length +
+    projects().filter(
+      (f) => f.syncStatus === "limit-reached" || f.syncStatus === "expired",
     ).length;
-  const hasExpiredQuest = () =>
-    activeQuests().some((w) => w.syncStatus === "expired");
+  const hasExpiredAccess = () =>
+    activeQuests().some((w) => w.syncStatus === "expired") ||
+    projects().some((f) => f.syncStatus === "expired");
 
-  // blockedCount only catches a quest that actually *failed* a
-  // create_quest call — but pullRemoteQuests (utils/quests.ts)
-  // marks anything with a real server row "synced" regardless of the
-  // account's *current* entitlement, and create_quest only enforces
-  // the limit at insert time, never retroactively. So an account can sit
-  // at, say, 11 synced quests against a 3-quest plan — nothing
-  // "failed", so blockedCount stays 0 — with no signal anywhere that
-  // new quests won't sync from here. This fills that gap.
+  // blockedCount only catches an item that actually *failed* a create_quest/
+  // create_project call — but pullRemoteQuests/pullRemoteFolders mark
+  // anything with a real server row "synced" regardless of the account's
+  // *current* entitlement, and the create RPCs only enforce the limit at
+  // insert time, never retroactively. So an account can sit at, say, 11
+  // synced items against a 3-item plan — nothing "failed", so blockedCount
+  // stays 0 — with no signal anywhere that new items won't sync from here.
+  // This fills that gap.
   const overLimitCount = () => {
     const max = entitlements()?.maxMissions;
     return max !== undefined && syncedCount() > max ? syncedCount() - max : 0;
@@ -2342,13 +2355,13 @@ function App() {
                 <TriangleAlert size={14} class="mt-0.5 shrink-0 text-warning" />
                 <p class="flex-1 text-surface-txt-hint">
                   <span class="font-medium text-surface-txt">
-                    {hasExpiredQuest()
+                    {hasExpiredAccess()
                       ? "Your plan has expired."
                       : "You've hit your plan's limit."}
                   </span>{" "}
-                  {blockedCount()} quest{blockedCount() === 1 ? "" : "s"}{" "}
+                  {blockedCount()} item{blockedCount() === 1 ? "" : "s"}{" "}
                   {blockedCount() === 1 ? "isn't" : "aren't"} syncing.{" "}
-                  {hasExpiredQuest() ? "Renew" : "Upgrade"} to keep everything
+                  {hasExpiredAccess() ? "Renew" : "Upgrade"} to keep everything
                   backed up.
                 </p>
                 <button
@@ -2368,9 +2381,9 @@ function App() {
                   <span class="font-medium text-surface-txt">
                     You're over your plan's limit.
                   </span>{" "}
-                  {syncedCount()} quests are synced, but your plan covers{" "}
-                  {entitlements()?.maxMissions}. New quests won't sync until
-                  you're back under the limit or you upgrade.
+                  {syncedCount()} items are synced, but your plan covers{" "}
+                  {entitlements()?.maxMissions}. New quests and projects won't
+                  sync until you're back under the limit or you upgrade.
                 </p>
                 <button
                   type="button"
@@ -2402,6 +2415,25 @@ function App() {
                     onThemeChange={handleThemeChange}
                     manualPullEnabled={manualPullEnabled}
                     onManualPullEnabledChange={handleManualPullEnabledChange}
+                    maxWorkspaces={() => entitlements()?.maxMissions}
+                    questCount={() => activeQuests().length}
+                    projectCount={() => projects().length}
+                    syncedCount={syncedCount}
+                    blockedCount={blockedCount}
+                    overLimitCount={overLimitCount}
+                    accessExpiresAt={() => entitlements()?.accessExpiresAt}
+                    trashedCount={() => trashedQuests().length}
+                    trashRetentionDays={trashRetention}
+                    monthlyCheckoutUrl={
+                      session()
+                        ? creemMonthlyCheckoutUrl(session()!.user.id)
+                        : undefined
+                    }
+                    yearlyCheckoutUrl={
+                      session()
+                        ? creemYearlyCheckoutUrl(session()!.user.id)
+                        : undefined
+                    }
                   />
                 </div>
               </Match>
