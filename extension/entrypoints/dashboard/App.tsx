@@ -927,6 +927,10 @@ function Dashboard(props: {
     showQuest(id);
     closePalette();
   }
+  function goToProject(id: string) {
+    showProjectTabs(id);
+    closePalette();
+  }
 
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -952,11 +956,14 @@ function Dashboard(props: {
   });
 
   type PaletteResult = {
-    kind: "WS" | "TAB";
+    kind: "QT" | "PR" | "AR" | "TAB";
     title: string;
     meta: string;
     go: () => void;
   };
+  // Global across the whole hierarchy — Quests, Projects (including their
+  // own live tabs), and Areas — not scoped to whichever one is currently
+  // being viewed.
   function paletteResults(): PaletteResult[] {
     const q = paletteQuery().trim().toLowerCase();
     if (!q) return [];
@@ -964,7 +971,7 @@ function Dashboard(props: {
     for (const w of quests()) {
       if (w.name.toLowerCase().includes(q)) {
         out.push({
-          kind: "WS",
+          kind: "QT",
           title: w.name,
           meta: `${w.tabs.length} tabs`,
           go: () => goToQuest(w.id),
@@ -980,6 +987,43 @@ function Dashboard(props: {
             title: t.title || t.url,
             meta: w.name,
             go: () => goToQuest(w.id),
+          });
+        }
+      }
+    }
+    for (const f of folders()) {
+      if (f.kind !== "project") {
+        if (f.name.toLowerCase().includes(q)) {
+          out.push({
+            kind: "AR",
+            title: f.name,
+            meta: "Area",
+            go: () => {
+              setViewingFolderId(f.id);
+              closePalette();
+            },
+          });
+        }
+        continue;
+      }
+      if (f.name.toLowerCase().includes(q)) {
+        out.push({
+          kind: "PR",
+          title: f.name,
+          meta: `${projectLiveTabCount(f)} tabs`,
+          go: () => goToProject(f.id),
+        });
+      }
+      for (const t of projectLiveTabs(f)) {
+        if (
+          t.title.toLowerCase().includes(q) ||
+          t.url.toLowerCase().includes(q)
+        ) {
+          out.push({
+            kind: "TAB",
+            title: t.title || t.url,
+            meta: f.name,
+            go: () => goToProject(f.id),
           });
         }
       }
@@ -1401,7 +1445,7 @@ function Dashboard(props: {
             <span class="flex-1" />
             <button
               type="button"
-              title="Search quests"
+              title="Search everything"
               onClick={openPalette}
               class="btn btn-sm shrink-0 border border-surface-alt3 bg-surface-alt1 shadow-[var(--shadow-card)]"
             >
@@ -1697,7 +1741,7 @@ function Dashboard(props: {
             autofocus
             value={paletteQuery()}
             onInput={(e) => setPaletteQuery(e.currentTarget.value)}
-            placeholder="Jump to a quest or tab…"
+            placeholder="Jump to a quest, project, area, or tab…"
             class="min-w-0 flex-1 bg-transparent text-[15px] outline-none"
           />
           <span class="rounded border border-surface-alt4 px-1.25 font-mono text-[11px] text-surface-txt-hint">
