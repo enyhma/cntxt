@@ -1,4 +1,3 @@
-import { Show } from "solid-js";
 import { questDotClass, questTxtClass } from "./colors";
 import { Icon, type IconName } from "./icon";
 
@@ -7,7 +6,10 @@ export function QuestDot(props: {
   ring?: boolean;
   title?: string;
 }) {
-  const icon = () => props.quest?.icon as IconName | undefined;
+  // A chosen icon wins; otherwise every quest still shows a consistent
+  // kind icon (a target — matching Area/Project each always showing their
+  // own kind icon in the sidebar) rather than a blank dot.
+  const icon = () => (props.quest?.icon as IconName | undefined) ?? "target";
   return (
     <span
       title={props.title}
@@ -17,9 +19,7 @@ export function QuestDot(props: {
         (props.ring ? " ring-2 ring-accent" : "")
       }
     >
-      <Show when={icon()}>
-        <Icon name={icon()!} size={9} class={questTxtClass(props.quest)} />
-      </Show>
+      <Icon name={icon()} size={9} class={questTxtClass(props.quest)} />
     </span>
   );
 }

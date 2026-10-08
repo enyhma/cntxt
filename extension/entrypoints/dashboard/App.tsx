@@ -35,8 +35,9 @@ import {
   ArrowRightLeft,
   ChevronDown,
   ChevronRight,
-  Folder as FolderIcon,
+  FolderOpen as ProjectIcon,
   FolderPlus,
+  Layers as AreaIcon,
   Link as LinkIcon,
   type LucideProps,
   MoreHorizontal,
@@ -46,7 +47,7 @@ import {
   Plus,
   RefreshCw,
   Search,
-  LayoutGrid as SectionsIcon,
+  LayoutGrid as QuestsIcon,
   Settings as SettingsIcon,
   Trash2,
   TriangleAlert,
@@ -150,7 +151,7 @@ const NAV_ITEMS: Array<{
   label: string;
   icon: (props: LucideProps) => JSX.Element;
 }> = [
-  { key: "quests", label: "Quests", icon: SectionsIcon },
+  { key: "quests", label: "Quests", icon: QuestsIcon },
   { key: "trash", label: "Trash", icon: Trash2 },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -204,7 +205,14 @@ function FolderHeader(props: {
           class={"transition-transform" + (props.expanded ? " rotate-90" : "")}
         />
       </button>
-      <FolderIcon size={12} class="shrink-0 text-surface-txt-faint" />
+      <Show
+        when={props.folder.kind === "area"}
+        fallback={
+          <ProjectIcon size={12} class="shrink-0 text-surface-txt-faint" />
+        }
+      >
+        <AreaIcon size={12} class="shrink-0 text-surface-txt-faint" />
+      </Show>
       <Show
         when={!props.editing}
         fallback={

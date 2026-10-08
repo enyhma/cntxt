@@ -111,6 +111,11 @@ export const ICONS = {
     ["path", { d: "m16 18 6-6-6-6" }],
     ["path", { d: "m8 6-6 6 6 6" }],
   ],
+  target: [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["circle", { cx: "12", cy: "12", r: "6" }],
+    ["circle", { cx: "12", cy: "12", r: "2" }],
+  ],
 } satisfies Record<string, IconNode>;
 
 export type IconName = keyof typeof ICONS;
