@@ -196,11 +196,13 @@ function FolderHeader(props: {
   editing: boolean;
   editingValue: string;
   onEditingInput: (v: string) => void;
-  onStartRename: () => void;
   onCommitRename: () => void;
   onAddQuest?: () => void;
   onAddProject?: () => void;
-  onDelete: () => void;
+  // Rename and delete live in a right-click context menu (see
+  // folderContextMenu in Dashboard) rather than inline icons here — this
+  // callback is how a row reports where it was right-clicked.
+  onContextMenu: (e: MouseEvent) => void;
   // Project-only: the same connect/switch/disconnect affordance a Quest
   // row has (QuestRow.tsx) — a Project is window-bound too (see
   // attach.ts's ensureBindingForWindow), so it needs a way to open its own
@@ -212,11 +214,20 @@ function FolderHeader(props: {
   onOpenAll?: () => void;
   onDisconnect?: () => void;
 }) {
+  const canSwitch = () =>
+    !!props.onOpenAll && !props.isCurrent && !props.openElsewhere;
   return (
     <div
+      onDblClick={() => canSwitch() && !props.busy && props.onOpenAll?.()}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        props.onContextMenu(e);
+      }}
+      data-tip={canSwitch() ? "Double-click to switch" : undefined}
       class={
         "group flex items-center gap-1 rounded py-1.5 pr-1.5" +
-        (props.active ? " bg-surface-alt2" : "")
+        (props.active ? " bg-surface-alt2" : "") +
+        (canSwitch() ? " tooltip" : "")
       }
       style={{ "padding-left": `${0.5 + props.depth * 0.875}rem` }}
     >
@@ -266,7 +277,6 @@ function FolderHeader(props: {
       >
         <span
           onClick={props.onOpen}
-          onDblClick={props.onStartRename}
           class={
             "min-w-0 flex-1 cursor-pointer truncate text-[12px] font-semibold tracking-wide" +
             (props.active ? " text-surface-txt" : " text-surface-txt-hint")
@@ -296,55 +306,37 @@ function FolderHeader(props: {
             <Plus size={11} />
           </button>
         </Show>
-        <Show when={props.onOpenAll}>
-          <Show when={props.isCurrent}>
-            <button
-              type="button"
-              title="Disconnect"
-              disabled={props.busy}
-              onClick={(e) => {
-                e.stopPropagation();
-                props.onDisconnect?.();
-              }}
-              class="btn btn-square btn-ghost btn-xs text-surface-txt-hint hover:text-warning disabled:opacity-40"
-            >
-              <Unplug size={11} />
-            </button>
-          </Show>
-          <Show when={!props.isCurrent}>
-            <Show
-              when={!props.openElsewhere}
-              fallback={
-                <span title="Open elsewhere" class="shrink-0">
-                  <AppWindow size={11} class="text-surface-txt-faint" />
-                </span>
-              }
-            >
-              <button
-                type="button"
-                title={props.anyActive ? "Switch here" : "Connect here"}
-                disabled={props.busy}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  props.onOpenAll?.();
-                }}
-                class="btn btn-square btn-ghost btn-xs text-accent disabled:opacity-40"
-              >
-                <Show when={props.anyActive} fallback={<Plug size={11} />}>
-                  <ArrowRightLeft size={11} />
-                </Show>
-              </button>
-            </Show>
-          </Show>
+        <Show when={props.onOpenAll && props.openElsewhere}>
+          <span title="Open elsewhere" class="shrink-0">
+            <AppWindow size={11} class="text-surface-txt-faint" />
+          </span>
         </Show>
-        <button
-          type="button"
-          title="Delete"
-          onClick={props.onDelete}
-          class="btn btn-square btn-ghost btn-xs text-surface-txt-hint hover:text-danger"
-        >
-          <Trash2 size={11} />
-        </button>
+        <Show when={props.onOpenAll && props.isCurrent}>
+          <details class="dropdown dropdown-end shrink-0">
+            <summary
+              title="More actions"
+              class="btn btn-square btn-ghost btn-xs list-none text-surface-txt-hint"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreHorizontal size={11} />
+            </summary>
+            <ul
+              class="dropdown-content menu z-50 mt-1 w-36 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <li>
+                <button
+                  type="button"
+                  disabled={props.busy}
+                  class="text-warning"
+                  onClick={() => props.onDisconnect?.()}
+                >
+                  Disconnect
+                </button>
+              </li>
+            </ul>
+          </details>
+        </Show>
       </div>
     </div>
   );
@@ -396,6 +388,14 @@ function Dashboard(props: {
   );
   const [editingFolderId, setEditingFolderId] = createSignal<string>();
   const [editingFolderName, setEditingFolderName] = createSignal("");
+  // Shared by both FolderHeader and QuestRow rows — each right-click
+  // builds its own item list (rename/delete mean different things, and
+  // target different entities, for a folder vs. a quest).
+  const [contextMenu, setContextMenu] = createSignal<{
+    x: number;
+    y: number;
+    items: { label: string; onClick: () => void; danger?: boolean }[];
+  }>();
   const [selected, setSelected] = createSignal<Set<number>>(new Set());
   let customizeRef: HTMLDialogElement | undefined;
 
@@ -419,6 +419,25 @@ function Dashboard(props: {
     } catch {
       // localStorage can throw in some extension contexts; default stands.
     }
+  });
+
+  onMount(() => {
+    // Not listening for "contextmenu" here: a row's own onContextMenu sets
+    // this same state, and since that event bubbles to the document too, a
+    // generic contextmenu-closes-it listener would immediately undo the
+    // open it just caused.
+    const close = () => setContextMenu(undefined);
+    const closeOnEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("click", close);
+    document.addEventListener("scroll", close, true);
+    document.addEventListener("keydown", closeOnEscape);
+    onCleanup(() => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("scroll", close, true);
+      document.removeEventListener("keydown", closeOnEscape);
+    });
   });
 
   // Seed the initially-viewed quest from this window's quest once
@@ -683,6 +702,17 @@ function Dashboard(props: {
     closeOpenDropdowns();
   }
 
+  function folderContextMenuItems(folder: Folder) {
+    return [
+      { label: "Rename", onClick: () => startRenameFolder(folder) },
+      {
+        label: "Delete",
+        danger: true,
+        onClick: () => handleDeleteFolder(folder),
+      },
+    ];
+  }
+
   const resourcesForViewed = () =>
     resources().filter((r) => r.questId === viewedId());
 
@@ -822,10 +852,15 @@ function Dashboard(props: {
           editing={editingFolderId() === project.id}
           editingValue={editingFolderName()}
           onEditingInput={setEditingFolderName}
-          onStartRename={() => startRenameFolder(project)}
           onCommitRename={commitRenameFolder}
           onAddQuest={() => handleAddQuestIn(project.id)}
-          onDelete={() => handleDeleteFolder(project)}
+          onContextMenu={(e) =>
+            setContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              items: folderContextMenuItems(project),
+            })
+          }
           isCurrent={project.id === currentId()}
           openElsewhere={
             project.id !== currentId() && openIds().has(project.id)
@@ -863,6 +898,13 @@ function Dashboard(props: {
           onView={() => showQuest(w.id)}
           onOpenAll={() => openAll(w)}
           onDisconnect={handleDisconnectWindow}
+          onContextMenu={(e) =>
+            setContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              items: questContextMenuItems(w),
+            })
+          }
         />
       </div>
     );
@@ -875,6 +917,29 @@ function Dashboard(props: {
     if (viewedId() === id) setViewedId(currentId());
     await refresh();
     closeOpenDropdowns();
+  }
+
+  async function handleDeleteQuest(quest: Quest) {
+    await deleteQuest(quest.id);
+    if (viewedId() === quest.id) setViewedId(currentId());
+    await refresh();
+  }
+
+  function questContextMenuItems(quest: Quest) {
+    return [
+      {
+        label: "Rename",
+        onClick: () => {
+          showQuest(quest.id);
+          startRename();
+        },
+      },
+      {
+        label: "Delete",
+        danger: true,
+        onClick: () => handleDeleteQuest(quest),
+      },
+    ];
   }
 
   const [renaming, setRenaming] = createSignal(false);
@@ -992,11 +1057,16 @@ function Dashboard(props: {
                       editing={editingFolderId() === area.id}
                       editingValue={editingFolderName()}
                       onEditingInput={setEditingFolderName}
-                      onStartRename={() => startRenameFolder(area)}
                       onCommitRename={commitRenameFolder}
                       onAddProject={() => handleAddProject(area.id)}
                       onAddQuest={() => handleAddQuestIn(area.id)}
-                      onDelete={() => handleDeleteFolder(area)}
+                      onContextMenu={(e) =>
+                        setContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          items: folderContextMenuItems(area),
+                        })
+                      }
                     />
                     <Show when={expandedFolders().has(area.id)}>
                       <For each={childFolders(area.id)}>
@@ -1185,6 +1255,13 @@ function Dashboard(props: {
                             }}
                             onOpenAll={() => openAll(w)}
                             onDisconnect={handleDisconnectWindow}
+                            onContextMenu={(e) =>
+                              setContextMenu({
+                                x: e.clientX,
+                                y: e.clientY,
+                                items: questContextMenuItems(w),
+                              })
+                            }
                           />
                         </li>
                       )}
@@ -1701,6 +1778,28 @@ function Dashboard(props: {
           </For>
         </div>
       </dialog>
+      <Show when={contextMenu()}>
+        {(ctx) => (
+          <ul
+            class="menu fixed z-50 w-36 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]"
+            style={{ left: `${ctx().x}px`, top: `${ctx().y}px` }}
+          >
+            <For each={ctx().items}>
+              {(item) => (
+                <li>
+                  <button
+                    type="button"
+                    class={item.danger ? "text-danger" : undefined}
+                    onClick={item.onClick}
+                  >
+                    {item.label}
+                  </button>
+                </li>
+              )}
+            </For>
+          </ul>
+        )}
+      </Show>
     </>
   );
 }

@@ -20,12 +20,17 @@ export function QuestRow(props: {
   onView: () => void;
   onOpenAll: () => void;
   onDisconnect: () => void;
+  onContextMenu: (e: MouseEvent) => void;
 }) {
   const canSwitch = () => !props.isCurrent && !props.openElsewhere;
   return (
     <div
       onClick={props.onView}
       onDblClick={() => canSwitch() && !props.busy && props.onOpenAll()}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        props.onContextMenu(e);
+      }}
       data-tip={canSwitch() ? "Double-click to switch" : undefined}
       class={
         "group flex cursor-pointer items-center gap-2.5 rounded border-l-2 px-2.5 py-2" +
