@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import { AppWindow, MoreHorizontal } from "lucide-solid";
+import { AppWindow } from "lucide-solid";
 import { QuestDot } from "./QuestDot";
 import { SyncBadge, type SyncStatus } from "./SyncBadge";
 
@@ -19,7 +19,6 @@ export function QuestRow(props: {
   busy: boolean;
   onView: () => void;
   onOpenAll: () => void;
-  onDisconnect: () => void;
   onContextMenu: (e: MouseEvent) => void;
 }) {
   const canSwitch = () => !props.isCurrent && !props.openElsewhere;
@@ -54,32 +53,6 @@ export function QuestRow(props: {
         <span title="Open elsewhere" class="shrink-0">
           <AppWindow size={10} class="text-surface-txt-faint" />
         </span>
-      </Show>
-      <Show when={props.isCurrent}>
-        <details class="dropdown dropdown-end shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-          <summary
-            title="More actions"
-            class="btn btn-square btn-ghost btn-xs list-none text-surface-txt-hint"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreHorizontal size={12} />
-          </summary>
-          <ul
-            class="dropdown-content menu z-50 mt-1 w-36 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <li>
-              <button
-                type="button"
-                disabled={props.busy}
-                class="text-warning"
-                onClick={props.onDisconnect}
-              >
-                Disconnect
-              </button>
-            </li>
-          </ul>
-        </details>
       </Show>
     </div>
   );

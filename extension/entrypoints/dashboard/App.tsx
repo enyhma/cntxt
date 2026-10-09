@@ -212,7 +212,6 @@ function FolderHeader(props: {
   anyActive?: boolean;
   busy?: boolean;
   onOpenAll?: () => void;
-  onDisconnect?: () => void;
 }) {
   const canSwitch = () =>
     !!props.onOpenAll && !props.isCurrent && !props.openElsewhere;
@@ -310,32 +309,6 @@ function FolderHeader(props: {
           <span title="Open elsewhere" class="shrink-0">
             <AppWindow size={11} class="text-surface-txt-faint" />
           </span>
-        </Show>
-        <Show when={props.onOpenAll && props.isCurrent}>
-          <details class="dropdown dropdown-end shrink-0">
-            <summary
-              title="More actions"
-              class="btn btn-square btn-ghost btn-xs list-none text-surface-txt-hint"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreHorizontal size={11} />
-            </summary>
-            <ul
-              class="dropdown-content menu z-50 mt-1 w-36 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <li>
-                <button
-                  type="button"
-                  disabled={props.busy}
-                  class="text-warning"
-                  onClick={() => props.onDisconnect?.()}
-                >
-                  Disconnect
-                </button>
-              </li>
-            </ul>
-          </details>
         </Show>
       </div>
     </div>
@@ -702,9 +675,18 @@ function Dashboard(props: {
     closeOpenDropdowns();
   }
 
-  function folderContextMenuItems(folder: Folder) {
+  function folderContextMenuItems(folder: Folder, isCurrent = false) {
     return [
       { label: "Rename", onClick: () => startRenameFolder(folder) },
+      ...(isCurrent
+        ? [
+            {
+              label: "Disconnect",
+              danger: true,
+              onClick: handleDisconnectWindow,
+            },
+          ]
+        : []),
       {
         label: "Delete",
         danger: true,
@@ -858,7 +840,10 @@ function Dashboard(props: {
             setContextMenu({
               x: e.clientX,
               y: e.clientY,
-              items: folderContextMenuItems(project),
+              items: folderContextMenuItems(
+                project,
+                project.id === currentId(),
+              ),
             })
           }
           isCurrent={project.id === currentId()}
@@ -868,7 +853,6 @@ function Dashboard(props: {
           anyActive={currentId() !== undefined}
           busy={busy()}
           onOpenAll={() => openProject(project)}
-          onDisconnect={handleDisconnectWindow}
         />
         <Show when={expandedFolders().has(project.id)}>
           <For each={questsIn(project.id)}>
@@ -897,12 +881,11 @@ function Dashboard(props: {
           busy={busy()}
           onView={() => showQuest(w.id)}
           onOpenAll={() => openAll(w)}
-          onDisconnect={handleDisconnectWindow}
           onContextMenu={(e) =>
             setContextMenu({
               x: e.clientX,
               y: e.clientY,
-              items: questContextMenuItems(w),
+              items: questContextMenuItems(w, w.id === currentId()),
             })
           }
         />
@@ -925,7 +908,7 @@ function Dashboard(props: {
     await refresh();
   }
 
-  function questContextMenuItems(quest: Quest) {
+  function questContextMenuItems(quest: Quest, isCurrent = false) {
     return [
       {
         label: "Rename",
@@ -934,6 +917,15 @@ function Dashboard(props: {
           startRename();
         },
       },
+      ...(isCurrent
+        ? [
+            {
+              label: "Disconnect",
+              danger: true,
+              onClick: handleDisconnectWindow,
+            },
+          ]
+        : []),
       {
         label: "Delete",
         danger: true,
@@ -1254,12 +1246,14 @@ function Dashboard(props: {
                               closeOpenDropdowns();
                             }}
                             onOpenAll={() => openAll(w)}
-                            onDisconnect={handleDisconnectWindow}
                             onContextMenu={(e) =>
                               setContextMenu({
                                 x: e.clientX,
                                 y: e.clientY,
-                                items: questContextMenuItems(w),
+                                items: questContextMenuItems(
+                                  w,
+                                  w.id === currentId(),
+                                ),
                               })
                             }
                           />
