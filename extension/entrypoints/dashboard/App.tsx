@@ -367,7 +367,11 @@ function Dashboard(props: {
   const [contextMenu, setContextMenu] = createSignal<{
     x: number;
     y: number;
-    items: { label: string; onClick: () => void; danger?: boolean }[];
+    items: {
+      label: string;
+      onClick: () => void;
+      tone?: "warning" | "danger";
+    }[];
   }>();
   const [selected, setSelected] = createSignal<Set<number>>(new Set());
   let customizeRef: HTMLDialogElement | undefined;
@@ -682,14 +686,14 @@ function Dashboard(props: {
         ? [
             {
               label: "Disconnect",
-              danger: true,
+              tone: "warning" as const,
               onClick: handleDisconnectWindow,
             },
           ]
         : []),
       {
         label: "Delete",
-        danger: true,
+        tone: "danger" as const,
         onClick: () => handleDeleteFolder(folder),
       },
     ];
@@ -921,14 +925,14 @@ function Dashboard(props: {
         ? [
             {
               label: "Disconnect",
-              danger: true,
+              tone: "warning" as const,
               onClick: handleDisconnectWindow,
             },
           ]
         : []),
       {
         label: "Delete",
-        danger: true,
+        tone: "danger" as const,
         onClick: () => handleDeleteQuest(quest),
       },
     ];
@@ -1783,7 +1787,13 @@ function Dashboard(props: {
                 <li>
                   <button
                     type="button"
-                    class={item.danger ? "text-danger" : undefined}
+                    class={
+                      item.tone === "danger"
+                        ? "text-danger"
+                        : item.tone === "warning"
+                          ? "text-warning"
+                          : undefined
+                    }
                     onClick={item.onClick}
                   >
                     {item.label}
