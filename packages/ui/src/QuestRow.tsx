@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import { AppWindow, ArrowRightLeft, Plug, Unplug } from "lucide-solid";
+import { AppWindow, MoreHorizontal } from "lucide-solid";
 import { QuestDot } from "./QuestDot";
 import { SyncBadge, type SyncStatus } from "./SyncBadge";
 
@@ -21,14 +21,18 @@ export function QuestRow(props: {
   onOpenAll: () => void;
   onDisconnect: () => void;
 }) {
+  const canSwitch = () => !props.isCurrent && !props.openElsewhere;
   return (
     <div
       onClick={props.onView}
+      onDblClick={() => canSwitch() && !props.busy && props.onOpenAll()}
+      data-tip={canSwitch() ? "Double-click to switch" : undefined}
       class={
         "group flex cursor-pointer items-center gap-2.5 rounded border-l-2 px-2.5 py-2" +
         (props.isViewed
           ? " border-l-accent bg-surface-alt1 font-medium"
-          : " border-l-transparent text-surface-txt-hint")
+          : " border-l-transparent text-surface-txt-hint") +
+        (canSwitch() ? " tooltip" : "")
       }
     >
       <QuestDot
@@ -41,44 +45,36 @@ export function QuestRow(props: {
         {props.count}
       </span>
       <SyncBadge status={props.quest.syncStatus} />
-      <Show when={props.isCurrent}>
-        <button
-          type="button"
-          title="Disconnect"
-          disabled={props.busy}
-          onClick={(e) => {
-            e.stopPropagation();
-            props.onDisconnect();
-          }}
-          class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-warning disabled:opacity-40"
-        >
-          <Unplug size={10} />
-        </button>
+      <Show when={props.openElsewhere}>
+        <span title="Open elsewhere" class="shrink-0">
+          <AppWindow size={10} class="text-surface-txt-faint" />
+        </span>
       </Show>
-      <Show when={!props.isCurrent}>
-        <Show
-          when={!props.openElsewhere}
-          fallback={
-            <span title="Open elsewhere" class="shrink-0">
-              <AppWindow size={10} class="text-surface-txt-faint" />
-            </span>
-          }
-        >
-          <button
-            type="button"
-            title={props.anyActive ? "Switch here" : "Connect here"}
-            disabled={props.busy}
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onOpenAll();
-            }}
-            class="btn btn-square btn-ghost btn-xs shrink-0 text-accent opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-40"
+      <Show when={props.isCurrent}>
+        <details class="dropdown dropdown-end shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+          <summary
+            title="More actions"
+            class="btn btn-square btn-ghost btn-xs list-none text-surface-txt-hint"
+            onClick={(e) => e.stopPropagation()}
           >
-            <Show when={props.anyActive} fallback={<Plug size={10} />}>
-              <ArrowRightLeft size={10} />
-            </Show>
-          </button>
-        </Show>
+            <MoreHorizontal size={12} />
+          </summary>
+          <ul
+            class="dropdown-content menu z-50 mt-1 w-36 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <li>
+              <button
+                type="button"
+                disabled={props.busy}
+                class="text-warning"
+                onClick={props.onDisconnect}
+              >
+                Disconnect
+              </button>
+            </li>
+          </ul>
+        </details>
       </Show>
     </div>
   );

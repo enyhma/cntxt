@@ -3,4 +3,47 @@
 @plugin "daisyui" {
   themes: false;
 }
+/*
+ * daisyUI components (tooltip, etc.) read a fixed set of CSS vars
+ * (--color-base-100, --color-neutral, --color-error, ...) that this app's
+ * own token system (tokens.css) never defines, since `themes: false` above
+ * opts out of daisyUI's built-in theme set. This custom theme backfills
+ * just those vars, aliased to the equivalent existing token (var(), not a
+ * literal), so it stays correct across the indigo/brass data-theme
+ * overrides below without restating their formulas.
+ *
+ * Names that collide with a token tokens.css already defines (primary,
+ * accent, info, success, warning) are deliberately left out here — writing
+ * e.g. `--color-accent: var(--color-accent)` would be self-referential.
+ * Omitting them means daisyUI's own CSS just resolves `var(--color-accent)`
+ * etc. to tokens.css's existing definition directly.
+ */
+@plugin "daisyui/theme" {
+  name: "cntxt";
+  default: true;
+  color-scheme: dark;
+  --color-base-100: var(--color-surface);
+  --color-base-200: var(--color-surface-alt1);
+  --color-base-300: var(--color-surface-alt2);
+  --color-base-content: var(--color-surface-txt);
+  --color-primary-content: var(--color-primary-txt);
+  --color-secondary: var(--color-accent);
+  --color-secondary-content: var(--color-accent-txt);
+  --color-accent-content: var(--color-accent-txt);
+  --color-neutral: var(--color-surface-alt4);
+  --color-neutral-content: var(--color-surface-txt);
+  --color-info-content: var(--color-info-txt);
+  --color-success-content: var(--color-success-txt);
+  --color-warning-content: var(--color-warning-txt);
+  --color-error: var(--color-danger);
+  --color-error-content: var(--color-danger-txt);
+  --radius-selector: 5px;
+  --radius-field: 5px;
+  --radius-box: 15px;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
 @import "@cntxt/tokens/tokens.css";
