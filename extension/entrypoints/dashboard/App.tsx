@@ -898,15 +898,14 @@ function Dashboard(props: {
   }
 
   async function handleDeleteViewed() {
-    const id = viewedId();
-    if (!id) return;
-    await deleteQuest(id);
-    if (viewedId() === id) setViewedId(currentId());
-    await refresh();
+    const quest = viewed();
+    if (!quest) return;
+    await handleDeleteQuest(quest);
     closeOpenDropdowns();
   }
 
   async function handleDeleteQuest(quest: Quest) {
+    if (!confirm(`Delete "${quest.name}"?`)) return;
     await deleteQuest(quest.id);
     if (viewedId() === quest.id) setViewedId(currentId());
     await refresh();
