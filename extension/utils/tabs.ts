@@ -9,6 +9,25 @@ export async function snapshotTabs(windowId: number): Promise<QuestTab[]> {
     .map((t) => ({ url: t.url ?? "", title: t.title ?? "" }));
 }
 
+// Same snapshot as snapshotTabs, plus the raw tab ids — needed by
+// ensureLiveTabGroup (utils/tabGroups.ts) to group/ungroup actual tabs,
+// which snapshotTabs's {url,title}-only shape can't carry. A sibling
+// function rather than changing snapshotTabs's return shape: that one has
+// its own call site (attach.ts) with no use for ids.
+export async function snapshotTabsWithIds(
+  windowId: number,
+): Promise<{ tabs: QuestTab[]; tabIds: number[] }> {
+  const tabs = (await browser.tabs.query({ windowId })).filter(
+    (t) => t.url !== DASHBOARD_URL,
+  );
+  return {
+    tabs: tabs.map((t) => ({ url: t.url ?? "", title: t.title ?? "" })),
+    tabIds: tabs
+      .map((t) => t.id)
+      .filter((id): id is number => id !== undefined),
+  };
+}
+
 export async function ensureDashboardTab(windowId: number) {
   const [existing] = await browser.tabs.query({
     url: DASHBOARD_URL,

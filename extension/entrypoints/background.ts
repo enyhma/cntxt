@@ -4,6 +4,7 @@ import { getWindowBindingMap, removeWindowBinding } from "@/utils/session";
 import { updateSettings } from "@/utils/settings";
 import { DASHBOARD_URL, ensureDashboardTab } from "@/utils/tabs";
 import { windowSyncMachine } from "@/utils/windowSyncMachine";
+import { scheduleCaptureCheck } from "@/utils/captureGroups";
 
 export default defineBackground(() => {
   const windowActors = new Map<
@@ -69,12 +70,35 @@ export default defineBackground(() => {
     notifyTabsChanged(info.windowId),
   );
   browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
-    if (changeInfo.url === undefined && changeInfo.title === undefined) return;
-    notifyTabsChanged(tab.windowId);
+    if (changeInfo.url !== undefined || changeInfo.title !== undefined) {
+      notifyTabsChanged(tab.windowId);
+    }
+    // A tab joining a real group (not TAB_GROUP_ID_NONE) is the native
+    // tab-groups "silent capture" trigger — see utils/captureGroups.ts.
+    // Independent of the url/title check above: both can fire off one event.
+    if (
+      changeInfo.groupId !== undefined &&
+      changeInfo.groupId !== -1 &&
+      tab.windowId !== undefined
+    ) {
+      scheduleCaptureCheck(tab.windowId, changeInfo.groupId);
+    }
   });
   browser.tabs.onMoved.addListener((_tabId, info) =>
     notifyTabsChanged(info.windowId),
   );
+
+  // A dashboard-side rename/recolor of a Quest/Project fires no tab event,
+  // so without this the mirrored native group (utils/tabGroups.ts) would
+  // only catch up whenever some unrelated tab event happens to occur next.
+  // ponytail: rescans every tracked window rather than indexing which one
+  // owns the changed entity — fine at expected scale, add a reverse index
+  // if this gets measurably expensive.
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (!("quests" in changes) && !("folders" in changes)) return;
+    for (const windowId of windowActors.keys()) notifyTabsChanged(windowId);
+  });
 
   browser.action.onClicked.addListener(async (tab) => {
     if (tab.windowId === undefined) return;

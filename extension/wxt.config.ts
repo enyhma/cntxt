@@ -37,7 +37,18 @@ export default defineConfig({
       // permission avoids (chrome-extension:// pinning, Edge's
       // can't-pin-ahead-of-time id, Firefox's randomized moz-extension://
       // uuid — see docs/architecture-sync.md).
-      permissions: ["tabs", "storage", "identity"] as const,
+      // "tabGroups" is needed for chrome.tabGroups.get/query/update on
+      // Chrome/Edge (grouping/ungrouping itself, tabs.group()/ungroup(), is
+      // already covered by "tabs"). Firefox's tabs.group()/tabGroups API
+      // (138+/139+) needs no separate manifest entry at all — declaring it
+      // there anyway would just be a permission string Firefox never asked
+      // for, so it's branched out instead of unconditionally added.
+      permissions: [
+        "tabs",
+        "storage",
+        "identity",
+        ...(env.browser === "firefox" ? [] : (["tabGroups"] as const)),
+      ],
       action: {},
     };
 

@@ -17,6 +17,8 @@ import { restoreMachine } from "@/utils/restoreMachine";
 import { questSwapMachine } from "@/utils/questSwapMachine";
 import { syncMachine } from "@/utils/sync";
 import { getWindowBindingMap, type WindowBinding } from "@/utils/session";
+import { findOwnedGroupId } from "@/utils/tabGroups";
+import { addTabGroupRule } from "@/utils/tabGroupRules";
 import {
   type Settings,
   type StartupBehavior,
@@ -911,6 +913,30 @@ function Dashboard(props: {
     await refresh();
   }
 
+  // Teaches a rule from the quest's CURRENT mirrored native group (see
+  // utils/tabGroups.ts's ensureLiveTabGroup) — only meaningful while that
+  // group still exists, hence the "isn't showing as a live tab group right
+  // now" guard below rather than silently writing an empty/useless rule.
+  async function handleTeachRule(quest: Quest) {
+    closeOpenDropdowns();
+    if (!quest.folderId) return;
+    const groupId = await findOwnedGroupId({ table: "quests", id: quest.id });
+    if (groupId === undefined) {
+      alert("This quest isn't showing as a live tab group right now.");
+      return;
+    }
+    try {
+      const group = await browser.tabGroups.get(groupId);
+      await addTabGroupRule({
+        matchTitle: group.title || undefined,
+        matchColor: group.color,
+        folderId: quest.folderId,
+      });
+    } catch {
+      alert("Couldn't read that tab group — try again while it's open.");
+    }
+  }
+
   function questContextMenuItems(quest: Quest, isCurrent = false) {
     return [
       {
@@ -920,6 +946,14 @@ function Dashboard(props: {
           startRename();
         },
       },
+      ...(quest.folderId
+        ? [
+            {
+              label: "Always file groups like this here",
+              onClick: () => handleTeachRule(quest),
+            },
+          ]
+        : []),
       ...(isCurrent
         ? [
             {
