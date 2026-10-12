@@ -1,0 +1,57 @@
+---
+import LearnLayout from "../../components/LearnLayout.astro";
+---
+
+<LearnLayout
+  title="Native Tab Groups, Mirrored — Learn — cntxt"
+  description="How cntxt mirrors its workspace model onto the browser's own native tab groups, in both directions."
+  path="/learn/tab-groups"
+>
+  <a href="/learn" class="back-link">← Learn</a>
+  <h1>Native tab groups, mirrored</h1>
+  <p>
+    cntxt mirrors its workspace model onto the browser's own native tab
+    groups — in both directions. A Project or Quest's live tabs show up as a
+    real browser tab group with a matching title and color, so the browser's
+    own UI already shows the same organization cntxt is tracking.
+  </p>
+  <p>
+    It also works the other way: grouping tabs the normal, native way inside
+    a Project's window silently becomes a nested Quest — no cntxt-specific
+    step required. You can even teach a recurring group (by title and color)
+    to always file into a specific Project automatically.
+  </p>
+
+  <h2>Status</h2>
+  <table class="status-table">
+    <thead>
+      <tr><th>Capability</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Mirror a Quest's or Project's tabs into a native tab group</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>A new native group inside a Project's window becomes a nested Quest automatically</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Teach a group's title/color to always file into a Project</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Rule management (list, edit, delete an existing rule)</td>
+        <td>🔴 Planned</td>
+      </tr>
+      <tr>
+        <td>Reverse color sync (a manual recolor in the browser updates the Quest)</td>
+        <td>🔴 Planned</td>
+      </tr>
+      <tr>
+        <td>A second native group inside a standalone Quest's window</td>
+        <td>🔴 Planned</td>
+      </tr>
+    </tbody>
+  </table>
+</LearnLayout>

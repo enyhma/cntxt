@@ -1,0 +1,193 @@
+---
+import LearnLayout from "../../components/LearnLayout.astro";
+
+interface Page {
+  slug: string;
+  title: string;
+  blurb: string;
+  status: "🟢" | "🟡" | "🔴";
+}
+interface Category {
+  n: string;
+  title: string;
+  pages: Page[];
+}
+
+const categories: Category[] = [
+  {
+    n: "01",
+    title: "Start here",
+    pages: [
+      {
+        slug: "projects-quests-areas",
+        title: "Projects, Quests & Areas",
+        blurb: "The three tiers cntxt organizes your work into.",
+        status: "🟢",
+      },
+      {
+        slug: "first-project",
+        title: "Save your first Project",
+        blurb: "Turn a window full of tabs into something you can close.",
+        status: "🟢",
+      },
+      {
+        slug: "quests",
+        title: "Quests: short tasks inside a Project",
+        blurb: "A side task that swaps in and out without its own window.",
+        status: "🟢",
+      },
+    ],
+  },
+  {
+    n: "02",
+    title: "Organize your work",
+    pages: [
+      {
+        slug: "resources",
+        title: "Resources: links & notes without a tab",
+        blurb: "Reference material that was never an open tab.",
+        status: "🟢",
+      },
+      {
+        slug: "tab-groups",
+        title: "Native tab groups, mirrored",
+        blurb: "cntxt state shows up as a real browser tab group, and back.",
+        status: "🟢",
+      },
+      {
+        slug: "archive",
+        title: "Archive: put work aside without losing it",
+        blurb: "Hidden but kept — and auto-archive for the ones you forget.",
+        status: "🟢",
+      },
+      {
+        slug: "search",
+        title: "Find anything: command palette & search",
+        blurb: "Type to jump to any Quest, Project, tab, or past session.",
+        status: "🟡",
+      },
+    ],
+  },
+  {
+    n: "03",
+    title: "Protect and move",
+    pages: [
+      {
+        slug: "sessions",
+        title: "Sessions: never lose a window again",
+        blurb: "A silent, periodic record of what was open — forever.",
+        status: "🟢",
+      },
+      {
+        slug: "sync",
+        title: "Sync across devices",
+        blurb: "Your Quests and Projects follow you to another machine.",
+        status: "🟡",
+      },
+      {
+        slug: "backup",
+        title: "Backup: a one-time license to your own storage",
+        blurb: "Back everything up to a storage provider you control.",
+        status: "🔴",
+      },
+      {
+        slug: "export-import",
+        title: "Export & import",
+        blurb: "A portable file you can move between profiles yourself.",
+        status: "🔴",
+      },
+    ],
+  },
+];
+---
+
+<LearnLayout
+  title="Learn — cntxt"
+  description="How cntxt organizes, protects, and moves your browser workspaces — what's shipped, what's in progress, and what's planned."
+  path="/learn"
+>
+  <a href="/" class="back-link">← cntxt</a>
+  <h1>Learn</h1>
+  <p>
+    How cntxt's Projects, Quests, and everything that protects them actually
+    work. Every page below is marked with where the feature stands today.
+  </p>
+
+  <div class="status-legend">
+    <span>🟢 Shipped</span>
+    <span>🟡 In progress</span>
+    <span>🔴 Planned</span>
+  </div>
+
+  {
+    categories.map((cat) => (
+      <section class="cat">
+        <p class="cat-n">{cat.n}</p>
+        <h2>{cat.title}</h2>
+        <div class="cat-grid">
+          {cat.pages.map((p) => (
+            <a href={`/learn/${p.slug}`} class="cat-card">
+              <span class="cat-card-top">
+                <span class="cat-card-status" aria-hidden="true">
+                  {p.status}
+                </span>
+                <span class="cat-card-title">{p.title}</span>
+              </span>
+              <span class="cat-card-blurb">{p.blurb}</span>
+            </a>
+          ))}
+        </div>
+      </section>
+    ))
+  }
+</LearnLayout>
+
+<style>
+  .cat {
+    margin-top: 2.5rem;
+  }
+  .cat-n {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.75rem;
+    color: var(--accent-alt1);
+    margin: 0 0 0.25rem;
+  }
+  .cat h2 {
+    margin: 0 0 1rem;
+  }
+  .cat-grid {
+    display: grid;
+    gap: 0.75rem;
+  }
+  .cat-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--surface-alt2);
+    border-radius: var(--radius);
+    background: var(--surface-alt1);
+    text-decoration: none;
+  }
+  .cat-card:hover {
+    border-color: var(--surface-alt3);
+  }
+  .cat-card-top {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .cat-card-status {
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  .cat-card-title {
+    color: var(--surface-txt);
+    font-weight: 500;
+    font-size: 0.95rem;
+  }
+  .cat-card-blurb {
+    color: var(--surface-txt-hint);
+    font-size: 0.85rem;
+  }
+</style>

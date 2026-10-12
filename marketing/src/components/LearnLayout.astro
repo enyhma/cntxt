@@ -1,0 +1,159 @@
+---
+import SEO from "./SEO.astro";
+import SiteHeader from "./SiteHeader.astro";
+import SiteFooter from "./SiteFooter.astro";
+
+interface Props {
+  title: string;
+  description: string;
+  path: string;
+  eyebrow?: string;
+}
+const { title, description, path, eyebrow = "Learn" } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <SEO title={title} description={description} path={path} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <SiteHeader />
+
+    <main>
+      <p class="eyebrow">{eyebrow}</p>
+      <slot />
+    </main>
+
+    <SiteFooter />
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --surface: #12151c;
+    --surface-alt1: #171a21;
+    --surface-alt2: #21242c;
+    --surface-alt3: #2c2f38;
+    --surface-txt: #ebebeb;
+    --surface-txt-hint: rgb(235 235 235 / 65%);
+    --accent: #1055c9;
+    --accent-alt1: #2c6bd6;
+    --radius: 10px;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--surface);
+    color: var(--surface-txt);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    line-height: 1.6;
+  }
+
+  a {
+    color: var(--accent-alt1);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 5rem;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--surface-txt-hint);
+    margin: 0 0 0.5rem;
+  }
+
+  .back-link {
+    display: inline-block;
+    font-size: 0.85rem;
+    color: var(--surface-txt-hint);
+    text-decoration: none;
+    margin-bottom: 1.5rem;
+  }
+  .back-link:hover {
+    color: var(--surface-txt);
+  }
+
+  main h1 {
+    font-size: 2.1rem;
+    margin: 0 0 1.5rem;
+  }
+  main h2 {
+    font-size: 1.15rem;
+    margin: 2.25rem 0 0.75rem;
+  }
+  main h3 {
+    font-size: 1rem;
+    margin: 1.5rem 0 0.5rem;
+  }
+  main p,
+  main li {
+    color: var(--surface-txt-hint);
+    font-size: 0.95rem;
+  }
+
+  .status-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--surface-txt-hint);
+    margin: 1.5rem 0 2rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--surface-alt2);
+    border-radius: var(--radius);
+    background: var(--surface-alt1);
+  }
+
+  .status-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 1.5rem;
+    font-size: 0.9rem;
+  }
+  .status-table th,
+  .status-table td {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--surface-alt2);
+  }
+  .status-table th {
+    color: var(--surface-txt-hint);
+    font-weight: 500;
+    font-size: 0.8rem;
+  }
+  .status-table td:first-child {
+    color: var(--surface-txt);
+  }
+</style>

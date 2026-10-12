@@ -1,0 +1,57 @@
+---
+import LearnLayout from "../../components/LearnLayout.astro";
+---
+
+<LearnLayout
+  title="Save Your First Project — Learn — cntxt"
+  description="How a browser window becomes a Project you can close and restore later."
+  path="/learn/first-project"
+>
+  <a href="/learn" class="back-link">← Learn</a>
+  <h1>Save your first Project</h1>
+  <p>
+    Every open window is already a Project — there's no "save" button to
+    remember. Install cntxt and your current window becomes an "Untitled
+    Project" automatically; rename it whenever you like. From then on, its
+    tabs mirror live: open a tab, close a tab, move a tab — the Project
+    updates itself, so it's never in an unsaved state.
+  </p>
+  <p>
+    When you're done for now, close all of its tabs from the dashboard and
+    the Project stays saved, ready to reopen later. Restoring puts its tabs
+    back into the current window with one click.
+  </p>
+
+  <h2>Status</h2>
+  <table class="status-table">
+    <thead>
+      <tr><th>Capability</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Save a window's tabs as a Project</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Live tab sync (a Project mirrors its window automatically)</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Close all tabs, keep the Project</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Restore a Project into the current window</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Resume your last-used Project/Quest on browser startup</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Restore a Project alongside what's already open (a new window, not a replace)</td>
+        <td>🔴 Planned</td>
+      </tr>
+    </tbody>
+  </table>
+</LearnLayout>

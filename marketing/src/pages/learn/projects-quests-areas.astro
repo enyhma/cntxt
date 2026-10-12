@@ -1,0 +1,50 @@
+---
+import LearnLayout from "../../components/LearnLayout.astro";
+---
+
+<LearnLayout
+  title="Projects, Quests & Areas — Learn — cntxt"
+  description="The three tiers cntxt organizes your browser work into: Area, Project, and Quest."
+  path="/learn/projects-quests-areas"
+>
+  <a href="/learn" class="back-link">← Learn</a>
+  <h1>Projects, Quests & Areas</h1>
+  <p>
+    cntxt organizes your work into three tiers. A <strong>Project</strong> is
+    the persistent, window-bound workspace — opening a window opens (or
+    creates) a Project. A <strong>Quest</strong> is a short-lived sub-task:
+    it can stand on its own in its own window, or nest under a Project, in
+    which case activating it swaps its tabs into that Project's already-open
+    window. An <strong>Area</strong> is purely organizational — it just
+    groups Projects together.
+  </p>
+  <p>
+    A Project can also hold manually-saved links and notes directly, separate
+    from any Quest's own tabs — see <a href="/learn/resources">Resources</a>.
+  </p>
+
+  <h2>Status</h2>
+  <table class="status-table">
+    <thead>
+      <tr><th>Capability</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Area / Project / Quest hierarchy</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Color-coding a Project, Quest, or Area</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Multi-select + bulk move tabs between Quests/Projects</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Drag-and-drop tabs between Quests/Projects</td>
+        <td>🔴 Planned</td>
+      </tr>
+    </tbody>
+  </table>
+</LearnLayout>

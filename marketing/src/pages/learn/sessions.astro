@@ -1,0 +1,55 @@
+---
+import LearnLayout from "../../components/LearnLayout.astro";
+---
+
+<LearnLayout
+  title="Sessions: Never Lose a Window Again — Learn — cntxt"
+  description="How cntxt silently records what was open, every ~15 minutes, so nothing is ever truly lost."
+  path="/learn/sessions"
+>
+  <a href="/learn" class="back-link">← Learn</a>
+  <h1>Sessions: never lose a window again</h1>
+  <p>
+    In the background, every ~15 minutes, cntxt silently snapshots every
+    open, cntxt-bound window — which Project or Quest it was showing, and
+    its live tabs — into one history record. No manual "save a session"
+    step; it just accumulates. Idling doesn't spam history: each capture is
+    deduplicated against the last one.
+  </p>
+  <p>
+    A Session survives even if the Project or Quest it was about is later
+    deleted — its name is snapshotted onto the record, not looked up live.
+    And unlike Trash, a Session is never auto-purged: by design, there is no
+    retention or deletion of session history, ever. Restoring one reopens
+    every window it recorded at once.
+  </p>
+
+  <h2>Status</h2>
+  <table class="status-table">
+    <thead>
+      <tr><th>Capability</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Automatic capture of open windows into history, every ~15 minutes</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>A Session survives the Project/Quest it references being deleted</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Restore a past Session (reopen all of its windows at once)</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Full-text search across your entire session history</td>
+        <td>🟡 In progress</td>
+      </tr>
+      <tr>
+        <td>Browse session history beyond a flat recent-first list</td>
+        <td>🔴 Planned</td>
+      </tr>
+    </tbody>
+  </table>
+</LearnLayout>

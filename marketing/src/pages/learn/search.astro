@@ -1,0 +1,49 @@
+---
+import LearnLayout from "../../components/LearnLayout.astro";
+---
+
+<LearnLayout
+  title="Find Anything: Command Palette & Search — Learn — cntxt"
+  description="How cntxt's command palette searches across Projects, Quests, tabs, and session history."
+  path="/learn/search"
+>
+  <a href="/learn" class="back-link">← Learn</a>
+  <h1>Find anything: command palette & search</h1>
+  <p>
+    Press ⌘K to search across every Area, Project, and Quest, and the tabs
+    inside them — faster than scrolling a sidebar once you have more than a
+    handful. The same palette also matches tabs from recent <a
+      href="/learn/sessions">Sessions</a
+    >.
+  </p>
+  <p>
+    Today that session search only reaches the last 7 days, held in a local
+    cache. A session older than that already exists in full further back,
+    but doesn't surface in search yet.
+  </p>
+
+  <h2>Status</h2>
+  <table class="status-table">
+    <thead>
+      <tr><th>Capability</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Command palette across Projects/Quests/Areas and their tabs</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Search across recent (last 7 days) session history</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Search across your full session history, not just recent</td>
+        <td>🟡 In progress</td>
+      </tr>
+      <tr>
+        <td>Display preferences (search scope, grid vs. list)</td>
+        <td>🔴 Planned</td>
+      </tr>
+    </tbody>
+  </table>
+</LearnLayout>
