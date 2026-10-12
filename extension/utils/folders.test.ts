@@ -16,11 +16,13 @@ const rpc = vi.fn().mockResolvedValue({ error: null });
 vi.mock("./supabase", () => ({ supabase: { from, rpc } }));
 
 const {
+  archiveFolder,
   createFolder,
   deleteFolder,
   getFolders,
   pullRemoteFolders,
   pushDirtyFolders,
+  unarchiveFolder,
   updateFolder,
 } = await import("./folders");
 const { createQuest, getQuests, updateQuest } = await import("./quests");
@@ -189,5 +191,52 @@ describe("deleteFolder", () => {
 
     const updated = (await getQuests()).find((m) => m.id === quest.id);
     expect(updated?.folderId).toBeNull();
+  });
+});
+
+describe("archiveFolder", () => {
+  it("archiving a project cascades to archive its child quests", async () => {
+    const project = await createFolder("App Redesign", null, "project");
+    const quest = await createQuest("Research", []);
+    await updateQuest(quest.id, { folderId: project.id });
+
+    await archiveFolder(project.id);
+
+    const updatedProject = (await getFolders()).find(
+      (f) => f.id === project.id,
+    );
+    expect(updatedProject?.archivedAt).toBeGreaterThan(0);
+    const updatedQuest = (await getQuests()).find((q) => q.id === quest.id);
+    expect(updatedQuest?.archivedAt).toBeGreaterThan(0);
+  });
+
+  it("archiving an area does not cascade to its child projects", async () => {
+    const area = await createFolder("Engineering", null, "area");
+    const project = await createFolder("App Redesign", area.id, "project");
+
+    await archiveFolder(area.id);
+
+    const updatedArea = (await getFolders()).find((f) => f.id === area.id);
+    expect(updatedArea?.archivedAt).toBeGreaterThan(0);
+    const updatedProject = (await getFolders()).find(
+      (f) => f.id === project.id,
+    );
+    expect(updatedProject?.archivedAt).toBeUndefined();
+  });
+
+  it("unarchiveFolder does not cascade back to child quests", async () => {
+    const project = await createFolder("App Redesign", null, "project");
+    const quest = await createQuest("Research", []);
+    await updateQuest(quest.id, { folderId: project.id });
+    await archiveFolder(project.id);
+
+    await unarchiveFolder(project.id);
+
+    const updatedProject = (await getFolders()).find(
+      (f) => f.id === project.id,
+    );
+    expect(updatedProject?.archivedAt).toBeUndefined();
+    const updatedQuest = (await getQuests()).find((q) => q.id === quest.id);
+    expect(updatedQuest?.archivedAt).toBeGreaterThan(0);
   });
 });

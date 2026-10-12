@@ -12,6 +12,7 @@ const from = vi.fn(() => ({ select, update, delete: del }));
 vi.mock("./supabase", () => ({ supabase: { rpc, from } }));
 
 const {
+  archiveQuest,
   createQuest,
   deleteQuest,
   getQuests,
@@ -21,6 +22,7 @@ const {
   pushDirtyQuests,
   restoreQuest,
   trashRetentionDays,
+  unarchiveQuest,
   updateQuest,
 } = await import("./quests");
 
@@ -195,6 +197,8 @@ describe("pushDirtyQuests", () => {
       folder_id: null,
       status: "pending",
       order_index: 0,
+      archived_at: null,
+      last_seen_at: null,
     });
     expect(lastPushedAt[quest.id]).toBe(Date.parse("2030-01-01T00:00:00Z"));
     const quests = await getQuests();
@@ -289,6 +293,24 @@ describe("deleteQuest / restoreQuest", () => {
     await restoreQuest(quest.id);
     const [m] = await getQuests();
     expect(m?.deletedAt).toBeUndefined();
+  });
+});
+
+describe("archiveQuest / unarchiveQuest", () => {
+  it("archiveQuest sets archivedAt without deleting the quest", async () => {
+    const quest = await createQuest("A", []);
+    await archiveQuest(quest.id);
+    const quests = await getQuests();
+    expect(quests).toHaveLength(1);
+    expect(quests[0]?.archivedAt).toBeGreaterThan(0);
+  });
+
+  it("unarchiveQuest clears archivedAt", async () => {
+    const quest = await createQuest("A", []);
+    await archiveQuest(quest.id);
+    await unarchiveQuest(quest.id);
+    const [m] = await getQuests();
+    expect(m?.archivedAt).toBeUndefined();
   });
 });
 

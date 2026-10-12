@@ -27,6 +27,10 @@ export type Folder = {
   // being a field not every tier uses.
   tabs?: QuestTab[];
   activeQuestId?: string;
+  // "Hidden but kept" — same shape and meaning as Quest.archivedAt (see
+  // that field's own comment). Archiving a Project cascades to archive its
+  // child Quests too (see archiveFolder below); Areas have no cascade.
+  archivedAt?: number;
   // "limit-reached"/"expired" now apply to a Project-kind folder (it's
   // quota-gated via create_project, see registerProject below) — an Area
   // row will just never hit them.
@@ -153,7 +157,7 @@ export async function pullRemoteFolders(): Promise<number> {
   const { data, error } = await supabase
     .from("folders")
     .select(
-      "id, name, parent_id, kind, color, created_at, updated_at, tabs, active_quest_id",
+      "id, name, parent_id, kind, color, created_at, updated_at, tabs, active_quest_id, archived_at",
     );
   if (error) throw new Error(error.message);
   if (!data) return 0;
@@ -175,6 +179,7 @@ export async function pullRemoteFolders(): Promise<number> {
       updatedAt: Date.parse(row.updated_at),
       tabs: (row.tabs as QuestTab[] | null) ?? [],
       activeQuestId: row.active_quest_id ?? undefined,
+      archivedAt: row.archived_at ? Date.parse(row.archived_at) : undefined,
       syncStatus: "synced",
     };
     if (!existing) {
@@ -211,6 +216,7 @@ export async function pushDirtyFolders(
         color: f.color,
         tabs: f.tabs ?? [],
         active_quest_id: f.activeQuestId ?? null,
+        archived_at: f.archivedAt ? new Date(f.archivedAt).toISOString() : null,
       })
       .eq("id", f.id)
       .select("updated_at")
@@ -233,13 +239,52 @@ export async function pushDirtyFolders(
 export async function updateFolder(
   id: string,
   patch: Partial<
-    Pick<Folder, "name" | "parentId" | "color" | "tabs" | "activeQuestId">
+    Pick<
+      Folder,
+      "name" | "parentId" | "color" | "tabs" | "activeQuestId" | "archivedAt"
+    >
   >,
 ) {
   const folders = await getFolders();
   await setFolders(
     folders.map((f) =>
       f.id === id ? { ...f, ...patch, updatedAt: Date.now() } : f,
+    ),
+  );
+}
+
+// "Hidden but kept" — unlike deleteFolder, never removes anything. When
+// `id` is a Project, also archives every quest directly nested under it
+// (one level, same as deleteFolder's folderId reparenting walk below) —
+// cascading down matches how a Project visually "contains" its quests
+// everywhere else in the UI. Does NOT recurse into child folders (an Area
+// archiving its child Projects was never asked for) and unarchiveFolder
+// deliberately does NOT cascade back (see that function's own comment).
+export async function archiveFolder(id: string) {
+  const folders = await getFolders();
+  const folder = folders.find((f) => f.id === id);
+  await setFolders(
+    folders.map((f) =>
+      f.id === id ? { ...f, archivedAt: Date.now(), updatedAt: Date.now() } : f,
+    ),
+  );
+  if (folder?.kind === "project") {
+    const quests = await getQuests();
+    for (const q of quests) {
+      if (q.folderId === id)
+        await updateQuest(q.id, { archivedAt: Date.now() });
+    }
+  }
+}
+
+// Deliberately asymmetric with archiveFolder's cascade: un-hiding a Project
+// shouldn't drag back into view a Quest that was separately, manually
+// archived for its own reason.
+export async function unarchiveFolder(id: string) {
+  const folders = await getFolders();
+  await setFolders(
+    folders.map((f) =>
+      f.id === id ? { ...f, archivedAt: undefined, updatedAt: Date.now() } : f,
     ),
   );
 }

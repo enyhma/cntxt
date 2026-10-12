@@ -2,6 +2,7 @@ import { assign, fromPromise, setup } from "xstate";
 import { getCachedEntitlements } from "./entitlements";
 import { pullRemoteFolders, pushDirtyFolders } from "./folders";
 import { pullRemoteResources } from "./resources";
+import { pullRemoteSessions } from "./sessions";
 import {
   pullRemoteQuests,
   purgeExpiredLocalTrash,
@@ -13,12 +14,17 @@ async function pullAndPurgeTrash(): Promise<number> {
   // once the folder it points to already exists locally. Resources last —
   // they reference a workspace_id, so pulling them before quests exist
   // locally would just leave them attributed to a quest not there yet.
+  // Sessions have no FK ordering dependency on either (entity references
+  // live denormalized inside their own jsonb, not as real FKs) — pulled
+  // last out of convenience, not necessity. No pushDirtySessions: a
+  // session is immutable after creation, nothing to push.
   const folders = await pullRemoteFolders();
   const quests = await pullRemoteQuests();
   const resources = await pullRemoteResources();
+  const sessions = await pullRemoteSessions();
   const entitlements = await getCachedEntitlements();
   await purgeExpiredLocalTrash(entitlements?.accessExpiresAt);
-  return folders + quests + resources;
+  return folders + quests + resources + sessions;
 }
 
 async function pushDirty(

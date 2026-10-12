@@ -46,6 +46,17 @@ export type Quest = {
   // Explicit ordinal among sibling quests sharing the same folderId, used
   // to pick the next quest to auto-activate when one completes.
   order: number;
+  // "Hidden but kept" — distinct from both `status === "done"` and Trash's
+  // `deletedAt`: never auto-deleted, just excluded from the main sidebar.
+  // Set manually (dashboard context menu) or by utils/autoArchive.ts's rule
+  // (done + inactive for a Settings-configurable stretch). See
+  // utils/sessions.ts for lastSeenAt below.
+  archivedAt?: number;
+  // Stamped by utils/sessions.ts's captureSession() every time this quest's
+  // tabs are live in a window at a periodic capture tick — NOT derived from
+  // updatedAt, which also bumps on an unrelated rename/recolor. Drives the
+  // auto-archive inactivity check.
+  lastSeenAt?: number;
 };
 
 // Mirrors purge_trashed_workspaces()'s retention window in the trash_and_purge
@@ -162,7 +173,7 @@ export async function pullRemoteQuests(): Promise<number> {
   const { data, error } = await supabase
     .from("quests")
     .select(
-      "id, name, tabs, created_at, updated_at, deleted_at, folder_id, status, order_index",
+      "id, name, tabs, created_at, updated_at, deleted_at, folder_id, status, order_index, archived_at, last_seen_at",
     );
   if (error) throw new Error(error.message);
   if (!data) return 0;
@@ -184,6 +195,8 @@ export async function pullRemoteQuests(): Promise<number> {
       folderId: row.folder_id,
       status: row.status ?? undefined,
       order: row.order_index ?? 0,
+      archivedAt: row.archived_at ? Date.parse(row.archived_at) : undefined,
+      lastSeenAt: row.last_seen_at ? Date.parse(row.last_seen_at) : undefined,
       syncStatus: "synced",
     };
     if (!existing) {
@@ -251,6 +264,10 @@ export async function pushDirtyQuests(
         folder_id: m.folderId ?? null,
         status: m.status ?? "pending",
         order_index: m.order ?? 0,
+        archived_at: m.archivedAt ? new Date(m.archivedAt).toISOString() : null,
+        last_seen_at: m.lastSeenAt
+          ? new Date(m.lastSeenAt).toISOString()
+          : null,
       })
       .eq("id", m.id)
       .select("updated_at")
@@ -275,7 +292,15 @@ export async function updateQuest(
   patch: Partial<
     Pick<
       Quest,
-      "name" | "tabs" | "color" | "icon" | "folderId" | "status" | "order"
+      | "name"
+      | "tabs"
+      | "color"
+      | "icon"
+      | "folderId"
+      | "status"
+      | "order"
+      | "archivedAt"
+      | "lastSeenAt"
     >
   >,
 ) {
@@ -305,6 +330,26 @@ export async function restoreQuest(id: string) {
   await setQuests(
     quests.map((m) =>
       m.id === id ? { ...m, deletedAt: undefined, updatedAt: Date.now() } : m,
+    ),
+  );
+}
+
+// "Hidden but kept" — unlike deleteQuest, never schedules removal and has
+// no retention countdown. See Quest.archivedAt's own comment.
+export async function archiveQuest(id: string) {
+  const quests = await getQuests();
+  await setQuests(
+    quests.map((m) =>
+      m.id === id ? { ...m, archivedAt: Date.now(), updatedAt: Date.now() } : m,
+    ),
+  );
+}
+
+export async function unarchiveQuest(id: string) {
+  const quests = await getQuests();
+  await setQuests(
+    quests.map((m) =>
+      m.id === id ? { ...m, archivedAt: undefined, updatedAt: Date.now() } : m,
     ),
   );
 }

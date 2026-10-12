@@ -5,6 +5,11 @@ import { updateSettings } from "@/utils/settings";
 import { DASHBOARD_URL, ensureDashboardTab } from "@/utils/tabs";
 import { windowSyncMachine } from "@/utils/windowSyncMachine";
 import { scheduleCaptureCheck } from "@/utils/captureGroups";
+import { captureSession, pruneOldLocalSessions } from "@/utils/sessions";
+import { runAutoArchiveCheck } from "@/utils/autoArchive";
+
+const SESSION_ALARM_NAME = "cntxt-session-capture";
+const SESSION_CAPTURE_INTERVAL_MINUTES = 15;
 
 export default defineBackground(() => {
   const windowActors = new Map<
@@ -43,6 +48,26 @@ export default defineBackground(() => {
     }
   })();
 
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== SESSION_ALARM_NAME) return;
+    captureSession()
+      .then(() => pruneOldLocalSessions())
+      .then(() => runAutoArchiveCheck())
+      .catch((e: unknown) => console.debug("session capture failed:", e));
+  });
+
+  (async () => {
+    // check-then-create: alarms persist across service-worker restarts, and
+    // unconditionally re-creating on every wake would keep resetting a live
+    // 15-minute timer on a frequently-woken worker, potentially delaying it
+    // indefinitely.
+    if (!(await browser.alarms.get(SESSION_ALARM_NAME))) {
+      browser.alarms.create(SESSION_ALARM_NAME, {
+        periodInMinutes: SESSION_CAPTURE_INTERVAL_MINUTES,
+      });
+    }
+  })();
+
   browser.runtime.onStartup.addListener(async () => {
     const windows = await browser.windows.getAll({ windowTypes: ["normal"] });
     for (const win of windows) {
@@ -56,6 +81,16 @@ export default defineBackground(() => {
   browser.windows.onRemoved.addListener((windowId) => {
     untrackWindow(windowId);
     removeWindowBinding(windowId);
+  });
+
+  // Session restore (utils/sessions.ts) is the first code path that creates
+  // brand-new windows programmatically — restoreMachine/questSwapMachine
+  // only ever reuse the CURRENT, already-tracked window, so this gap never
+  // mattered before. windowSyncMachine.syncTabs already no-ops safely with
+  // no binding, so tracking an as-yet-unbound window (e.g. a plain Cmd+N) is
+  // harmless — incidentally also fixes that pre-existing gap.
+  browser.windows.onCreated.addListener((win) => {
+    if (win.id !== undefined) trackWindow(win.id);
   });
 
   browser.windows.onFocusChanged.addListener(async (windowId) => {

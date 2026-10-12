@@ -43,10 +43,14 @@ export default defineConfig({
       // (138+/139+) needs no separate manifest entry at all — declaring it
       // there anyway would just be a permission string Firefox never asked
       // for, so it's branched out instead of unconditionally added.
+      // "alarms" drives Sessions' periodic background capture (see
+      // entrypoints/background.ts) — a standard WebExtensions permission,
+      // uniform across Chrome/Firefox/Edge, unlike "tabGroups" below.
       permissions: [
         "tabs",
         "storage",
         "identity",
+        "alarms",
         ...(env.browser === "firefox" ? [] : (["tabGroups"] as const)),
       ],
       action: {},

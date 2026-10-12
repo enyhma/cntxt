@@ -40,6 +40,7 @@ import {
   FolderClosed as ProjectClosedIcon,
   FolderOpen as ProjectOpenIcon,
   FolderPlus,
+  History as HistoryIcon,
   Layers as AreaIcon,
   Link as LinkIcon,
   type LucideProps,
@@ -59,10 +60,12 @@ import {
 } from "lucide-solid";
 import {
   type Folder,
+  archiveFolder,
   createFolder,
   deleteFolder,
   getFolders,
   reconcileFolderSyncStatus,
+  unarchiveFolder,
   updateFolder,
 } from "@/utils/folders";
 import {
@@ -74,6 +77,7 @@ import {
 } from "@/utils/resources";
 import {
   type Quest,
+  archiveQuest,
   createQuest,
   deleteQuest,
   getQuests,
@@ -81,8 +85,10 @@ import {
   reconcileQuestSyncStatus,
   restoreQuest,
   trashRetentionDays,
+  unarchiveQuest,
   updateQuest,
 } from "@/utils/quests";
+import { type Session, getSessions, restoreSession } from "@/utils/sessions";
 import {
   type ColorKey,
   COLOR_CLASS,
@@ -96,6 +102,7 @@ import {
   SettingsPanel,
   TabRow,
   TrashPanel,
+  HistoryPanel,
   FolderPage,
   QuestDot,
   QuestRow,
@@ -174,12 +181,13 @@ function closeOpenDropdowns() {
 }
 
 const NAV_ITEMS: Array<{
-  key: "quests" | "trash" | "settings";
+  key: "quests" | "trash" | "history" | "settings";
   label: string;
   icon: (props: LucideProps) => JSX.Element;
 }> = [
   { key: "quests", label: "Quests", icon: QuestsIcon },
   { key: "trash", label: "Trash", icon: Trash2 },
+  { key: "history", label: "History", icon: HistoryIcon },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -681,6 +689,11 @@ function Dashboard(props: {
     closeOpenDropdowns();
   }
 
+  async function handleArchiveFolder(folder: Folder) {
+    await archiveFolder(folder.id);
+    await refresh();
+  }
+
   function folderContextMenuItems(folder: Folder, isCurrent = false) {
     return [
       { label: "Rename", onClick: () => startRenameFolder(folder) },
@@ -693,6 +706,10 @@ function Dashboard(props: {
             },
           ]
         : []),
+      // No confirm() — archiving is reversible, unlike Delete. Allowed even
+      // on the currently-open/bound folder; doesn't close its window (known,
+      // accepted minor wrinkle).
+      { label: "Archive", onClick: () => handleArchiveFolder(folder) },
       {
         label: "Delete",
         tone: "danger" as const,
@@ -937,6 +954,11 @@ function Dashboard(props: {
     }
   }
 
+  async function handleArchiveQuest(quest: Quest) {
+    await archiveQuest(quest.id);
+    await refresh();
+  }
+
   function questContextMenuItems(quest: Quest, isCurrent = false) {
     return [
       {
@@ -963,6 +985,10 @@ function Dashboard(props: {
             },
           ]
         : []),
+      // No confirm() — archiving is reversible, unlike Delete. Allowed even
+      // on the currently-open quest; doesn't close its window (known,
+      // accepted minor wrinkle).
+      { label: "Archive", onClick: () => handleArchiveQuest(quest) },
       {
         label: "Delete",
         tone: "danger" as const,
@@ -1845,6 +1871,7 @@ function App() {
   const [quests, setQuests] = createSignal<Quest[]>([]);
   const [folders, setFolders] = createSignal<Folder[]>([]);
   const [resources, setResources] = createSignal<Resource[]>([]);
+  const [sessions, setSessions] = createSignal<Session[]>([]);
   const [windowMap, setWindowMap] = createSignal<Record<number, WindowBinding>>(
     {},
   );
@@ -1853,7 +1880,11 @@ function App() {
     createSignal<StartupBehavior>("none");
   const [theme, setTheme] = createSignal<Theme>("baseline");
   const [manualPullEnabled, setManualPullEnabled] = createSignal(false);
-  const [nav, setNav] = createSignal<"quests" | "trash" | "settings">("quests");
+  const [autoArchiveDays, setAutoArchiveDays] = createSignal(30);
+  const [nav, setNav] = createSignal<
+    "quests" | "trash" | "history" | "settings"
+  >("quests");
+  const [jumpToSessionId, setJumpToSessionId] = createSignal<string>();
   const [state, send] = useMachine(restoreMachine);
   const [questSwapState, questSwapSend] = useMachine(questSwapMachine);
   const [syncState, syncSend] = useMachine(syncMachine);
@@ -1892,6 +1923,11 @@ function App() {
     setJumpTo({ kind: "area", id });
     closePalette();
   }
+  function goToSession(id: string) {
+    setNav("history");
+    setJumpToSessionId(id);
+    closePalette();
+  }
 
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1917,7 +1953,7 @@ function App() {
   });
 
   type PaletteResult = {
-    kind: "QT" | "PR" | "AR" | "TAB";
+    kind: "QT" | "PR" | "AR" | "TAB" | "SN";
     title: string;
     meta: string;
     go: () => void;
@@ -1925,11 +1961,16 @@ function App() {
   // Global across the whole hierarchy — Quests, Projects (including their
   // own live tabs), and Areas — not scoped to whichever one is currently
   // being viewed, and reachable from any nav tab (Quests/Trash/Settings).
+  // Uses visibleQuests()/visibleFolders() (archive-excluded), not the raw
+  // signals, so an archived item disappears from search the same way it
+  // disappears from the sidebar. Sessions are matched against the local
+  // cache only (see utils/sessions.ts) — no live Supabase query here, same
+  // synchronous-scan shape as every other branch.
   function paletteResults(): PaletteResult[] {
     const q = paletteQuery().trim().toLowerCase();
     if (!q) return [];
     const out: PaletteResult[] = [];
-    for (const w of quests()) {
+    for (const w of visibleQuests()) {
       if (w.name.toLowerCase().includes(q)) {
         out.push({
           kind: "QT",
@@ -1952,7 +1993,7 @@ function App() {
         }
       }
     }
-    for (const f of folders()) {
+    for (const f of visibleFolders()) {
       if (f.kind !== "project") {
         if (f.name.toLowerCase().includes(q)) {
           out.push({
@@ -1983,6 +2024,24 @@ function App() {
             meta: f.name,
             go: () => goToProject(f.id),
           });
+        }
+      }
+    }
+    for (const s of sessions()) {
+      for (const w of s.windows) {
+        const tabMatch = w.tabs.some(
+          (t) =>
+            t.title.toLowerCase().includes(q) ||
+            t.url.toLowerCase().includes(q),
+        );
+        if (w.entityName.toLowerCase().includes(q) || tabMatch) {
+          out.push({
+            kind: "SN",
+            title: w.entityName,
+            meta: new Date(s.capturedAt).toLocaleString(),
+            go: () => goToSession(s.id),
+          });
+          break; // one result per session leg match, not per matching tab
         }
       }
     }
@@ -2053,6 +2112,17 @@ function App() {
   // Project-kind one counts as "active" for usage purposes.
   const projects = () => folders().filter((f) => f.kind === "project");
 
+  // Archive is a visibility filter only — unlike Trash, archiving never
+  // frees quota (an archived Quest/Project still counts toward
+  // max_workspaces, same as a "done" one does today), so activeQuests()/
+  // projects() above stay archive-inclusive for every quota/usage
+  // calculation. Only the main sidebar tree (Dashboard's props below) and
+  // the "save to project" picker/palette should exclude archived items.
+  const visibleQuests = () => activeQuests().filter((w) => !w.archivedAt);
+  const archivedQuests = () => activeQuests().filter((w) => !!w.archivedAt);
+  const visibleFolders = () => folders().filter((f) => !f.archivedAt);
+  const archivedFolders = () => folders().filter((f) => !!f.archivedAt);
+
   // Account-level usage, driven by actual per-item sync status (see
   // docs/quest-sync-semantics.md) rather than re-deriving "at limit" from
   // entitlements — an item only counts here once it's actually failed to
@@ -2106,6 +2176,7 @@ function App() {
     setQuests(await getQuests());
     setFolders(await getFolders());
     setResources(await getResources());
+    setSessions(await getSessions());
     setWindowMap(await getWindowBindingMap());
   }
 
@@ -2121,6 +2192,7 @@ function App() {
     setStartupBehavior(settings.startupBehavior);
     setTheme(settings.theme);
     setManualPullEnabled(settings.manualPullEnabled);
+    setAutoArchiveDays(settings.autoArchiveDays);
 
     // A "workspaces" write also notifies syncMachine, so a local rename or
     // the background script's live tab-sync gets pushed — see
@@ -2232,6 +2304,11 @@ function App() {
     await updateSettings({ manualPullEnabled: value });
   }
 
+  async function handleAutoArchiveDaysChange(value: number) {
+    setAutoArchiveDays(value);
+    await updateSettings({ autoArchiveDays: value });
+  }
+
   // Forces the same pull syncMachine already runs on sign-in/token refresh
   // and on its own periodic tick (see onMount above and utils/sync.ts), on
   // demand — the escape hatch the "Manual sync pull" setting exists for.
@@ -2248,6 +2325,20 @@ function App() {
   async function handlePermanentlyDeleteQuest(id: string) {
     await permanentlyDeleteQuest(id);
     await refresh();
+  }
+
+  async function handleUnarchiveQuest(id: string) {
+    await unarchiveQuest(id);
+    await refresh();
+  }
+
+  async function handleUnarchiveFolder(id: string) {
+    await unarchiveFolder(id);
+    await refresh();
+  }
+
+  async function handleRestoreSession(session: Session) {
+    await restoreSession(session);
   }
 
   // tokens.css keys every non-baseline theme off data-theme on the root
@@ -2542,6 +2633,19 @@ function App() {
                   />
                 </div>
               </Match>
+              <Match when={nav() === "history"}>
+                <div class="flex flex-1 items-stretch overflow-hidden">
+                  <HistoryPanel
+                    archivedQuests={archivedQuests}
+                    archivedFolders={archivedFolders}
+                    onUnarchiveQuest={handleUnarchiveQuest}
+                    onUnarchiveFolder={handleUnarchiveFolder}
+                    sessions={sessions}
+                    onRestoreSession={handleRestoreSession}
+                    jumpToSessionId={jumpToSessionId}
+                  />
+                </div>
+              </Match>
               <Match when={nav() === "settings"}>
                 <div class="flex flex-1 items-stretch overflow-hidden">
                   <SettingsPanel
@@ -2551,6 +2655,8 @@ function App() {
                     onThemeChange={handleThemeChange}
                     manualPullEnabled={manualPullEnabled}
                     onManualPullEnabledChange={handleManualPullEnabledChange}
+                    autoArchiveDays={autoArchiveDays}
+                    onAutoArchiveDaysChange={handleAutoArchiveDaysChange}
                     maxWorkspaces={() => entitlements()?.maxMissions}
                     questCount={() => activeQuests().length}
                     projectCount={() => projects().length}
@@ -2575,8 +2681,8 @@ function App() {
               </Match>
               <Match when={nav() === "quests"}>
                 <Dashboard
-                  quests={activeQuests}
-                  folders={folders}
+                  quests={visibleQuests}
+                  folders={visibleFolders}
                   resources={resources}
                   currentId={currentId}
                   openIds={openIds}

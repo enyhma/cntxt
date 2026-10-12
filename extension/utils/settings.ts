@@ -16,6 +16,12 @@ export type Settings = {
   // docs/implementation-plan-sync.md M6), so this is an escape hatch for
   // forcing a check rather than a fully-designed manual-sync feature.
   manualPullEnabled: boolean;
+  // How many days a "done" quest can go unreferenced by a Session (see
+  // utils/sessions.ts/utils/autoArchive.ts) before it's auto-archived.
+  // Distinct from both Trash's hardcoded 7/30-day retention and
+  // sessions.ts's own 7-day *local cache* bound — this is the one
+  // user-facing, Settings-configurable "N days" in the app.
+  autoArchiveDays: number;
 };
 
 const STORAGE_KEY = "settings";
@@ -23,6 +29,7 @@ const DEFAULT_SETTINGS: Settings = {
   startupBehavior: "none",
   theme: "baseline",
   manualPullEnabled: false,
+  autoArchiveDays: 30,
 };
 
 export async function getSettings(): Promise<Settings> {
