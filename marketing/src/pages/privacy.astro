@@ -1,5 +1,7 @@
 ---
 import SEO from "../components/SEO.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
 
 const LAST_UPDATED = "September 28, 2026";
 ---
@@ -23,27 +25,7 @@ const LAST_UPDATED = "September 28, 2026";
     />
   </head>
   <body>
-    <header class="site-header">
-      <a href="/" class="brand">
-        <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true">
-          <path
-            d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85"
-            fill="none"
-            stroke="var(--accent)"
-            stroke-width="14"
-            stroke-linecap="round"></path>
-          <rect x="74" y="40" width="8" height="20" rx="4" fill="var(--accent)"
-          ></rect>
-        </svg>
-        cntxt
-      </a>
-      <nav class="site-nav">
-        <a href="/#features">Features</a>
-        <a href="/#pricing">Pricing</a>
-        <a href="/terms">Terms</a>
-        <a href="https://dash.cntxt.work">Dashboard</a>
-      </nav>
-    </header>
+    <SiteHeader />
 
     <main>
       <article class="policy">
@@ -152,14 +134,7 @@ const LAST_UPDATED = "September 28, 2026";
       </article>
     </main>
 
-    <footer class="site-footer">
-      <span>cntxt</span>
-      <nav class="footer-nav">
-        <a href="/privacy">Privacy</a>
-        <a href="/terms">Terms</a>
-        <a href="mailto:support@cntxt.work">support@cntxt.work</a>
-      </nav>
-    </footer>
+    <SiteFooter />
   </body>
 </html>
 
@@ -200,43 +175,6 @@ const LAST_UPDATED = "September 28, 2026";
   h2 {
     font-weight: 600;
     letter-spacing: -0.01em;
-  }
-
-  .site-header {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.9rem 1.5rem;
-    background: color-mix(in srgb, var(--surface), transparent 8%);
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--surface-alt2);
-  }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-weight: 500;
-    font-size: 1.05rem;
-    text-decoration: none;
-    color: inherit;
-  }
-  .site-nav {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    font-size: 0.9rem;
-  }
-  .site-nav a {
-    color: var(--surface-txt-hint);
-    text-decoration: none;
-  }
-  .site-nav a:hover {
-    color: var(--surface-txt);
   }
 
   main {
@@ -281,31 +219,6 @@ const LAST_UPDATED = "September 28, 2026";
     gap: 0.5rem;
   }
   .policy strong {
-    color: var(--surface-txt);
-  }
-
-  .site-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 2rem 1.5rem 3rem;
-    color: var(--surface-txt-hint);
-    font-size: 0.85rem;
-    border-top: 1px solid var(--surface-alt2);
-  }
-  .footer-nav {
-    display: flex;
-    gap: 1.25rem;
-  }
-  .footer-nav a {
-    color: var(--surface-txt-hint);
-    text-decoration: none;
-  }
-  .footer-nav a:hover {
     color: var(--surface-txt);
   }
 </style>

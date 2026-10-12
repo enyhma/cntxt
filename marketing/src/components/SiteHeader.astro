@@ -1,0 +1,89 @@
+---
+interface Props {
+  home?: boolean;
+}
+const { home = false } = Astro.props;
+const DASHBOARD_URL = "https://dash.cntxt.work";
+const prefix = home ? "" : "/";
+---
+
+<header class="site-header">
+  <a href="/" class="brand">
+    <svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true">
+      <path
+        d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85"
+        fill="none"
+        stroke="var(--accent)"
+        stroke-width="14"
+        stroke-linecap="round"></path>
+      <rect x="74" y="40" width="8" height="20" rx="4" fill="var(--accent)"
+      ></rect>
+    </svg>
+    cntxt
+  </a>
+  <nav class="site-nav">
+    <a href="/learn">Learn</a>
+    <a href={`${prefix}#features`}>Features</a>
+    <a href={`${prefix}#how-it-works`}>How it works</a>
+    <a href={`${prefix}#pricing`}>Pricing</a>
+    <a href={DASHBOARD_URL} class="btn btn-ghost">Dashboard</a>
+  </nav>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.5rem;
+    background: color-mix(in srgb, var(--surface), transparent 8%);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--surface-alt2);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 500;
+    font-size: 1.05rem;
+    text-decoration: none;
+    color: inherit;
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    font-size: 0.9rem;
+  }
+  .site-nav a:not(.btn) {
+    color: var(--surface-txt-hint);
+    text-decoration: none;
+  }
+  .site-nav a:not(.btn):hover {
+    color: var(--surface-txt);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.1rem;
+    border-radius: var(--radius);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+  .btn-ghost {
+    border: 1px solid var(--surface-alt3);
+  }
+
+  @media (max-width: 720px) {
+    .site-nav a:not(.btn) {
+      display: none;
+    }
+  }
+</style>
