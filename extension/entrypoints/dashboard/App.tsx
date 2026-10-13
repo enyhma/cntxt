@@ -14,7 +14,7 @@ import {
 } from "solid-js";
 import { ensureBindingForWindow } from "@/utils/attach";
 import { restoreMachine } from "@/utils/restoreMachine";
-import { questSwapMachine } from "@/utils/questSwapMachine";
+import { groupSwapMachine } from "@/utils/groupSwapMachine";
 import { syncMachine } from "@/utils/sync";
 import { getWindowBindingMap, type WindowBinding } from "@/utils/session";
 import { findOwnedGroupId } from "@/utils/tabGroups";
@@ -51,7 +51,7 @@ import {
   Plus,
   RefreshCw,
   Search,
-  LayoutGrid as QuestsIcon,
+  LayoutGrid as GroupsIcon,
   Settings as SettingsIcon,
   Trash2,
   TriangleAlert,
@@ -77,18 +77,18 @@ import {
   reconcileResourceSyncStatus,
 } from "@/utils/resources";
 import {
-  type Quest,
-  archiveQuest,
-  createQuest,
-  deleteQuest,
-  getQuests,
-  permanentlyDeleteQuest,
-  reconcileQuestSyncStatus,
-  restoreQuest,
+  type Group,
+  archiveGroup,
+  createGroup,
+  deleteGroup,
+  getGroups,
+  permanentlyDeleteGroup,
+  reconcileGroupSyncStatus,
+  restoreGroup,
   trashRetentionDays,
-  unarchiveQuest,
-  updateQuest,
-} from "@/utils/quests";
+  unarchiveGroup,
+  updateGroup,
+} from "@/utils/groups";
 import { type Session, getSessions, restoreSession } from "@/utils/sessions";
 import {
   type Automation,
@@ -113,11 +113,11 @@ import {
   AutomationsPanel,
   type Automation as UiAutomation,
   FolderPage,
-  QuestDot,
-  QuestRow,
-  QuestBoardPanel,
-  questColorKey,
-  questDotClass,
+  GroupDot,
+  GroupRow,
+  GroupBoardPanel,
+  groupColorKey,
+  groupDotClass,
 } from "@cntxt/ui";
 
 function iconNodeToSvgString(node: IconNode, color: string): string {
@@ -146,13 +146,13 @@ function resolveDotColor(colorClass: string): string {
   return getComputedStyle(colorProbe).backgroundColor;
 }
 
-// A quest with a chosen icon draws that icon (in its own dot color);
+// A group with a chosen icon draws that icon (in its own dot color);
 // otherwise falls back to the cntxt mark (open ring + caret) traced in that
 // same color, so every window's pinned dashboard tab stays identifiable at
 // a glance even without a custom icon set.
-function faviconHrefFor(quest: Quest | undefined): string {
-  const color = resolveDotColor(questDotClass(quest));
-  const icon = quest?.icon as IconName | undefined;
+function faviconHrefFor(group: Group | undefined): string {
+  const color = resolveDotColor(groupDotClass(group));
+  const icon = group?.icon as IconName | undefined;
   const svg = icon
     ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconNodeToSvgString(ICONS[icon], color)}</svg>`
     : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32"><path d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/><rect x="74" y="40" width="8" height="20" rx="4" fill="${color}"/></svg>`;
@@ -163,24 +163,24 @@ function faviconHrefFor(quest: Quest | undefined): string {
 // state (see its jumpTo prop) — "area" targets a folder page, the other two
 // target the same views their sidebar rows do.
 type JumpTarget =
-  | { kind: "quest"; id: string }
+  | { kind: "group"; id: string }
   | { kind: "project"; id: string }
   | { kind: "area"; id: string };
 
 // A Project's live tabs are either its own base tabs, or — once a child
-// Quest has been swapped in via questSwapMachine — that Quest's tabs
+// Group has been swapped in via groupSwapMachine — that Group's tabs
 // instead. Mirrors utils/projectLiveTabs.ts's resolveProjectLiveTarget, but
 // as a pure read over already-loaded data rather than storage. Module-level
 // (not a Dashboard-local closure) so the global navbar's search can use it
 // too, without depending on Dashboard being mounted.
-function projectLiveTabs(project: Folder, quests: Quest[]) {
-  if (project.activeQuestId) {
-    return quests.find((q) => q.id === project.activeQuestId)?.tabs ?? [];
+function projectLiveTabs(project: Folder, groups: Group[]) {
+  if (project.activeGroupId) {
+    return groups.find((q) => q.id === project.activeGroupId)?.tabs ?? [];
   }
   return project.tabs ?? [];
 }
-function projectLiveTabCount(project: Folder, quests: Quest[]) {
-  return projectLiveTabs(project, quests).length;
+function projectLiveTabCount(project: Folder, groups: Group[]) {
+  return projectLiveTabs(project, groups).length;
 }
 
 function closeOpenDropdowns() {
@@ -190,11 +190,11 @@ function closeOpenDropdowns() {
 }
 
 const NAV_ITEMS: Array<{
-  key: "quests" | "trash" | "history" | "automations" | "settings";
+  key: "groups" | "trash" | "history" | "automations" | "settings";
   label: string;
   icon: (props: LucideProps) => JSX.Element;
 }> = [
-  { key: "quests", label: "Quests", icon: QuestsIcon },
+  { key: "groups", label: "Tabs", icon: GroupsIcon },
   { key: "trash", label: "Trash", icon: Trash2 },
   { key: "history", label: "History", icon: HistoryIcon },
   { key: "automations", label: "Automations", icon: AutomationsIcon },
@@ -217,14 +217,14 @@ function FolderHeader(props: {
   editingValue: string;
   onEditingInput: (v: string) => void;
   onCommitRename: () => void;
-  onAddQuest?: () => void;
+  onAddGroup?: () => void;
   onAddProject?: () => void;
   // Rename and delete live in a right-click context menu (see
   // folderContextMenu in Dashboard) rather than inline icons here — this
   // callback is how a row reports where it was right-clicked.
   onContextMenu: (e: MouseEvent) => void;
-  // Project-only: the same connect/switch/disconnect affordance a Quest
-  // row has (QuestRow.tsx) — a Project is window-bound too (see
+  // Project-only: the same connect/switch/disconnect affordance a Group
+  // row has (GroupRow.tsx) — a Project is window-bound too (see
   // attach.ts's ensureBindingForWindow), so it needs a way to open its own
   // tabs into the current window without going through its folder page.
   isCurrent?: boolean;
@@ -315,11 +315,11 @@ function FolderHeader(props: {
             <FolderPlus size={11} />
           </button>
         </Show>
-        <Show when={props.onAddQuest}>
+        <Show when={props.onAddGroup}>
           <button
             type="button"
-            title="New quest"
-            onClick={props.onAddQuest}
+            title="New group"
+            onClick={props.onAddGroup}
             class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
           >
             <Plus size={11} />
@@ -336,7 +336,7 @@ function FolderHeader(props: {
 }
 
 function Dashboard(props: {
-  quests: Accessor<Quest[]>;
+  groups: Accessor<Group[]>;
   folders: Accessor<Folder[]>;
   resources: Accessor<Resource[]>;
   currentId: Accessor<string | undefined>;
@@ -346,13 +346,13 @@ function Dashboard(props: {
   refresh: () => Promise<void>;
   restoreState: ReturnType<typeof useMachine<typeof restoreMachine>>[0];
   restoreSend: ReturnType<typeof useMachine<typeof restoreMachine>>[1];
-  questSwapState: ReturnType<typeof useMachine<typeof questSwapMachine>>[0];
-  questSwapSend: ReturnType<typeof useMachine<typeof questSwapMachine>>[1];
+  groupSwapState: ReturnType<typeof useMachine<typeof groupSwapMachine>>[0];
+  groupSwapSend: ReturnType<typeof useMachine<typeof groupSwapMachine>>[1];
   jumpTo: Accessor<JumpTarget | undefined>;
   onJumped: () => void;
 }) {
   const {
-    quests,
+    groups,
     folders,
     resources,
     currentId,
@@ -362,16 +362,16 @@ function Dashboard(props: {
     refresh,
     restoreState,
     restoreSend,
-    questSwapState,
-    questSwapSend,
+    groupSwapState,
+    groupSwapSend,
   } = props;
 
   // Advisory only — a stale or missing cache never blocks anything by
   // itself, it just gates whether this button offers to try. See
   // docs/architecture-sync.md → "Entitlements".
-  const atQuestLimit = () => {
+  const atGroupLimit = () => {
     const max = entitlements()?.maxMissions;
-    return max !== undefined && quests().length >= max;
+    return max !== undefined && groups().length >= max;
   };
 
   const [railOpen, setRailOpen] = createSignal(true);
@@ -381,9 +381,9 @@ function Dashboard(props: {
   );
   const [editingFolderId, setEditingFolderId] = createSignal<string>();
   const [editingFolderName, setEditingFolderName] = createSignal("");
-  // Shared by both FolderHeader and QuestRow rows — each right-click
+  // Shared by both FolderHeader and GroupRow rows — each right-click
   // builds its own item list (rename/delete mean different things, and
-  // target different entities, for a folder vs. a quest).
+  // target different entities, for a folder vs. a group).
   const [contextMenu, setContextMenu] = createSignal<{
     x: number;
     y: number;
@@ -398,13 +398,13 @@ function Dashboard(props: {
 
   // Set when the sidebar's FolderHeader *name* (not its chevron) is
   // clicked — the main pane shows that folder's own page instead of a
-  // quest's tabs until something navigates back to a quest.
+  // group's tabs until something navigates back to a group.
   const [viewingFolderId, setViewingFolderId] = createSignal<string>();
   const viewingFolder = () => folders().find((f) => f.id === viewingFolderId());
 
   // Set via a Project's "Project tabs" entry point (its FolderPage header
   // button, or its sidebar row's connect affordance) — the main pane shows
-  // that Project's own live tabs instead of a quest's or a folder page
+  // that Project's own live tabs instead of a group's or a folder page
   // until something navigates elsewhere.
   const [viewedProjectId, setViewedProjectId] = createSignal<string>();
   const viewedProject = () => folders().find((f) => f.id === viewedProjectId());
@@ -437,7 +437,7 @@ function Dashboard(props: {
     });
   });
 
-  // Seed the initially-viewed quest from this window's quest once
+  // Seed the initially-viewed group from this window's group once
   // it resolves, without fighting later manual browsing (viewed() isn't a
   // dependency here, just read via untrack).
   createEffect(() => {
@@ -445,33 +445,33 @@ function Dashboard(props: {
     if (id && untrack(viewedId) === undefined) setViewedId(id);
   });
 
-  // Any storage tab data shown for a *saved* (non-open) quest goes
-  // stale the moment you switch which quest you're looking at, so
+  // Any storage tab data shown for a *saved* (non-open) group goes
+  // stale the moment you switch which group you're looking at, so
   // selection indices reset on every view change.
   createEffect(() => {
     viewedId();
     setSelected(new Set<number>());
   });
 
-  const viewed = () => quests().find((w) => w.id === viewedId());
+  const viewed = () => groups().find((w) => w.id === viewedId());
   const isViewingCurrent = () =>
     viewedId() !== undefined && viewedId() === currentId();
   const busy = () =>
-    !restoreState.matches("idle") || !questSwapState.matches("idle");
+    !restoreState.matches("idle") || !groupSwapState.matches("idle");
 
-  // Whichever Project or Quest is actually live in this window right now —
-  // used by the connect/switch buttons (on both a Quest's and a Project's
+  // Whichever Project or Group is actually live in this window right now —
+  // used by the connect/switch buttons (on both a Group's and a Project's
   // header) to know what they'd be replacing, regardless of which kind it
-  // currently is. (`current`, a prop, stays Quest-only — it's only used for
+  // currently is. (`current`, a prop, stays Group-only — it's only used for
   // the document title/favicon.)
   const currentThing = (): { name: string } | undefined =>
-    quests().find((w) => w.id === currentId()) ??
+    groups().find((w) => w.id === currentId()) ??
     folders().find((f) => f.id === currentId());
 
-  // Whether a quest belongs to a Project — used to tell a standalone quest
+  // Whether a group belongs to a Project — used to tell a standalone group
   // (no sibling roster, completes via restoreMachine) apart from a
-  // Project-nested one (completes/reactivates via questSwapMachine, from
-  // the Project's own roadmap board, not from the quest's own view).
+  // Project-nested one (completes/reactivates via groupSwapMachine, from
+  // the Project's own roadmap board, not from the group's own view).
   function projectOf(folderId: string | null | undefined) {
     const folder = folderId
       ? folders().find((f) => f.id === folderId)
@@ -488,17 +488,17 @@ function Dashboard(props: {
     setRailOpen(v);
   }
 
-  function openAll(quest: Quest) {
-    restoreSend({ type: "RESTORE", target: { kind: "quest", quest } });
-    showQuest(quest.id);
+  function openAll(group: Group) {
+    restoreSend({ type: "RESTORE", target: { kind: "group", group } });
+    showGroup(group.id);
   }
 
-  // A quest's *live* tabs (the one mapped to this window) are the
+  // A group's *live* tabs (the one mapped to this window) are the
   // source of truth for the real browser window, re-synced on every tab
   // event by windowSyncMachine — editing that array in storage would
   // just be overwritten on the next sync. So a click on one of its rows
   // jumps to the real tab instead of "selecting" it, and only saved
-  // (non-open) quests support the multi-select/move flow below.
+  // (non-open) groups support the multi-select/move flow below.
   async function focusRealTab(url: string) {
     const windowId = myWindowId();
     if (windowId === undefined) return;
@@ -523,38 +523,38 @@ function Dashboard(props: {
     if (!source || idxs.size === 0) return;
     const moved = source.tabs.filter((_, i) => idxs.has(i));
     const remaining = source.tabs.filter((_, i) => !idxs.has(i));
-    await updateQuest(source.id, { tabs: remaining });
+    await updateGroup(source.id, { tabs: remaining });
 
     if (targetId === currentId() && myWindowId() !== undefined) {
       for (const tab of moved) {
         await browser.tabs.create({ windowId: myWindowId(), url: tab.url });
       }
     } else {
-      const target = quests().find((w) => w.id === targetId);
+      const target = groups().find((w) => w.id === targetId);
       if (target)
-        await updateQuest(targetId, { tabs: [...target.tabs, ...moved] });
+        await updateGroup(targetId, { tabs: [...target.tabs, ...moved] });
     }
     setSelected(new Set<number>());
     await refresh();
   }
 
-  async function handleAddQuest() {
-    const quest = await createQuest("Untitled quest", []);
+  async function handleAddGroup() {
+    const group = await createGroup("Untitled group", []);
     await refresh();
-    showQuest(quest.id);
+    showGroup(group.id);
   }
 
   const rootFolders = () => folders().filter((f) => !f.parentId);
   const childFolders = (parentId: string) =>
     folders().filter((f) => f.parentId === parentId);
-  const questsIn = (folderId: string) =>
-    quests().filter((w) => w.folderId === folderId);
-  const ungroupedQuests = () => quests().filter((w) => !w.folderId);
+  const groupsIn = (folderId: string) =>
+    groups().filter((w) => w.folderId === folderId);
+  const ungroupedGroups = () => groups().filter((w) => !w.folderId);
 
-  // Navigating to a quest always leaves folder view and any Project
+  // Navigating to a group always leaves folder view and any Project
   // tabs view, whichever of the several entry points (sidebar row, command
-  // palette, a Project page's quest list, creating a new one) got you here.
-  function showQuest(id: string) {
+  // palette, a Project page's group list, creating a new one) got you here.
+  function showGroup(id: string) {
     setViewingFolderId(undefined);
     setViewedProjectId(undefined);
     setViewedId(id);
@@ -572,13 +572,13 @@ function Dashboard(props: {
   // The global navbar's search lives in App(), outside this component (so
   // it works from the Trash/Settings tabs too, where Dashboard isn't even
   // mounted) — it hands off a selected result via this prop instead of
-  // calling showQuest/showProjectTabs/setViewingFolderId directly. Reacts
+  // calling showGroup/showProjectTabs/setViewingFolderId directly. Reacts
   // whether Dashboard was already mounted or just mounted because of this
   // jump, since it's a plain effect over the prop's value.
   createEffect(() => {
     const target = props.jumpTo();
     if (!target) return;
-    if (target.kind === "quest") showQuest(target.id);
+    if (target.kind === "group") showGroup(target.id);
     else if (target.kind === "project") showProjectTabs(target.id);
     else setViewingFolderId(target.id);
     props.onJumped();
@@ -608,7 +608,7 @@ function Dashboard(props: {
   async function handleMoveToFolder(folderId: string | null) {
     const id = viewedId();
     if (!id) return;
-    await updateQuest(id, { folderId });
+    await updateGroup(id, { folderId });
     await refresh();
     closeOpenDropdowns();
   }
@@ -633,7 +633,7 @@ function Dashboard(props: {
   }
 
   // Copies (not moves — see the type comment on Resource in utils/resources.ts)
-  // a Quest-scoped resource onto its Project, so it survives that Quest
+  // a Group-scoped resource onto its Project, so it survives that Group
   // being deleted.
   async function handleSaveResourceToProject(
     resource: Resource,
@@ -676,17 +676,17 @@ function Dashboard(props: {
     await refresh();
     startRenameFolder(folder);
   }
-  async function handleAddQuestIn(folderId: string) {
-    const quest = await createQuest("Untitled quest", []);
-    await updateQuest(quest.id, { folderId });
+  async function handleAddGroupIn(folderId: string) {
+    const group = await createGroup("Untitled group", []);
+    await updateGroup(group.id, { folderId });
     await refresh();
-    showQuest(quest.id);
+    showGroup(group.id);
   }
   async function handleDeleteFolder(folder: Folder): Promise<boolean> {
     const hasChildren = folders().some((f) => f.parentId === folder.id);
     const warning = hasChildren
-      ? `Delete "${folder.name}" and the projects inside it? Quests stay — they'll just be ungrouped.`
-      : `Delete "${folder.name}"? Any quests inside stay — they'll just be ungrouped.`;
+      ? `Delete "${folder.name}" and the projects inside it? Groups stay — they'll just be ungrouped.`
+      : `Delete "${folder.name}"? Any groups inside stay — they'll just be ungrouped.`;
     if (!confirm(warning)) return false;
     await deleteFolder(folder.id);
     await refresh();
@@ -729,7 +729,7 @@ function Dashboard(props: {
   }
 
   const resourcesForViewed = () =>
-    resources().filter((r) => r.questId === viewedId());
+    resources().filter((r) => r.groupId === viewedId());
 
   const [addingResource, setAddingResource] = createSignal(false);
   const [resourceUrl, setResourceUrl] = createSignal("");
@@ -748,7 +748,7 @@ function Dashboard(props: {
     setAddingResource(false);
     if (!id || (!url && !note)) return;
     await addResource(
-      { questId: id },
+      { groupId: id },
       { url: url || undefined, note: note || undefined },
     );
     await refresh();
@@ -756,7 +756,7 @@ function Dashboard(props: {
   async function handleSaveTabAsResource(tab: { url: string; title: string }) {
     const id = viewedId();
     if (!id) return;
-    await addResource({ questId: id }, { url: tab.url, note: tab.title });
+    await addResource({ groupId: id }, { url: tab.url, note: tab.title });
     await refresh();
   }
   async function handleDeleteResource(id: string) {
@@ -781,7 +781,7 @@ function Dashboard(props: {
     await refresh();
   }
 
-  // Shared between a Quest's resources panel and a Project's — same row
+  // Shared between a Group's resources panel and a Project's — same row
   // shape either way (a link/note, a "Save to project" copy picker, and a
   // delete button).
   function resourceRow(r: Resource) {
@@ -851,7 +851,7 @@ function Dashboard(props: {
 
   // A Project's sidebar block: its own FolderHeader row (with the
   // connect/switch/disconnect affordance, since it's window-bound too) plus
-  // its child Quests. Used both for a Project nested under an Area
+  // its child Groups. Used both for a Project nested under an Area
   // (depth 1) and for a standalone, ad-hoc Project (depth 0, see
   // standaloneProjects below) — same structure either way.
   function projectBlock(project: Folder, depth: number) {
@@ -868,7 +868,7 @@ function Dashboard(props: {
           editingValue={editingFolderName()}
           onEditingInput={setEditingFolderName}
           onCommitRename={commitRenameFolder}
-          onAddQuest={() => handleAddQuestIn(project.id)}
+          onAddGroup={() => handleAddGroupIn(project.id)}
           onContextMenu={(e) =>
             setContextMenu({
               x: e.clientX,
@@ -888,8 +888,8 @@ function Dashboard(props: {
           onOpenAll={() => openProject(project)}
         />
         <Show when={expandedFolders().has(project.id)}>
-          <For each={questsIn(project.id)}>
-            {(w) => questRowFor(w, depth + 1)}
+          <For each={groupsIn(project.id)}>
+            {(w) => groupRowFor(w, depth + 1)}
           </For>
         </Show>
       </>
@@ -899,26 +899,26 @@ function Dashboard(props: {
   const standaloneProjects = () =>
     folders().filter((f) => f.kind === "project" && !f.parentId);
 
-  function questRowFor(w: Quest, depth = 0) {
+  function groupRowFor(w: Group, depth = 0) {
     return (
       <div
         style={depth ? { "padding-left": `${depth * 0.875}rem` } : undefined}
       >
-        <QuestRow
-          quest={w}
+        <GroupRow
+          group={w}
           count={w.tabs.length}
           isViewed={w.id === viewedId()}
           isCurrent={w.id === currentId()}
           openElsewhere={w.id !== currentId() && openIds().has(w.id)}
           anyActive={currentId() !== undefined}
           busy={busy()}
-          onView={() => showQuest(w.id)}
+          onView={() => showGroup(w.id)}
           onOpenAll={() => openAll(w)}
           onContextMenu={(e) =>
             setContextMenu({
               x: e.clientX,
               y: e.clientY,
-              items: questContextMenuItems(w, w.id === currentId()),
+              items: groupContextMenuItems(w, w.id === currentId()),
             })
           }
         />
@@ -927,62 +927,64 @@ function Dashboard(props: {
   }
 
   async function handleDeleteViewed() {
-    const quest = viewed();
-    if (!quest) return;
-    await handleDeleteQuest(quest);
+    const group = viewed();
+    if (!group) return;
+    await handleDeleteGroup(group);
     closeOpenDropdowns();
   }
 
-  async function handleDeleteQuest(quest: Quest) {
-    if (!confirm(`Delete "${quest.name}"?`)) return;
-    await deleteQuest(quest.id);
-    if (viewedId() === quest.id) setViewedId(currentId());
+  async function handleDeleteGroup(group: Group) {
+    if (!confirm(`Delete "${group.name}"?`)) return;
+    await deleteGroup(group.id);
+    if (viewedId() === group.id) setViewedId(currentId());
     await refresh();
   }
 
-  // Teaches a rule from the quest's CURRENT mirrored native group (see
+  // Teaches a rule from the group's CURRENT mirrored native group (see
   // utils/tabGroups.ts's ensureLiveTabGroup) — only meaningful while that
   // group still exists, hence the "isn't showing as a live tab group right
   // now" guard below rather than silently writing an empty/useless rule.
-  async function handleTeachRule(quest: Quest) {
+  async function handleTeachRule(group: Group) {
     closeOpenDropdowns();
-    if (!quest.folderId) return;
-    const groupId = await findOwnedGroupId({ table: "quests", id: quest.id });
+    if (!group.folderId) return;
+    const groupId = await findOwnedGroupId({ table: "groups", id: group.id });
     if (groupId === undefined) {
-      alert("This quest isn't showing as a live tab group right now.");
+      alert("This group isn't showing as a live tab group right now.");
       return;
     }
     try {
-      const group = await browser.tabGroups.get(groupId);
+      // The *native* browser tab group's own title/color — distinct from
+      // the outer `group` (Group entity) param this rule is filed against.
+      const nativeGroup = await browser.tabGroups.get(groupId);
       await addTabGroupRule({
-        matchTitle: group.title || undefined,
-        matchColor: group.color,
-        folderId: quest.folderId,
+        matchTitle: nativeGroup.title || undefined,
+        matchColor: nativeGroup.color,
+        folderId: group.folderId,
       });
     } catch {
       alert("Couldn't read that tab group — try again while it's open.");
     }
   }
 
-  async function handleArchiveQuest(quest: Quest) {
-    await archiveQuest(quest.id);
+  async function handleArchiveGroup(group: Group) {
+    await archiveGroup(group.id);
     await refresh();
   }
 
-  function questContextMenuItems(quest: Quest, isCurrent = false) {
+  function groupContextMenuItems(group: Group, isCurrent = false) {
     return [
       {
         label: "Rename",
         onClick: () => {
-          showQuest(quest.id);
+          showGroup(group.id);
           startRename();
         },
       },
-      ...(quest.folderId
+      ...(group.folderId
         ? [
             {
               label: "Always file groups like this here",
-              onClick: () => handleTeachRule(quest),
+              onClick: () => handleTeachRule(group),
             },
           ]
         : []),
@@ -996,13 +998,13 @@ function Dashboard(props: {
           ]
         : []),
       // No confirm() — archiving is reversible, unlike Delete. Allowed even
-      // on the currently-open quest; doesn't close its window (known,
+      // on the currently-open group; doesn't close its window (known,
       // accepted minor wrinkle).
-      { label: "Archive", onClick: () => handleArchiveQuest(quest) },
+      { label: "Archive", onClick: () => handleArchiveGroup(group) },
       {
         label: "Delete",
         tone: "danger" as const,
-        onClick: () => handleDeleteQuest(quest),
+        onClick: () => handleDeleteGroup(group),
       },
     ];
   }
@@ -1019,7 +1021,7 @@ function Dashboard(props: {
     const trimmed = renameValue().trim();
     setRenaming(false);
     if (!id || !trimmed) return;
-    await updateQuest(id, { name: trimmed });
+    await updateGroup(id, { name: trimmed });
     await refresh();
   }
 
@@ -1033,13 +1035,13 @@ function Dashboard(props: {
   async function handleSetColor(color: ColorKey) {
     const id = viewedId();
     if (!id) return;
-    await updateQuest(id, { color });
+    await updateGroup(id, { color });
     await refresh();
   }
   async function handleSetIcon(icon: IconName | undefined) {
     const id = viewedId();
     if (!id) return;
-    await updateQuest(id, { icon });
+    await updateGroup(id, { icon });
     await refresh();
   }
 
@@ -1048,22 +1050,22 @@ function Dashboard(props: {
     closeOpenDropdowns();
   }
 
-  // Detaches this window from its quest *before* closing its tabs (see
+  // Detaches this window from its group *before* closing its tabs (see
   // restoreMachine's DISCONNECT), so windowSyncMachine's syncTabs
   // no-ops on those closures instead of autosaving them — unlike
-  // handleCloseAllTabs, the quest's saved tab list is left untouched.
+  // handleCloseAllTabs, the group's saved tab list is left untouched.
   function handleDisconnectWindow() {
     restoreSend({ type: "DISCONNECT" });
     closeOpenDropdowns();
   }
 
-  // Standalone-quest counterpart to questSwapMachine's COMPLETE_QUEST: a
-  // quest with no Project parent has no sibling roster to auto-advance
-  // into, so this just detaches + closes (restoreMachine.COMPLETE_QUEST)
+  // Standalone-group counterpart to groupSwapMachine's COMPLETE_GROUP: a
+  // group with no Project parent has no sibling roster to auto-advance
+  // into, so this just detaches + closes (restoreMachine.COMPLETE_GROUP)
   // and marks it done — reopenable later via an ordinary Restore.
-  function handleCompleteQuestStandalone() {
-    const quest = viewed();
-    if (quest) restoreSend({ type: "COMPLETE_QUEST", quest });
+  function handleCompleteGroupStandalone() {
+    const group = viewed();
+    if (group) restoreSend({ type: "COMPLETE_GROUP", group });
     closeOpenDropdowns();
   }
 
@@ -1074,7 +1076,7 @@ function Dashboard(props: {
           <nav class="flex w-60 shrink-0 flex-col border-r border-surface-alt2 bg-surface-alt1">
             <div class="flex h-11 shrink-0 items-center gap-2 border-b border-surface-alt2 pr-2.5 pl-3.5">
               <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
-                QUESTS
+                GROUPS
               </span>
               <button
                 type="button"
@@ -1087,14 +1089,14 @@ function Dashboard(props: {
               <button
                 type="button"
                 title={
-                  atQuestLimit()
-                    ? "You've hit your plan's limit — this quest won't sync until you upgrade"
+                  atGroupLimit()
+                    ? "You've hit your plan's limit — this group won't sync until you upgrade"
                     : undefined
                 }
-                onClick={handleAddQuest}
+                onClick={handleAddGroup}
                 class={
                   "btn btn-square btn-ghost btn-xs" +
-                  (atQuestLimit() ? " text-warning" : "")
+                  (atGroupLimit() ? " text-warning" : "")
                 }
               >
                 <Plus size={14} />
@@ -1124,7 +1126,7 @@ function Dashboard(props: {
                       onEditingInput={setEditingFolderName}
                       onCommitRename={commitRenameFolder}
                       onAddProject={() => handleAddProject(area.id)}
-                      onAddQuest={() => handleAddQuestIn(area.id)}
+                      onAddGroup={() => handleAddGroupIn(area.id)}
                       onContextMenu={(e) =>
                         setContextMenu({
                           x: e.clientX,
@@ -1137,8 +1139,8 @@ function Dashboard(props: {
                       <For each={childFolders(area.id)}>
                         {(project) => projectBlock(project, 1)}
                       </For>
-                      <For each={questsIn(area.id)}>
-                        {(w) => questRowFor(w, 1)}
+                      <For each={groupsIn(area.id)}>
+                        {(w) => groupRowFor(w, 1)}
                       </For>
                     </Show>
                   </>
@@ -1153,13 +1155,13 @@ function Dashboard(props: {
                 </For>
               </Show>
               <Show
-                when={rootFolders().length > 0 && ungroupedQuests().length > 0}
+                when={rootFolders().length > 0 && ungroupedGroups().length > 0}
               >
                 <div class="mt-1 px-2 py-1 font-mono text-[10px] tracking-wider text-surface-txt-faint">
                   UNGROUPED
                 </div>
               </Show>
-              <For each={ungroupedQuests()}>{(w) => questRowFor(w)}</For>
+              <For each={ungroupedGroups()}>{(w) => groupRowFor(w)}</For>
             </div>
           </nav>
         </Show>
@@ -1202,7 +1204,7 @@ function Dashboard(props: {
                 </span>
               </Show>
               <span class="font-mono text-[11px] text-surface-txt-faint">
-                {projectLiveTabCount(viewedProject()!, quests())} tabs
+                {projectLiveTabCount(viewedProject()!, groups())} tabs
               </span>
 
               <Show when={viewedProjectId() !== currentId()}>
@@ -1293,7 +1295,7 @@ function Dashboard(props: {
               <Show when={!railOpen()}>
                 <details class="dropdown shrink-0">
                   <summary class="btn h-8 list-none gap-2 rounded-full border border-surface-alt3 bg-surface-alt1 px-2.75 font-normal shadow-[var(--shadow-card)]">
-                    <QuestDot quest={viewed()} />
+                    <GroupDot group={viewed()} />
                     <span class="text-sm font-bold">{viewed()?.name}</span>
                     <span class="font-mono text-[11px] text-surface-txt-faint">
                       {viewed()?.tabs.length ?? 0}
@@ -1301,11 +1303,11 @@ function Dashboard(props: {
                     <ChevronDown size={11} class="text-surface-txt-hint" />
                   </summary>
                   <ul class="dropdown-content menu z-50 mt-1 w-58 gap-0.5 rounded bg-surface-alt2 p-1.5 shadow-[var(--shadow-dropdown)]">
-                    <For each={quests()}>
+                    <For each={groups()}>
                       {(w) => (
                         <li>
-                          <QuestRow
-                            quest={w}
+                          <GroupRow
+                            group={w}
                             count={w.tabs.length}
                             isViewed={w.id === viewedId()}
                             isCurrent={w.id === currentId()}
@@ -1315,7 +1317,7 @@ function Dashboard(props: {
                             anyActive={currentId() !== undefined}
                             busy={busy()}
                             onView={() => {
-                              showQuest(w.id);
+                              showGroup(w.id);
                               closeOpenDropdowns();
                             }}
                             onOpenAll={() => openAll(w)}
@@ -1323,7 +1325,7 @@ function Dashboard(props: {
                               setContextMenu({
                                 x: e.clientX,
                                 y: e.clientY,
-                                items: questContextMenuItems(
+                                items: groupContextMenuItems(
                                   w,
                                   w.id === currentId(),
                                 ),
@@ -1379,8 +1381,8 @@ function Dashboard(props: {
                       <ArrowRightLeft size={13} />
                     </Show>
                     {currentThing()
-                      ? "Switch to this quest"
-                      : "Connect to this quest"}
+                      ? "Switch to this group"
+                      : "Connect to this group"}
                   </button>
                   <Show when={currentThing()}>
                     <TriangleAlert size={12} class="shrink-0 text-warning" />
@@ -1413,7 +1415,7 @@ function Dashboard(props: {
                 <ul class="dropdown-content menu z-50 mt-1 w-47.5 gap-0.5 rounded border border-surface-alt4 bg-surface-alt2 p-1.25 shadow-[var(--shadow-dropdown)]">
                   <li>
                     <button type="button" onClick={startRename}>
-                      Rename quest
+                      Rename group
                     </button>
                   </li>
                   <li>
@@ -1471,9 +1473,9 @@ function Dashboard(props: {
                       <button
                         type="button"
                         disabled={busy()}
-                        onClick={handleCompleteQuestStandalone}
+                        onClick={handleCompleteGroupStandalone}
                       >
-                        Complete quest
+                        Complete group
                       </button>
                     </li>
                   </Show>
@@ -1499,23 +1501,23 @@ function Dashboard(props: {
             <FolderPage
               folder={viewingFolder()!}
               breadcrumb={viewingFolderBreadcrumb()}
-              quests={() => questsIn(viewingFolderId()!)}
+              groups={() => groupsIn(viewingFolderId()!)}
               projects={
                 viewingFolder()?.kind === "area"
                   ? () => childFolders(viewingFolderId()!)
                   : undefined
               }
               onOpenProject={showProjectTabs}
-              onOpenQuest={showQuest}
-              onAddQuest={() => handleAddQuestIn(viewingFolderId()!)}
+              onOpenGroup={showGroup}
+              onAddGroup={() => handleAddGroupIn(viewingFolderId()!)}
             />
           </Show>
 
           <Show when={!viewingFolderId() && viewedProject()}>
             <div class="min-h-0 flex-1 overflow-y-auto p-3.5">
-              <QuestBoardPanel
-                quests={() =>
-                  questsIn(viewedProject()!.id).map((q) => ({
+              <GroupBoardPanel
+                groups={() =>
+                  groupsIn(viewedProject()!.id).map((q) => ({
                     id: q.id,
                     name: q.name,
                     status: q.status,
@@ -1523,37 +1525,37 @@ function Dashboard(props: {
                   }))
                 }
                 busy={busy()}
-                onActivate={(questId) => {
-                  const quest = quests().find((q) => q.id === questId);
-                  if (quest) {
-                    questSwapSend({
-                      type: "ACTIVATE_QUEST",
+                onActivate={(groupId) => {
+                  const group = groups().find((q) => q.id === groupId);
+                  if (group) {
+                    groupSwapSend({
+                      type: "ACTIVATE_GROUP",
                       project: viewedProject()!,
-                      quest,
+                      group,
                     });
                   }
                 }}
-                onComplete={(questId) => {
-                  const quest = quests().find((q) => q.id === questId);
-                  if (quest) {
-                    questSwapSend({
-                      type: "COMPLETE_QUEST",
+                onComplete={(groupId) => {
+                  const group = groups().find((q) => q.id === groupId);
+                  if (group) {
+                    groupSwapSend({
+                      type: "COMPLETE_GROUP",
                       project: viewedProject()!,
-                      quest,
+                      group,
                     });
                   }
                 }}
-                onAddQuest={async (name) => {
+                onAddGroup={async (name) => {
                   const project = viewedProject();
                   if (!project) return;
-                  const order = questsIn(project.id).length;
-                  const quest = await createQuest(name, []);
-                  await updateQuest(quest.id, { folderId: project.id, order });
+                  const order = groupsIn(project.id).length;
+                  const group = await createGroup(name, []);
+                  await updateGroup(group.id, { folderId: project.id, order });
                   await refresh();
                 }}
               />
               <Show
-                when={projectLiveTabs(viewedProject()!, quests()).length > 0}
+                when={projectLiveTabs(viewedProject()!, groups()).length > 0}
                 fallback={
                   <p class="text-sm text-surface-txt-hint">
                     No tabs in this project.
@@ -1561,7 +1563,7 @@ function Dashboard(props: {
                 }
               >
                 <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                  <For each={projectLiveTabs(viewedProject()!, quests())}>
+                  <For each={projectLiveTabs(viewedProject()!, groups())}>
                     {(tab) => (
                       <div class="flex items-center gap-2.5 truncate border-b border-surface-alt2 px-3.5 py-2.5 text-sm last:border-b-0">
                         <span class="min-w-0 flex-1 truncate">
@@ -1648,7 +1650,7 @@ function Dashboard(props: {
                 when={viewed() && viewed()!.tabs.length > 0}
                 fallback={
                   <p class="text-sm text-surface-txt-hint">
-                    No tabs in this quest.
+                    No tabs in this group.
                   </p>
                 }
               >
@@ -1748,7 +1750,7 @@ function Dashboard(props: {
             {selected().size} tab{selected().size === 1 ? "" : "s"} selected
           </span>
           <span class="h-4.5 w-px bg-surface-alt4" />
-          <For each={quests().filter((w) => w.id !== viewedId())}>
+          <For each={groups().filter((w) => w.id !== viewedId())}>
             {(w) => (
               <button
                 type="button"
@@ -1800,7 +1802,7 @@ function Dashboard(props: {
                 class={
                   "h-6 w-6 rounded-full " +
                   COLOR_CLASS[key] +
-                  (questColorKey(viewed()) === key
+                  (groupColorKey(viewed()) === key
                     ? " ring-2 ring-offset-2 ring-offset-surface-alt2 ring-surface-txt"
                     : "")
                 }
@@ -1878,7 +1880,7 @@ function Dashboard(props: {
 }
 
 function App() {
-  const [quests, setQuests] = createSignal<Quest[]>([]);
+  const [groups, setGroups] = createSignal<Group[]>([]);
   const [folders, setFolders] = createSignal<Folder[]>([]);
   const [resources, setResources] = createSignal<Resource[]>([]);
   const [sessions, setSessions] = createSignal<Session[]>([]);
@@ -1892,16 +1894,16 @@ function App() {
   const [manualPullEnabled, setManualPullEnabled] = createSignal(false);
   const [autoArchiveDays, setAutoArchiveDays] = createSignal(30);
   const [nav, setNav] = createSignal<
-    "quests" | "trash" | "history" | "automations" | "settings"
-  >("quests");
+    "groups" | "trash" | "history" | "automations" | "settings"
+  >("groups");
   const [automations, setAutomations] = createSignal<Automation[]>([]);
   const [jumpToSessionId, setJumpToSessionId] = createSignal<string>();
   const [state, send] = useMachine(restoreMachine);
-  const [questSwapState, questSwapSend] = useMachine(questSwapMachine);
+  const [groupSwapState, groupSwapSend] = useMachine(groupSwapMachine);
   const [syncState, syncSend] = useMachine(syncMachine);
 
   // The search palette lives here, not inside Dashboard, so it works from
-  // the Trash/Settings tabs too — Dashboard only mounts for nav()==="quests".
+  // the Trash/Settings tabs too — Dashboard only mounts for nav()==="groups".
   const [paletteQuery, setPaletteQuery] = createSignal("");
   let paletteRef: HTMLDialogElement | undefined;
   // A selected result hands off to Dashboard's own view state via this prop
@@ -1919,18 +1921,18 @@ function App() {
   function closePalette() {
     paletteRef?.close();
   }
-  function goToQuest(id: string) {
-    setNav("quests");
-    setJumpTo({ kind: "quest", id });
+  function goToGroup(id: string) {
+    setNav("groups");
+    setJumpTo({ kind: "group", id });
     closePalette();
   }
   function goToProject(id: string) {
-    setNav("quests");
+    setNav("groups");
     setJumpTo({ kind: "project", id });
     closePalette();
   }
   function goToArea(id: string) {
-    setNav("quests");
+    setNav("groups");
     setJumpTo({ kind: "area", id });
     closePalette();
   }
@@ -1969,10 +1971,10 @@ function App() {
     meta: string;
     go: () => void;
   };
-  // Global across the whole hierarchy — Quests, Projects (including their
+  // Global across the whole hierarchy — Groups, Projects (including their
   // own live tabs), and Areas — not scoped to whichever one is currently
-  // being viewed, and reachable from any nav tab (Quests/Trash/Settings).
-  // Uses visibleQuests()/visibleFolders() (archive-excluded), not the raw
+  // being viewed, and reachable from any nav tab (Groups/Trash/Settings).
+  // Uses visibleGroups()/visibleFolders() (archive-excluded), not the raw
   // signals, so an archived item disappears from search the same way it
   // disappears from the sidebar. Sessions are matched against the local
   // cache only (see utils/sessions.ts) — no live Supabase query here, same
@@ -1981,13 +1983,13 @@ function App() {
     const q = paletteQuery().trim().toLowerCase();
     if (!q) return [];
     const out: PaletteResult[] = [];
-    for (const w of visibleQuests()) {
+    for (const w of visibleGroups()) {
       if (w.name.toLowerCase().includes(q)) {
         out.push({
           kind: "QT",
           title: w.name,
           meta: `${w.tabs.length} tabs`,
-          go: () => goToQuest(w.id),
+          go: () => goToGroup(w.id),
         });
       }
       for (const t of w.tabs) {
@@ -1999,7 +2001,7 @@ function App() {
             kind: "TAB",
             title: t.title || t.url,
             meta: w.name,
-            go: () => goToQuest(w.id),
+            go: () => goToGroup(w.id),
           });
         }
       }
@@ -2020,11 +2022,11 @@ function App() {
         out.push({
           kind: "PR",
           title: f.name,
-          meta: `${projectLiveTabCount(f, quests())} tabs`,
+          meta: `${projectLiveTabCount(f, groups())} tabs`,
           go: () => goToProject(f.id),
         });
       }
-      for (const t of projectLiveTabs(f, quests())) {
+      for (const t of projectLiveTabs(f, groups())) {
         if (
           t.title.toLowerCase().includes(q) ||
           t.url.toLowerCase().includes(q)
@@ -2071,14 +2073,14 @@ function App() {
     const count = syncState.context.lastPullCount;
     if (count === undefined) return "";
     return count > 0
-      ? `Pulled ${count} quest${count === 1 ? "" : "s"}`
+      ? `Pulled ${count} group${count === 1 ? "" : "s"}`
       : "Already up to date";
   }
 
   function onSignedIn() {
     refreshEntitlements().then(setEntitlements);
     syncSend({ type: "PULL" });
-    reconcileQuestSyncStatus().then(refresh);
+    reconcileGroupSyncStatus().then(refresh);
     reconcileFolderSyncStatus().then(refresh);
     reconcileResourceSyncStatus().then(refresh);
   }
@@ -2098,25 +2100,25 @@ function App() {
   const [authError, setAuthError] = createSignal("");
 
   const bindingId = (b: WindowBinding) =>
-    b.kind === "quest" ? b.questId : b.projectId;
+    b.kind === "group" ? b.groupId : b.projectId;
   const openIds = () => new Set(Object.values(windowMap()).map(bindingId));
   const currentId = () => {
     const windowId = myWindowId();
     const binding = windowId !== undefined ? windowMap()[windowId] : undefined;
     return binding ? bindingId(binding) : undefined;
   };
-  // Quest-only: used for the document title/favicon, which stays keyed off
-  // a live Quest specifically, same as before Project became window-bound.
-  const current = () => quests().find((w) => w.id === currentId());
+  // Group-only: used for the document title/favicon, which stays keyed off
+  // a live Group specifically, same as before Project became window-bound.
+  const current = () => groups().find((w) => w.id === currentId());
 
-  // A trashed quest is still in storage.local (and still has whatever
+  // A trashed group is still in storage.local (and still has whatever
   // syncStatus it had before deletion) but shouldn't appear in the normal
-  // quest list, count against the plan limit display, or trigger sync
-  // issue banners — create_quest's own count already excludes it
+  // group list, count against the plan limit display, or trigger sync
+  // issue banners — create_group's own count already excludes it
   // server-side (supabase/migrations' trash_and_purge migration), so this
   // keeps the dashboard's numbers matching what the server actually counts.
-  const activeQuests = () => quests().filter((w) => !w.deletedAt);
-  const trashedQuests = () => quests().filter((w) => !!w.deletedAt);
+  const activeGroups = () => groups().filter((w) => !w.deletedAt);
+  const trashedGroups = () => groups().filter((w) => !!w.deletedAt);
   const trashRetention = () =>
     trashRetentionDays(entitlements()?.accessExpiresAt);
   // Folders have no trash tier (deleteFolder is a hard delete), so every
@@ -2124,42 +2126,43 @@ function App() {
   const projects = () => folders().filter((f) => f.kind === "project");
 
   // Archive is a visibility filter only — unlike Trash, archiving never
-  // frees quota (an archived Quest/Project still counts toward
-  // max_workspaces, same as a "done" one does today), so activeQuests()/
+  // frees quota (an archived Group/Project still counts toward
+  // max_workspaces, same as a "done" one does today), so activeGroups()/
   // projects() above stay archive-inclusive for every quota/usage
   // calculation. Only the main sidebar tree (Dashboard's props below) and
   // the "save to project" picker/palette should exclude archived items.
-  const visibleQuests = () => activeQuests().filter((w) => !w.archivedAt);
-  const archivedQuests = () => activeQuests().filter((w) => !!w.archivedAt);
+  const visibleGroups = () => activeGroups().filter((w) => !w.archivedAt);
+  const archivedGroups = () => activeGroups().filter((w) => !!w.archivedAt);
   const visibleFolders = () => folders().filter((f) => !f.archivedAt);
   const archivedFolders = () => folders().filter((f) => !!f.archivedAt);
 
   // Account-level usage, driven by actual per-item sync status (see
-  // docs/quest-sync-semantics.md) rather than re-deriving "at limit" from
+  // docs/group-sync-semantics.md) rather than re-deriving "at limit" from
   // entitlements — an item only counts here once it's actually failed to
   // sync for a plan reason, not just because a count crossed a threshold
-  // with nothing having been rejected yet. Quests and Projects share one
-  // quota pool server-side (count_workspace_like() — see
-  // supabase/migrations/20261007170000_project_quest_restructure.sql), so
-  // both are counted together here too.
-  const syncedQuestCount = () =>
-    activeQuests().filter((w) => w.syncStatus === "synced").length;
+  // with nothing having been rejected yet. Groups and Projects share one
+  // quota pool server-side (count_group_like(), added by
+  // supabase/migrations/20261007170000_project_quest_restructure.sql and
+  // renamed by 20261013000000_quest_to_group_rename.sql), so both are
+  // counted together here too.
+  const syncedGroupCount = () =>
+    activeGroups().filter((w) => w.syncStatus === "synced").length;
   const syncedProjectCount = () =>
     projects().filter((f) => f.syncStatus === "synced").length;
-  const syncedCount = () => syncedQuestCount() + syncedProjectCount();
+  const syncedCount = () => syncedGroupCount() + syncedProjectCount();
   const blockedCount = () =>
-    activeQuests().filter(
+    activeGroups().filter(
       (w) => w.syncStatus === "limit-reached" || w.syncStatus === "expired",
     ).length +
     projects().filter(
       (f) => f.syncStatus === "limit-reached" || f.syncStatus === "expired",
     ).length;
   const hasExpiredAccess = () =>
-    activeQuests().some((w) => w.syncStatus === "expired") ||
+    activeGroups().some((w) => w.syncStatus === "expired") ||
     projects().some((f) => f.syncStatus === "expired");
 
-  // blockedCount only catches an item that actually *failed* a create_quest/
-  // create_project call — but pullRemoteQuests/pullRemoteFolders mark
+  // blockedCount only catches an item that actually *failed* a create_group/
+  // create_project call — but pullRemoteGroups/pullRemoteFolders mark
   // anything with a real server row "synced" regardless of the account's
   // *current* entitlement, and the create RPCs only enforce the limit at
   // insert time, never retroactively. So an account can sit at, say, 11
@@ -2184,7 +2187,7 @@ function App() {
   });
 
   async function refresh() {
-    setQuests(await getQuests());
+    setGroups(await getGroups());
     setFolders(await getFolders());
     setResources(await getResources());
     setSessions(await getSessions());
@@ -2326,21 +2329,21 @@ function App() {
   // demand — the escape hatch the "Manual sync pull" setting exists for.
   function handlePullNow() {
     syncSend({ type: "PULL" });
-    reconcileQuestSyncStatus().then(refresh);
+    reconcileGroupSyncStatus().then(refresh);
   }
 
-  async function handleRestoreQuest(id: string) {
-    await restoreQuest(id);
+  async function handleRestoreGroup(id: string) {
+    await restoreGroup(id);
     await refresh();
   }
 
-  async function handlePermanentlyDeleteQuest(id: string) {
-    await permanentlyDeleteQuest(id);
+  async function handlePermanentlyDeleteGroup(id: string) {
+    await permanentlyDeleteGroup(id);
     await refresh();
   }
 
-  async function handleUnarchiveQuest(id: string) {
-    await unarchiveQuest(id);
+  async function handleUnarchiveGroup(id: string) {
+    await unarchiveGroup(id);
     await refresh();
   }
 
@@ -2380,17 +2383,17 @@ function App() {
   });
 
   // The pinned dashboard tab is this window's only always-visible surface,
-  // so it's where "which quest is this window" needs to be obvious
+  // so it's where "which group is this window" needs to be obvious
   // without opening the dashboard: tab title + a favicon colored to match
-  // the quest's own dot color (same palette as the sidebar).
+  // the group's own dot color (same palette as the sidebar).
   createEffect(() => {
-    const quest = current();
+    const group = current();
     theme(); // recompute the resolved color when the palette changes
-    document.title = quest ? `${quest.name} — cntxt` : "cntxt";
+    document.title = group ? `${group.name} — cntxt` : "cntxt";
     const favicon = document.getElementById(
       "favicon",
     ) as HTMLLinkElement | null;
-    if (favicon) favicon.href = faviconHrefFor(quest);
+    if (favicon) favicon.href = faviconHrefFor(group);
   });
 
   return (
@@ -2551,7 +2554,7 @@ function App() {
                             : "text-surface-txt-hint"
                         }
                       >
-                        {syncedCount()} of {entitlements()!.maxMissions} quests
+                        {syncedCount()} of {entitlements()!.maxMissions} groups
                         synced
                       </span>
                     </li>
@@ -2571,7 +2574,7 @@ function App() {
                               : undefined
                           }
                         />
-                        Pull quests now
+                        Pull groups now
                       </button>
                     </li>
                     <Show when={syncMessage()}>
@@ -2639,7 +2642,7 @@ function App() {
                     You're over your plan's limit.
                   </span>{" "}
                   {syncedCount()} items are synced, but your plan covers{" "}
-                  {entitlements()?.maxMissions}. New quests and projects won't
+                  {entitlements()?.maxMissions}. New groups and projects won't
                   sync until you're back under the limit or you upgrade.
                 </p>
                 <button
@@ -2656,19 +2659,19 @@ function App() {
               <Match when={nav() === "trash"}>
                 <div class="flex flex-1 items-stretch overflow-hidden">
                   <TrashPanel
-                    quests={trashedQuests}
+                    groups={trashedGroups}
                     retentionDays={trashRetention}
-                    onRestore={handleRestoreQuest}
-                    onDeleteForever={handlePermanentlyDeleteQuest}
+                    onRestore={handleRestoreGroup}
+                    onDeleteForever={handlePermanentlyDeleteGroup}
                   />
                 </div>
               </Match>
               <Match when={nav() === "history"}>
                 <div class="flex flex-1 items-stretch overflow-hidden">
                   <HistoryPanel
-                    archivedQuests={archivedQuests}
+                    archivedGroups={archivedGroups}
                     archivedFolders={archivedFolders}
-                    onUnarchiveQuest={handleUnarchiveQuest}
+                    onUnarchiveGroup={handleUnarchiveGroup}
                     onUnarchiveFolder={handleUnarchiveFolder}
                     sessions={sessions}
                     onRestoreSession={handleRestoreSession}
@@ -2698,13 +2701,13 @@ function App() {
                     autoArchiveDays={autoArchiveDays}
                     onAutoArchiveDaysChange={handleAutoArchiveDaysChange}
                     maxWorkspaces={() => entitlements()?.maxMissions}
-                    questCount={() => activeQuests().length}
+                    groupCount={() => activeGroups().length}
                     projectCount={() => projects().length}
                     syncedCount={syncedCount}
                     blockedCount={blockedCount}
                     overLimitCount={overLimitCount}
                     accessExpiresAt={() => entitlements()?.accessExpiresAt}
-                    trashedCount={() => trashedQuests().length}
+                    trashedCount={() => trashedGroups().length}
                     trashRetentionDays={trashRetention}
                     monthlyCheckoutUrl={
                       session()
@@ -2719,9 +2722,9 @@ function App() {
                   />
                 </div>
               </Match>
-              <Match when={nav() === "quests"}>
+              <Match when={nav() === "groups"}>
                 <Dashboard
-                  quests={visibleQuests}
+                  groups={visibleGroups}
                   folders={visibleFolders}
                   resources={resources}
                   currentId={currentId}
@@ -2731,8 +2734,8 @@ function App() {
                   refresh={refresh}
                   restoreState={state}
                   restoreSend={send}
-                  questSwapState={questSwapState}
-                  questSwapSend={questSwapSend}
+                  groupSwapState={groupSwapState}
+                  groupSwapSend={groupSwapSend}
                   jumpTo={jumpTo}
                   onJumped={() => setJumpTo(undefined)}
                 />
@@ -2751,7 +2754,7 @@ function App() {
                 autofocus
                 value={paletteQuery()}
                 onInput={(e) => setPaletteQuery(e.currentTarget.value)}
-                placeholder="Jump to a quest, project, area, or tab…"
+                placeholder="Jump to a group, project, area, or tab…"
                 class="min-w-0 flex-1 bg-transparent text-[15px] outline-none"
               />
               <span class="rounded border border-surface-alt4 px-1.25 font-mono text-[11px] text-surface-txt-hint">

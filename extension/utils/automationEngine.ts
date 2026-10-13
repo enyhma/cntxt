@@ -1,5 +1,5 @@
-import { getQuests } from "./quests";
-import type { Quest } from "./quests";
+import { getGroups } from "./groups";
+import type { Group } from "./groups";
 import { getAutomations } from "./automations";
 import type { Automation } from "./automations";
 import { BLOCK_REGISTRY } from "./automationBlocks";
@@ -11,12 +11,12 @@ function triggerNodeOf(automation: Pick<Automation, "nodes">) {
 
 export function matchesTrigger(
   automation: Pick<Automation, "nodes">,
-  quest: Quest,
+  group: Group,
 ): boolean {
   const triggerNode = triggerNodeOf(automation);
   if (!triggerNode) return false;
   const block = BLOCK_REGISTRY[triggerNode.blockType];
-  return block.kind === "trigger" && block.matches(quest, triggerNode.config);
+  return block.kind === "trigger" && block.matches(group, triggerNode.config);
 }
 
 // Walks the chain starting right after the trigger node, running each
@@ -59,18 +59,18 @@ export async function getEnabledAutomationsFor(
 // Called from the existing session-capture alarm tick
 // (entrypoints/background.ts) — replaces utils/autoArchive.ts's hardcoded
 // loop with the same check expressed as the seeded "Archive stale done
-// quests" Automation, plus any other enabled "scheduleTick" automation a
+// groups" Automation, plus any other enabled "scheduleTick" automation a
 // user adds later.
 export async function runScheduledAutomations(): Promise<void> {
   const automations = await getEnabledAutomationsFor("scheduleTick");
   if (automations.length === 0) return;
 
-  for (const quest of await getQuests()) {
-    if (quest.archivedAt || quest.deletedAt) continue;
+  for (const group of await getGroups()) {
+    if (group.archivedAt || group.deletedAt) continue;
     for (const automation of automations) {
-      if (matchesTrigger(automation, quest)) {
+      if (matchesTrigger(automation, group)) {
         await runAutomationChain(automation, {
-          quest,
+          group,
           project: null,
           windowId: null,
         });

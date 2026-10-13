@@ -1,6 +1,6 @@
 import { For, Show, type Accessor } from "solid-js";
 import { RotateCcw, FolderClosed } from "lucide-solid";
-import { QuestDot } from "./QuestDot";
+import { GroupDot } from "./GroupDot";
 
 // Inline shapes (not imported from the extension's utils/) — matches
 // TrashPanel's own precedent of a minimal structural type, keeping this
@@ -9,7 +9,7 @@ import { QuestDot } from "./QuestDot";
 // so a caller can pass its real restoreSession(session) straight through
 // as onRestoreSession without a narrowing mismatch.
 type SessionLeg = {
-  entityTable: "quests" | "folders";
+  entityTable: "groups" | "folders";
   entityId: string;
   entityName: string;
   tabs: Array<{ url: string; title: string }>;
@@ -27,20 +27,20 @@ function timeAgo(ms: number): string {
 }
 
 export function HistoryPanel(props: {
-  archivedQuests: Accessor<
+  archivedGroups: Accessor<
     Array<{ id: string; name: string; color?: string; icon?: string }>
   >;
   archivedFolders: Accessor<
     Array<{ id: string; name: string; color?: string; kind: string }>
   >;
-  onUnarchiveQuest: (id: string) => void;
+  onUnarchiveGroup: (id: string) => void;
   onUnarchiveFolder: (id: string) => void;
   sessions: Accessor<HistorySession[]>;
   onRestoreSession: (session: HistorySession) => void;
   jumpToSessionId?: Accessor<string | undefined>;
 }) {
   const hasArchived = () =>
-    props.archivedQuests().length > 0 || props.archivedFolders().length > 0;
+    props.archivedGroups().length > 0 || props.archivedFolders().length > 0;
 
   return (
     <div class="flex-1 overflow-y-auto p-6">
@@ -74,17 +74,17 @@ export function HistoryPanel(props: {
                 </div>
               )}
             </For>
-            <For each={props.archivedQuests()}>
+            <For each={props.archivedGroups()}>
               {(q) => (
                 <div class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 shadow-[var(--shadow-card)]">
-                  <QuestDot quest={q} />
+                  <GroupDot group={q} />
                   <span class="min-w-0 flex-1 truncate text-sm font-medium">
                     {q.name}
                   </span>
                   <button
                     type="button"
                     title="Unarchive"
-                    onClick={() => props.onUnarchiveQuest(q.id)}
+                    onClick={() => props.onUnarchiveGroup(q.id)}
                     class="btn btn-square btn-sm border border-surface-alt3 bg-surface-alt2"
                   >
                     <RotateCcw size={13} />

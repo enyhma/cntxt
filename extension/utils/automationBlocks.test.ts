@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { BLOCK_REGISTRY } from "./automationBlocks";
-import type { Quest } from "./quests";
+import type { Group } from "./groups";
 
-function quest(overrides: Partial<Quest> = {}): Quest {
+function group(overrides: Partial<Group> = {}): Group {
   return {
-    id: "q1",
-    name: "Quest",
+    id: "g1",
+    name: "Group",
     tabs: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -14,52 +14,52 @@ function quest(overrides: Partial<Quest> = {}): Quest {
   };
 }
 
-describe("questDoneAndStale trigger", () => {
-  const block = BLOCK_REGISTRY.questDoneAndStale;
+describe("groupDoneAndStale trigger", () => {
+  const block = BLOCK_REGISTRY.groupDoneAndStale;
   if (block.kind !== "trigger") throw new Error("expected a trigger block");
 
-  it("does not match a quest that isn't done", () => {
-    expect(block.matches(quest({ status: "active" }), { days: 30 })).toBe(
+  it("does not match a group that isn't done", () => {
+    expect(block.matches(group({ status: "active" }), { days: 30 })).toBe(
       false,
     );
   });
 
-  it("does not match a done quest that was seen recently", () => {
+  it("does not match a done group that was seen recently", () => {
     expect(
-      block.matches(quest({ status: "done", lastSeenAt: Date.now() }), {
+      block.matches(group({ status: "done", lastSeenAt: Date.now() }), {
         days: 30,
       }),
     ).toBe(false);
   });
 
-  it("matches a done quest unseen for longer than the configured days", () => {
+  it("matches a done group unseen for longer than the configured days", () => {
     const longAgo = Date.now() - 31 * 24 * 60 * 60 * 1000;
     expect(
-      block.matches(quest({ status: "done", lastSeenAt: longAgo }), {
+      block.matches(group({ status: "done", lastSeenAt: longAgo }), {
         days: 30,
       }),
     ).toBe(true);
   });
 });
 
-describe("questTabsEmpty trigger", () => {
-  const block = BLOCK_REGISTRY.questTabsEmpty;
+describe("groupTabsEmpty trigger", () => {
+  const block = BLOCK_REGISTRY.groupTabsEmpty;
   if (block.kind !== "trigger") throw new Error("expected a trigger block");
 
-  it("does not match a quest with tabs open", () => {
+  it("does not match a group with tabs open", () => {
     expect(
       block.matches(
-        quest({ tabs: [{ url: "https://a.example/", title: "" }] }),
+        group({ tabs: [{ url: "https://a.example/", title: "" }] }),
         {},
       ),
     ).toBe(false);
   });
 
-  it("does not match an already-done quest", () => {
-    expect(block.matches(quest({ status: "done", tabs: [] }), {})).toBe(false);
+  it("does not match an already-done group", () => {
+    expect(block.matches(group({ status: "done", tabs: [] }), {})).toBe(false);
   });
 
-  it("matches a non-done quest with zero tabs", () => {
-    expect(block.matches(quest({ status: "active", tabs: [] }), {})).toBe(true);
+  it("matches a non-done group with zero tabs", () => {
+    expect(block.matches(group({ status: "active", tabs: [] }), {})).toBe(true);
   });
 });

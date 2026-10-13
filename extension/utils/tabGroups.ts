@@ -18,8 +18,8 @@ export type NativeColor =
   | "yellow";
 
 // Fixed 5->9 lookup, deliberately one-directional and non-configurable — a
-// quest's 5 semantic ColorKeys map onto 5 of the 9 literal native hues.
-// No reverse table: a captured quest's color is left unset (see
+// group's 5 semantic ColorKeys map onto 5 of the 9 literal native hues.
+// No reverse table: a captured group's color is left unset (see
 // captureGroups.ts) rather than trying to map the other 4 native colors
 // back onto a ColorKey nobody asked it to represent.
 const COLOR_TO_NATIVE: Record<ColorKey, NativeColor> = {
@@ -42,7 +42,13 @@ export function tabGroupsApiAvailable(): boolean {
 // same lifetime as utils/session.ts's WindowBinding map, which is fine:
 // group ids aren't stable across restarts either). ---
 const OWNERS_KEY = "tabGroupOwners";
-export type GroupOwner = { table: "quests" | "folders"; id: string };
+// `table` names which entity table owns this *native browser* tab group —
+// "groups" here means the Group entity's storage table, same word as this
+// type's own name meaning something different (ownership of a native tab
+// group). Deliberate: see this file's own module-level framing and the
+// Quest->Group rename notes in CLAUDE.md for why these two meanings of
+// "group" coexist rather than one being renamed away.
+export type GroupOwner = { table: "groups" | "folders"; id: string };
 type OwnerMap = Record<number, GroupOwner>;
 
 export async function getTabGroupOwners(): Promise<OwnerMap> {
@@ -91,7 +97,7 @@ export function isMirroring(windowId: number): boolean {
 // windowSyncMachine.ts's own house idiom (full-replace every sync, no
 // diffing), and both calls are cheap/idempotent no-ops when already correct.
 //
-// Best-effort like utils/quests.ts's registerQuest: mirroring is a visual
+// Best-effort like utils/groups.ts's registerGroup: mirroring is a visual
 // nicety layered on top of the tab sync that already succeeded by the time
 // this runs, so a browser-API failure here (the window closed mid-call, the
 // browser's own tabGroups limit, anything) is swallowed rather than thrown —

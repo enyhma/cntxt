@@ -1,7 +1,7 @@
 import { setup } from "xstate";
 import { getWindowBindingMap } from "./session";
 import { snapshotTabsWithIds } from "./tabs";
-import { getQuests, updateQuest } from "./quests";
+import { getGroups, updateGroup } from "./groups";
 import { getFolders, updateFolder } from "./folders";
 import type { Folder } from "./folders";
 import { resolveProjectLiveTarget } from "./projectLiveTabs";
@@ -16,7 +16,7 @@ import type { ColorKey } from "@cntxt/ui";
 type Context = { windowId: number };
 type Event = { type: "TABS_CHANGED" } | { type: "WINDOW_CLOSED" };
 
-// Debounces the "tabs settled empty" automation trigger per quest — same
+// Debounces the "tabs settled empty" automation trigger per group — same
 // shape as utils/captureGroups.ts's scheduleCaptureCheck: a burst of
 // TABS_CHANGED events (or new tabs arriving before the debounce elapses)
 // resets the timer instead of firing early. Lives here, not in
@@ -25,50 +25,50 @@ type Event = { type: "TABS_CHANGED" } | { type: "WINDOW_CLOSED" };
 const EMPTY_TABS_DEBOUNCE_MS = 45_000;
 const pendingEmptyChecks = new Map<string, ReturnType<typeof setTimeout>>();
 
-function cancelEmptyTabsCheck(questId: string) {
-  clearTimeout(pendingEmptyChecks.get(questId));
-  pendingEmptyChecks.delete(questId);
+function cancelEmptyTabsCheck(groupId: string) {
+  clearTimeout(pendingEmptyChecks.get(groupId));
+  pendingEmptyChecks.delete(groupId);
 }
 
 function scheduleEmptyTabsCheck(
-  questId: string,
+  groupId: string,
   windowId: number,
   project: Folder | null,
 ) {
-  clearTimeout(pendingEmptyChecks.get(questId));
+  clearTimeout(pendingEmptyChecks.get(groupId));
   pendingEmptyChecks.set(
-    questId,
+    groupId,
     setTimeout(() => {
-      pendingEmptyChecks.delete(questId);
-      runEmptyTabsAutomations(questId, windowId, project).catch((e: unknown) =>
-        console.debug("quest automation check failed:", e),
+      pendingEmptyChecks.delete(groupId);
+      runEmptyTabsAutomations(groupId, windowId, project).catch((e: unknown) =>
+        console.debug("group automation check failed:", e),
       );
     }, EMPTY_TABS_DEBOUNCE_MS),
   );
 }
 
-// Re-reads the quest fresh at fire time (not the snapshot from when the
+// Re-reads the group fresh at fire time (not the snapshot from when the
 // debounce was scheduled) — if it changed status, got deleted, or picked
 // up new tabs in the meantime via a path this module didn't observe, the
 // trigger's own `matches` check naturally no-ops instead of needing extra
 // cancellation plumbing for every such case.
 async function runEmptyTabsAutomations(
-  questId: string,
+  groupId: string,
   windowId: number,
   project: Folder | null,
 ) {
-  const quest = (await getQuests()).find((q) => q.id === questId);
-  if (!quest || quest.deletedAt) return;
+  const group = (await getGroups()).find((q) => q.id === groupId);
+  if (!group || group.deletedAt) return;
 
-  const automations = await getEnabledAutomationsFor("questTabsSettled");
+  const automations = await getEnabledAutomationsFor("groupTabsSettled");
   for (const automation of automations) {
-    if (matchesTrigger(automation, quest)) {
-      await runAutomationChain(automation, { quest, project, windowId });
+    if (matchesTrigger(automation, group)) {
+      await runAutomationChain(automation, { group, project, windowId });
     }
   }
 }
 
-// Each Quest/Project tab list is a plain snapshot now — no per-tab metadata
+// Each Group/Project tab list is a plain snapshot now — no per-tab metadata
 // (like the old phaseId tag) survives a resync, so there's nothing to merge
 // by URL, just write the fresh list straight through.
 async function syncTabs(windowId: number) {
@@ -78,24 +78,24 @@ async function syncTabs(windowId: number) {
 
   const { tabs, tabIds } = await snapshotTabsWithIds(windowId);
 
-  if (binding.kind === "quest") {
-    await updateQuest(binding.questId, { tabs });
-    const quest = (await getQuests()).find((q) => q.id === binding.questId);
-    if (quest) {
+  if (binding.kind === "group") {
+    await updateGroup(binding.groupId, { tabs });
+    const group = (await getGroups()).find((q) => q.id === binding.groupId);
+    if (group) {
       await ensureLiveTabGroup(
         windowId,
         {
-          table: "quests",
-          id: quest.id,
-          name: quest.name,
-          color: quest.color as ColorKey | undefined,
+          table: "groups",
+          id: group.id,
+          name: group.name,
+          color: group.color as ColorKey | undefined,
         },
         tabIds,
       );
       if (tabs.length > 0) {
-        cancelEmptyTabsCheck(quest.id);
-      } else if (quest.status !== "done") {
-        scheduleEmptyTabsCheck(quest.id, windowId, null);
+        cancelEmptyTabsCheck(group.id);
+      } else if (group.status !== "done") {
+        scheduleEmptyTabsCheck(group.id, windowId, null);
       }
     }
     return;
@@ -105,24 +105,24 @@ async function syncTabs(windowId: number) {
   if (!project) return;
 
   const target = resolveProjectLiveTarget(project);
-  if (target.table === "quests") {
-    await updateQuest(target.id, { tabs });
-    const quest = (await getQuests()).find((q) => q.id === target.id);
-    if (quest) {
+  if (target.table === "groups") {
+    await updateGroup(target.id, { tabs });
+    const group = (await getGroups()).find((q) => q.id === target.id);
+    if (group) {
       await ensureLiveTabGroup(
         windowId,
         {
-          table: "quests",
-          id: quest.id,
-          name: quest.name,
-          color: quest.color as ColorKey | undefined,
+          table: "groups",
+          id: group.id,
+          name: group.name,
+          color: group.color as ColorKey | undefined,
         },
         tabIds,
       );
       if (tabs.length > 0) {
-        cancelEmptyTabsCheck(quest.id);
-      } else if (quest.status !== "done") {
-        scheduleEmptyTabsCheck(quest.id, windowId, project);
+        cancelEmptyTabsCheck(group.id);
+      } else if (group.status !== "done") {
+        scheduleEmptyTabsCheck(group.id, windowId, project);
       }
     }
   } else {
@@ -143,7 +143,7 @@ async function syncTabs(windowId: number) {
 /**
  * One actor per open window. The binding is deliberately NOT kept in
  * context: the dashboard can reassign a window to a different Project or
- * Quest (Restore) without this actor knowing, so syncTabs re-reads the
+ * Group (Restore) without this actor knowing, so syncTabs re-reads the
  * mapping from session storage on every sync instead of trusting stale
  * context.
  */

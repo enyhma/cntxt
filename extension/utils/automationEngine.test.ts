@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { fakeBrowser } from "wxt/testing/fake-browser";
-import { createQuest, getQuests, updateQuest } from "./quests";
+import { createGroup, getGroups, updateGroup } from "./groups";
 import { createFolder, getFolders } from "./folders";
 import type { Automation, AutomationEdge, AutomationNode } from "./automations";
 import {
@@ -23,16 +23,16 @@ function chain(nodes: AutomationNode[]): AutomationEdge[] {
 }
 
 describe("runAutomationChain", () => {
-  it("runs setQuestStatus then advanceNextSibling in order", async () => {
+  it("runs setGroupStatus then advanceNextSibling in order", async () => {
     const project = await createFolder("Project", null, "project");
-    const active = await createQuest("Active", []);
-    await updateQuest(active.id, {
+    const active = await createGroup("Active", []);
+    await updateGroup(active.id, {
       folderId: project.id,
       status: "active",
       order: 0,
     });
-    const pending = await createQuest("Pending", []);
-    await updateQuest(pending.id, {
+    const pending = await createGroup("Pending", []);
+    await updateGroup(pending.id, {
       folderId: project.id,
       status: "pending",
       order: 1,
@@ -42,14 +42,14 @@ describe("runAutomationChain", () => {
       {
         id: "trigger",
         kind: "trigger",
-        blockType: "questTabsEmpty",
+        blockType: "groupTabsEmpty",
         config: {},
         position: { x: 0, y: 0 },
       },
       {
         id: "a1",
         kind: "action",
-        blockType: "setQuestStatus",
+        blockType: "setGroupStatus",
         config: { status: "done" },
         position: { x: 0, y: 0 },
       },
@@ -66,40 +66,40 @@ describe("runAutomationChain", () => {
       edges: chain(nodes),
     };
 
-    const freshActive = (await getQuests()).find((q) => q.id === active.id)!;
+    const freshActive = (await getGroups()).find((q) => q.id === active.id)!;
     await runAutomationChain(automation, {
-      quest: freshActive,
+      group: freshActive,
       project,
       windowId: null,
     });
 
-    const quests = await getQuests();
-    expect(quests.find((q) => q.id === active.id)?.status).toBe("done");
-    expect(quests.find((q) => q.id === pending.id)?.status).toBe("active");
+    const groups = await getGroups();
+    expect(groups.find((q) => q.id === active.id)?.status).toBe("done");
+    expect(groups.find((q) => q.id === pending.id)?.status).toBe("active");
 
     const folders = await getFolders();
-    expect(folders.find((f) => f.id === project.id)?.activeQuestId).toBe(
+    expect(folders.find((f) => f.id === project.id)?.activeGroupId).toBe(
       pending.id,
     );
   });
 
   it("does nothing beyond the trigger when there are no action nodes", async () => {
-    const quest = await createQuest("Standalone", []);
+    const group = await createGroup("Standalone", []);
     const nodes: AutomationNode[] = [
       {
         id: "trigger",
         kind: "trigger",
-        blockType: "questTabsEmpty",
+        blockType: "groupTabsEmpty",
         config: {},
         position: { x: 0, y: 0 },
       },
     ];
     await runAutomationChain(
       { nodes, edges: [] },
-      { quest, project: null, windowId: null },
+      { group, project: null, windowId: null },
     );
-    const quests = await getQuests();
-    expect(quests.find((q) => q.id === quest.id)?.status).toBeUndefined();
+    const groups = await getGroups();
+    expect(groups.find((q) => q.id === group.id)?.status).toBeUndefined();
   });
 });
 
@@ -113,7 +113,7 @@ describe("matchesTrigger / getEnabledAutomationsFor", () => {
         {
           id: "t",
           kind: "trigger",
-          blockType: "questDoneAndStale",
+          blockType: "groupDoneAndStale",
           config: { days: 1 },
           position: { x: 0, y: 0 },
         },
@@ -130,7 +130,7 @@ describe("matchesTrigger / getEnabledAutomationsFor", () => {
         {
           id: "t",
           kind: "trigger",
-          blockType: "questTabsEmpty",
+          blockType: "groupTabsEmpty",
           config: {},
           position: { x: 0, y: 0 },
         },
@@ -142,12 +142,12 @@ describe("matchesTrigger / getEnabledAutomationsFor", () => {
 
     const scheduled = await getEnabledAutomationsFor("scheduleTick");
     expect(scheduled.map((a) => a.id)).toEqual(["w1"]);
-    const event = await getEnabledAutomationsFor("questTabsSettled");
+    const event = await getEnabledAutomationsFor("groupTabsSettled");
     expect(event.map((a) => a.id)).toEqual(["w2"]);
   });
 
   it("matchesTrigger returns false when there's no trigger node", () => {
-    const quest = {
+    const group = {
       id: "q",
       name: "Q",
       tabs: [],
@@ -155,7 +155,7 @@ describe("matchesTrigger / getEnabledAutomationsFor", () => {
       updatedAt: 0,
       order: 0,
     };
-    expect(matchesTrigger({ nodes: [] }, quest)).toBe(false);
+    expect(matchesTrigger({ nodes: [] }, group)).toBe(false);
   });
 });
 
@@ -163,14 +163,14 @@ describe("validateAutomation", () => {
   const trigger: AutomationNode = {
     id: "t",
     kind: "trigger",
-    blockType: "questTabsEmpty",
+    blockType: "groupTabsEmpty",
     config: {},
     position: { x: 0, y: 0 },
   };
   const action: AutomationNode = {
     id: "a",
     kind: "action",
-    blockType: "archiveQuest",
+    blockType: "archiveGroup",
     config: {},
     position: { x: 0, y: 0 },
   };

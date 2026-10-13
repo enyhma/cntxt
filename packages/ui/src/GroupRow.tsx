@@ -1,10 +1,10 @@
 import { Show } from "solid-js";
 import { AppWindow } from "lucide-solid";
-import { QuestDot } from "./QuestDot";
+import { GroupDot } from "./GroupDot";
 import { SyncBadge, type SyncStatus } from "./SyncBadge";
 
-export function QuestRow(props: {
-  quest: {
+export function GroupRow(props: {
+  group: {
     id: string;
     name: string;
     color?: string;
@@ -39,16 +39,16 @@ export function QuestRow(props: {
         (canSwitch() ? " tooltip" : "")
       }
     >
-      <QuestDot
-        quest={props.quest}
+      <GroupDot
+        group={props.group}
         ring={props.isCurrent}
         title={props.isCurrent ? "Active" : undefined}
       />
-      <span class="min-w-0 flex-1 truncate text-sm">{props.quest.name}</span>
+      <span class="min-w-0 flex-1 truncate text-sm">{props.group.name}</span>
       <span class="font-mono text-[11px] text-surface-txt-faint">
         {props.count}
       </span>
-      <SyncBadge status={props.quest.syncStatus} />
+      <SyncBadge status={props.group.syncStatus} />
       <Show when={props.openElsewhere}>
         <span title="Open elsewhere" class="shrink-0">
           <AppWindow size={10} class="text-surface-txt-faint" />

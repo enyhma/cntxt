@@ -8,15 +8,15 @@ import { supabase } from "./supabase";
 // pushDirtyResources: creation registers itself immediately (like
 // registerWorkspace/registerFolder), and there's nothing left to push later.
 //
-// A resource is parented to exactly one of a Quest (questId — the
+// A resource is parented to exactly one of a Group (groupId — the
 // original "save this open tab" flow) or a Project (folderId — "save this
-// permanently" so it survives the Quest it was found in being deleted).
+// permanently" so it survives the Group it was found in being deleted).
 // Both optional rather than a tagged union so the Supabase row shape maps
 // straight across: exactly one column is ever non-null, enforced at the
 // call site (addResource), not the type.
 export type Resource = {
   id: string;
-  questId?: string;
+  groupId?: string;
   folderId?: string;
   type: "link";
   url?: string;
@@ -50,7 +50,7 @@ async function registerResource(resource: Resource) {
   await setSyncStatus(resource.id, "syncing");
   const { error } = await supabase.from("resources").insert({
     id: resource.id,
-    quest_id: resource.questId ?? null,
+    group_id: resource.groupId ?? null,
     folder_id: resource.folderId ?? null,
     type: resource.type,
     url: resource.url,
@@ -71,12 +71,12 @@ async function registerResource(resource: Resource) {
 }
 
 export async function addResource(
-  parent: { questId?: string; folderId?: string },
+  parent: { groupId?: string; folderId?: string },
   fields: { url?: string; note?: string },
 ): Promise<Resource> {
   const resource: Resource = {
     id: crypto.randomUUID(),
-    questId: parent.questId,
+    groupId: parent.groupId,
     folderId: parent.folderId,
     type: "link",
     url: fields.url,
@@ -103,7 +103,7 @@ export async function pullRemoteResources(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
     .from("resources")
-    .select("id, quest_id, folder_id, type, url, note, created_at");
+    .select("id, group_id, folder_id, type, url, note, created_at");
   if (error) throw new Error(error.message);
   if (!data) return 0;
 
@@ -113,7 +113,7 @@ export async function pullRemoteResources(): Promise<number> {
     .filter((row) => !localIds.has(row.id))
     .map((row): Resource => ({
       id: row.id,
-      questId: row.quest_id ?? undefined,
+      groupId: row.group_id ?? undefined,
       folderId: row.folder_id ?? undefined,
       type: row.type as Resource["type"],
       url: row.url ?? undefined,

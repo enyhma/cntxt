@@ -1,6 +1,6 @@
 import type { NativeColor } from "./tabGroups";
 
-// Taught via the dashboard's "Always file groups like this here" quest
+// Taught via the dashboard's "Always file groups like this here" group
 // context-menu item (App.tsx) — snapshots a live native group's title/color
 // at the moment it's taught, so a rule always carries whichever fields that
 // group actually had then. No update/delete flow in v1: nothing calls one,

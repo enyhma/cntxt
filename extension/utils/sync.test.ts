@@ -1,12 +1,12 @@
 import { createActor } from "xstate";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const pullRemoteQuests = vi.fn();
-const pushDirtyQuests = vi.fn();
+const pullRemoteGroups = vi.fn();
+const pushDirtyGroups = vi.fn();
 const purgeExpiredLocalTrash = vi.fn();
-vi.mock("./quests", () => ({
-  pullRemoteQuests,
-  pushDirtyQuests,
+vi.mock("./groups", () => ({
+  pullRemoteGroups,
+  pushDirtyGroups,
   purgeExpiredLocalTrash,
 }));
 const pullRemoteFolders = vi.fn();
@@ -24,8 +24,8 @@ const { syncMachine } = await import("./sync");
 
 beforeEach(() => {
   vi.useFakeTimers();
-  pullRemoteQuests.mockReset().mockResolvedValue(0);
-  pushDirtyQuests.mockReset().mockImplementation((input) => input);
+  pullRemoteGroups.mockReset().mockResolvedValue(0);
+  pushDirtyGroups.mockReset().mockImplementation((input) => input);
   purgeExpiredLocalTrash.mockReset().mockResolvedValue(undefined);
   pullRemoteFolders.mockReset().mockResolvedValue(0);
   pushDirtyFolders.mockReset().mockImplementation((input) => input);
@@ -48,7 +48,7 @@ describe("syncMachine", () => {
   it("pulls once on start", async () => {
     const actor = createActor(syncMachine).start();
     await flush();
-    expect(pullRemoteQuests).toHaveBeenCalledTimes(1);
+    expect(pullRemoteGroups).toHaveBeenCalledTimes(1);
     expect(actor.getSnapshot().value).toBe("idle");
   });
 
@@ -61,17 +61,17 @@ describe("syncMachine", () => {
     actor.send({ type: "LOCAL_CHANGE" });
     vi.advanceTimersByTime(500);
     actor.send({ type: "LOCAL_CHANGE" });
-    expect(pushDirtyQuests).not.toHaveBeenCalled();
+    expect(pushDirtyGroups).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(2000);
     await flush();
-    expect(pushDirtyQuests).toHaveBeenCalledTimes(1);
+    expect(pushDirtyGroups).toHaveBeenCalledTimes(1);
     expect(actor.getSnapshot().value).toBe("idle");
   });
 
   it("re-debounces a LOCAL_CHANGE that lands mid-push instead of dropping it", async () => {
     let resolvePush!: (v: Record<string, number>) => void;
-    pushDirtyQuests.mockImplementation(
+    pushDirtyGroups.mockImplementation(
       () => new Promise((resolve) => (resolvePush = resolve)),
     );
 
@@ -89,16 +89,16 @@ describe("syncMachine", () => {
 
     vi.advanceTimersByTime(2000);
     await flush();
-    expect(pushDirtyQuests).toHaveBeenCalledTimes(2);
+    expect(pushDirtyGroups).toHaveBeenCalledTimes(2);
   });
 
   it("goes offline on a pull failure and recovers on ONLINE", async () => {
-    pullRemoteQuests.mockRejectedValue(new Error("network"));
+    pullRemoteGroups.mockRejectedValue(new Error("network"));
     const actor = createActor(syncMachine).start();
     await flush();
     expect(actor.getSnapshot().value).toBe("offline");
 
-    pullRemoteQuests.mockResolvedValue(0);
+    pullRemoteGroups.mockResolvedValue(0);
     actor.send({ type: "ONLINE" });
     expect(actor.getSnapshot().value).toBe("idle");
   });
@@ -107,7 +107,7 @@ describe("syncMachine", () => {
     const actor = createActor(syncMachine).start();
     await flush();
 
-    pushDirtyQuests.mockRejectedValue(new Error("network"));
+    pushDirtyGroups.mockRejectedValue(new Error("network"));
     actor.send({ type: "LOCAL_CHANGE" });
     vi.advanceTimersByTime(2000);
     await flush();
@@ -117,11 +117,11 @@ describe("syncMachine", () => {
   it("runs a periodic pull on the interval without any LOCAL_CHANGE", async () => {
     const actor = createActor(syncMachine).start();
     await flush();
-    expect(pullRemoteQuests).toHaveBeenCalledTimes(1);
+    expect(pullRemoteGroups).toHaveBeenCalledTimes(1);
 
     vi.advanceTimersByTime(5 * 60 * 1000);
     await flush();
-    expect(pullRemoteQuests).toHaveBeenCalledTimes(2);
+    expect(pullRemoteGroups).toHaveBeenCalledTimes(2);
     expect(actor.getSnapshot().value).toBe("idle");
   });
 });

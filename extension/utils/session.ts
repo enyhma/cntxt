@@ -4,15 +4,15 @@
 const STORAGE_KEY = "windowBindingMap";
 
 // A window can be bound to either a Project (the window-bound workspace
-// role Mission/Quest used to have alone) or a standalone Quest (one not
-// nested under a Project — see questSwapMachine.ts for the nested case,
+// role Mission/Group used to have alone) or a standalone Group (one not
+// nested under a Project — see groupSwapMachine.ts for the nested case,
 // which never changes a window's binding at all).
 export type WindowBinding =
-  { kind: "project"; projectId: string } | { kind: "quest"; questId: string };
+  { kind: "project"; projectId: string } | { kind: "group"; groupId: string };
 
 export function sameBinding(a: WindowBinding, b: WindowBinding): boolean {
-  return a.kind === "quest" && b.kind === "quest"
-    ? a.questId === b.questId
+  return a.kind === "group" && b.kind === "group"
+    ? a.groupId === b.groupId
     : a.kind === "project" && b.kind === "project"
       ? a.projectId === b.projectId
       : false;

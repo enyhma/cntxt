@@ -1,18 +1,18 @@
 import { For, Show, type Accessor } from "solid-js";
 import { Plus } from "lucide-solid";
-import { QuestDot } from "./QuestDot";
+import { GroupDot } from "./GroupDot";
 
-// Area landing page — the main pane shows this instead of a quest's tabs
+// Area landing page — the main pane shows this instead of a group's tabs
 // when the sidebar's FolderHeader name (not its chevron) is clicked for an
 // Area. A Project's name click goes straight to its own live-tabs view
 // instead (see App.tsx's showProjectTabs) — a Project is window-bound, so
 // there's no separate "organizational" page for it the way an Area has
-// one. `quests` here only ever lists quests directly ungrouped-under-this-
-// Area (a Project's own quests show in its live-tabs view instead).
+// one. `groups` here only ever lists groups directly ungrouped-under-this-
+// Area (a Project's own groups show in its live-tabs view instead).
 export function FolderPage(props: {
   folder: { id: string; name: string };
   breadcrumb: Array<{ id: string; name: string }>;
-  quests: Accessor<
+  groups: Accessor<
     Array<{
       id: string;
       name: string;
@@ -23,8 +23,8 @@ export function FolderPage(props: {
   >;
   projects?: Accessor<Array<{ id: string; name: string }>>;
   onOpenProject?: (id: string) => void;
-  onOpenQuest: (id: string) => void;
-  onAddQuest: () => void;
+  onOpenGroup: (id: string) => void;
+  onAddGroup: () => void;
 }) {
   const projectsList = () => props.projects?.() ?? [];
 
@@ -64,31 +64,31 @@ export function FolderPage(props: {
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center gap-2">
             <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
-              QUESTS
+              GROUPS
             </span>
             <button
               type="button"
-              title="New quest"
-              onClick={props.onAddQuest}
+              title="New group"
+              onClick={props.onAddGroup}
               class="btn btn-square btn-ghost btn-xs"
             >
               <Plus size={12} />
             </button>
           </div>
           <Show
-            when={props.quests().length > 0}
+            when={props.groups().length > 0}
             fallback={
-              <p class="text-sm text-surface-txt-hint">No quests yet.</p>
+              <p class="text-sm text-surface-txt-hint">No groups yet.</p>
             }
           >
-            <For each={props.quests()}>
+            <For each={props.groups()}>
               {(m) => (
                 <button
                   type="button"
-                  onClick={() => props.onOpenQuest(m.id)}
+                  onClick={() => props.onOpenGroup(m.id)}
                   class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 text-left shadow-[var(--shadow-card)] hover:bg-surface-alt2"
                 >
-                  <QuestDot quest={m} />
+                  <GroupDot group={m} />
                   <span class="min-w-0 flex-1 truncate text-sm font-medium">
                     {m.name}
                   </span>

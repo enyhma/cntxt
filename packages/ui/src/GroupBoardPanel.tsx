@@ -1,30 +1,30 @@
 import { createSignal, For, Show, type Accessor } from "solid-js";
 import { Check, Plus } from "lucide-solid";
 
-export type QuestStatus = "pending" | "active" | "done";
-export type QuestBoardItem = {
+export type GroupStatus = "pending" | "active" | "done";
+export type GroupBoardItem = {
   id: string;
   name: string;
-  status?: QuestStatus;
+  status?: GroupStatus;
   tabCount: number;
 };
 
-const STATUS_LABEL: Record<QuestStatus, string> = {
+const STATUS_LABEL: Record<GroupStatus, string> = {
   pending: "PENDING",
   active: "ACTIVE",
   done: "DONE",
 };
 
-// A Project's roadmap: its child quests as ordered cards, one swapped into
-// the Project's window at a time. Absent/empty quests (handled by the
+// A Project's roadmap: its child groups as ordered cards, one swapped into
+// the Project's window at a time. Absent/empty groups (handled by the
 // caller, not here) means nothing is nested under this Project yet — this
 // only ever renders once there's at least one.
-export function QuestBoardPanel(props: {
-  quests: Accessor<QuestBoardItem[]>;
+export function GroupBoardPanel(props: {
+  groups: Accessor<GroupBoardItem[]>;
   busy: boolean;
-  onActivate: (questId: string) => void;
-  onComplete: (questId: string) => void;
-  onAddQuest: (name: string) => void;
+  onActivate: (groupId: string) => void;
+  onComplete: (groupId: string) => void;
+  onAddGroup: (name: string) => void;
 }) {
   const [adding, setAdding] = createSignal(false);
   const [name, setName] = createSignal("");
@@ -33,7 +33,7 @@ export function QuestBoardPanel(props: {
     const trimmed = name().trim();
     setAdding(false);
     setName("");
-    if (trimmed) props.onAddQuest(trimmed);
+    if (trimmed) props.onAddGroup(trimmed);
   }
 
   return (
@@ -47,7 +47,7 @@ export function QuestBoardPanel(props: {
           fallback={
             <input
               autofocus
-              placeholder="Quest name"
+              placeholder="Group name"
               class="input input-xs w-36 bg-surface-alt2"
               value={name()}
               onInput={(e) => setName(e.currentTarget.value)}
@@ -58,7 +58,7 @@ export function QuestBoardPanel(props: {
         >
           <button
             type="button"
-            title="Add quest"
+            title="Add group"
             onClick={() => setAdding(true)}
             class="btn btn-square btn-ghost btn-xs"
           >
@@ -67,15 +67,15 @@ export function QuestBoardPanel(props: {
         </Show>
       </div>
 
-      <Show when={props.quests().length === 0}>
+      <Show when={props.groups().length === 0}>
         <p class="text-sm text-surface-txt-hint">
-          No other quests in this project yet.
+          No other groups in this project yet.
         </p>
       </Show>
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <For each={props.quests()}>
-          {(quest) => {
-            const status = () => quest.status ?? "pending";
+        <For each={props.groups()}>
+          {(group) => {
+            const status = () => group.status ?? "pending";
             return (
               <div
                 class={
@@ -90,7 +90,7 @@ export function QuestBoardPanel(props: {
                     {STATUS_LABEL[status()]}
                   </span>
                   <span class="font-mono text-[11px] text-surface-txt-faint">
-                    {quest.tabCount} tabs
+                    {group.tabCount} tabs
                   </span>
                 </div>
                 <span
@@ -101,13 +101,13 @@ export function QuestBoardPanel(props: {
                       : "")
                   }
                 >
-                  {quest.name}
+                  {group.name}
                 </span>
                 <Show when={status() !== "active"}>
                   <button
                     type="button"
                     disabled={props.busy}
-                    onClick={() => props.onActivate(quest.id)}
+                    onClick={() => props.onActivate(group.id)}
                     class="btn btn-xs self-start border-none bg-accent text-accent-txt hover:bg-accent-alt1 disabled:opacity-50"
                   >
                     Activate
@@ -117,11 +117,11 @@ export function QuestBoardPanel(props: {
                   <button
                     type="button"
                     disabled={props.busy}
-                    onClick={() => props.onComplete(quest.id)}
+                    onClick={() => props.onComplete(group.id)}
                     class="btn btn-xs gap-1 self-start border border-surface-alt3 disabled:opacity-50"
                   >
                     <Check size={11} />
-                    Complete quest
+                    Complete group
                   </button>
                 </Show>
               </div>

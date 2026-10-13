@@ -2,12 +2,12 @@ import { assign, fromPromise, setup } from "xstate";
 import { removeWindowBinding, setWindowBinding } from "./session";
 import { closeMatchingTabs, openMissingTabs } from "./tabOps";
 import { resolveProjectLiveTarget } from "./projectLiveTabs";
-import { getQuests, updateQuest } from "./quests";
-import type { Quest } from "./quests";
+import { getGroups, updateGroup } from "./groups";
+import type { Group } from "./groups";
 import type { Folder } from "./folders";
 
 type RestoreTarget =
-  { kind: "project"; project: Folder } | { kind: "quest"; quest: Quest };
+  { kind: "project"; project: Folder } | { kind: "group"; group: Group };
 
 type Context = {
   target: RestoreTarget | null;
@@ -18,12 +18,12 @@ type Event =
   | { type: "RESTORE"; target: RestoreTarget }
   | { type: "CLOSE_TABS" }
   | { type: "DISCONNECT" }
-  // A standalone quest (no Project parent, so no questSwapMachine sibling
+  // A standalone group (no Project parent, so no groupSwapMachine sibling
   // roster) gets the same non-destructive complete/reopen lifecycle a
-  // Project-nested quest gets from questSwapMachine: detach + close like
+  // Project-nested group gets from groupSwapMachine: detach + close like
   // DISCONNECT, plus mark it done. Reopening later is a plain RESTORE —
   // ACTIVATE-style reopening already works for any status.
-  | { type: "COMPLETE_QUEST"; quest: Quest };
+  | { type: "COMPLETE_GROUP"; group: Group };
 
 async function closeCurrentTabs(input: {
   detach: boolean;
@@ -52,12 +52,12 @@ async function openBindingTabs(input: {
 }) {
   if (input.windowId === null || input.target === null) return;
 
-  if (input.target.kind === "quest") {
+  if (input.target.kind === "group") {
     await setWindowBinding(input.windowId, {
-      kind: "quest",
-      questId: input.target.quest.id,
+      kind: "group",
+      groupId: input.target.group.id,
     });
-    await openMissingTabs(input.windowId, input.target.quest.tabs);
+    await openMissingTabs(input.windowId, input.target.group.tabs);
     return;
   }
 
@@ -67,15 +67,15 @@ async function openBindingTabs(input: {
   });
   const resolved = resolveProjectLiveTarget(input.target.project);
   const tabs =
-    resolved.table === "quests"
-      ? ((await getQuests()).find((q) => q.id === resolved.id)?.tabs ?? [])
+    resolved.table === "groups"
+      ? ((await getGroups()).find((q) => q.id === resolved.id)?.tabs ?? [])
       : (input.target.project.tabs ?? []);
   await openMissingTabs(input.windowId, tabs);
 }
 
 /**
  * Shared "busy" gate for the two window-mutating dashboard actions: closing
- * the current binding's tabs, and restoring another Project or Quest into
+ * the current binding's tabs, and restoring another Project or Group into
  * this window (which is a close, then an open). Mutually exclusive so a
  * double-click can't overlap them.
  */
@@ -110,12 +110,12 @@ export const restoreMachine = setup({
           target: "closingTabs",
           actions: assign({ target: null, detach: true }),
         },
-        COMPLETE_QUEST: {
+        COMPLETE_GROUP: {
           target: "closingTabs",
           actions: [
             assign({ target: null, detach: true }),
             ({ event }) => {
-              updateQuest(event.quest.id, { status: "done" });
+              updateGroup(event.group.id, { status: "done" });
             },
           ],
         },

@@ -1,7 +1,7 @@
 import { assign, fromPromise, setup } from "xstate";
 import { closeMatchingTabs, openMissingTabs } from "./tabOps";
-import { getQuests, updateQuest } from "./quests";
-import type { Quest } from "./quests";
+import { getGroups, updateGroup } from "./groups";
+import type { Group } from "./groups";
 import { updateFolder } from "./folders";
 import type { Folder } from "./folders";
 
@@ -9,14 +9,14 @@ type Mode = "activate" | "complete";
 
 type Context = {
   project: Folder | null;
-  quest: Quest | null;
+  group: Group | null;
   windowId: number | null;
   mode: Mode | null;
 };
 
 type Event =
-  | { type: "ACTIVATE_QUEST"; project: Folder; quest: Quest }
-  | { type: "COMPLETE_QUEST"; project: Folder; quest: Quest };
+  | { type: "ACTIVATE_GROUP"; project: Folder; group: Group }
+  | { type: "COMPLETE_GROUP"; project: Folder; group: Group };
 
 async function closeForEvent(): Promise<number | null> {
   const win = await browser.windows.getCurrent();
@@ -26,27 +26,28 @@ async function closeForEvent(): Promise<number | null> {
 }
 
 // Finds the next `pending` sibling by `order` and swaps it in (opens its
-// tabs, activates it), or clears `activeQuestId` if there's none. Shared
-// by the explicit COMPLETE_QUEST path below and by the automation
-// engine's "advanceNextSibling" action block (utils/automationBlocks.ts), which
-// fires this same effect from a passive trigger instead of a user click.
+// tabs, activates it), or clears `activeGroupId` if there's none. Shared
+// by the explicit COMPLETE_GROUP path below and by the automation
+// engine's "advanceNextSibling" action block (utils/automationBlocks.ts),
+// which fires this same effect from a passive trigger instead of a user
+// click.
 export async function advanceNextSibling(
   project: Folder,
-  quest: Quest,
+  group: Group,
   windowId: number | null,
 ): Promise<void> {
-  const siblings = (await getQuests()).filter((q) => q.folderId === project.id);
+  const siblings = (await getGroups()).filter((g) => g.folderId === project.id);
   const next = siblings
-    .filter((s) => s.id !== quest.id && s.status === "pending")
+    .filter((s) => s.id !== group.id && s.status === "pending")
     .sort((a, b) => a.order - b.order)[0];
   if (next) {
     if (windowId !== null) {
       await openMissingTabs(windowId, next.tabs);
     }
-    await updateFolder(project.id, { activeQuestId: next.id });
-    await updateQuest(next.id, { status: "active" });
+    await updateFolder(project.id, { activeGroupId: next.id });
+    await updateGroup(next.id, { status: "active" });
   } else {
-    await updateFolder(project.id, { activeQuestId: undefined });
+    await updateFolder(project.id, { activeGroupId: undefined });
   }
 }
 
@@ -54,46 +55,46 @@ async function openAndPersist(input: {
   windowId: number | null;
   mode: Mode;
   project: Folder;
-  quest: Quest;
+  group: Group;
 }) {
   if (input.mode === "activate") {
-    const siblings = (await getQuests()).filter(
-      (q) => q.folderId === input.project.id,
+    const siblings = (await getGroups()).filter(
+      (g) => g.folderId === input.project.id,
     );
     if (input.windowId !== null) {
-      await openMissingTabs(input.windowId, input.quest.tabs);
+      await openMissingTabs(input.windowId, input.group.tabs);
     }
-    await updateFolder(input.project.id, { activeQuestId: input.quest.id });
-    await updateQuest(input.quest.id, { status: "active" });
+    await updateFolder(input.project.id, { activeGroupId: input.group.id });
+    await updateGroup(input.group.id, { status: "active" });
     for (const sib of siblings) {
-      if (sib.id !== input.quest.id && sib.status === "active") {
-        await updateQuest(sib.id, { status: "pending" });
+      if (sib.id !== input.group.id && sib.status === "active") {
+        await updateGroup(sib.id, { status: "pending" });
       }
     }
     return;
   }
 
-  // Complete: close its tabs and mark it done — `quest.tabs` is NEVER
+  // Complete: close its tabs and mark it done — `group.tabs` is NEVER
   // cleared, so this stays a full record, reopenable later via another
-  // ACTIVATE_QUEST (which works identically regardless of prior status).
+  // ACTIVATE_GROUP (which works identically regardless of prior status).
   // Then auto-advance to the next pending sibling by order, if any.
-  await updateQuest(input.quest.id, { status: "done" });
-  await advanceNextSibling(input.project, input.quest, input.windowId);
+  await updateGroup(input.group.id, { status: "done" });
+  await advanceNextSibling(input.project, input.group, input.windowId);
 }
 
 /**
- * Swaps which child Quest of a Project has its tabs live in the Project's
+ * Swaps which child Group of a Project has its tabs live in the Project's
  * window: activating one closes whatever's currently open and opens that
- * quest's own full tab list; completing one closes its tabs (never
+ * group's own full tab list; completing one closes its tabs (never
  * clearing them) and auto-advances to the next pending sibling by order.
- * Only `Folder.activeQuestId` ever changes here — the window's
+ * Only `Folder.activeGroupId` ever changes here — the window's
  * WindowBinding stays pointed at the Project throughout, unlike
  * restoreMachine's RESTORE/DISCONNECT, which do change it. Shares
  * closingTabs/openingTabs shape and tabOps.ts helpers with restoreMachine,
  * but close/open here is always everything-at-once (no detach/reattach),
  * so it stays its own small machine rather than branchy shared context.
  */
-export const questSwapMachine = setup({
+export const groupSwapMachine = setup({
   types: {} as { context: Context; events: Event },
   actors: {
     closeForEvent: fromPromise(() => closeForEvent()),
@@ -105,30 +106,30 @@ export const questSwapMachine = setup({
           windowId: number | null;
           mode: Mode;
           project: Folder;
-          quest: Quest;
+          group: Group;
         };
       }) => openAndPersist(input),
     ),
   },
 }).createMachine({
-  context: { project: null, quest: null, windowId: null, mode: null },
+  context: { project: null, group: null, windowId: null, mode: null },
   initial: "idle",
   states: {
     idle: {
       on: {
-        ACTIVATE_QUEST: {
+        ACTIVATE_GROUP: {
           target: "closingTabs",
           actions: assign(({ event }) => ({
             project: event.project,
-            quest: event.quest,
+            group: event.group,
             mode: "activate" as const,
           })),
         },
-        COMPLETE_QUEST: {
+        COMPLETE_GROUP: {
           target: "closingTabs",
           actions: assign(({ event }) => ({
             project: event.project,
-            quest: event.quest,
+            group: event.group,
             mode: "complete" as const,
           })),
         },
@@ -150,7 +151,7 @@ export const questSwapMachine = setup({
           windowId: context.windowId,
           mode: context.mode!,
           project: context.project!,
-          quest: context.quest!,
+          group: context.group!,
         }),
         onDone: "idle",
       },

@@ -1,8 +1,8 @@
 import { For, Show, type Accessor } from "solid-js";
 import { RotateCcw, Trash2 } from "lucide-solid";
-import { QuestDot } from "./QuestDot";
+import { GroupDot } from "./GroupDot";
 
-// Days left before purge_trashed_workspaces (supabase/migrations) removes
+// Days left before purge_trashed_groups (supabase/migrations) removes
 // this for good. Floored, not rounded, so "0 days left" means "could be
 // gone any time now" rather than implying a few more hours of safety.
 export function daysRemaining(
@@ -14,7 +14,7 @@ export function daysRemaining(
 }
 
 export function TrashPanel(props: {
-  quests: Accessor<
+  groups: Accessor<
     Array<{
       id: string;
       name: string;
@@ -32,15 +32,15 @@ export function TrashPanel(props: {
       <div class="flex max-w-md flex-col gap-3">
         <h2 class="text-base font-semibold">Trash</h2>
         <Show
-          when={props.quests().length > 0}
+          when={props.groups().length > 0}
           fallback={
             <p class="text-sm text-surface-txt-hint">Trash is empty.</p>
           }
         >
-          <For each={props.quests()}>
+          <For each={props.groups()}>
             {(m) => (
               <div class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 shadow-[var(--shadow-card)]">
-                <QuestDot quest={m} />
+                <GroupDot group={m} />
                 <div class="flex min-w-0 flex-1 flex-col">
                   <span class="truncate text-sm font-medium">{m.name}</span>
                   <span class="text-xs text-surface-txt-hint">

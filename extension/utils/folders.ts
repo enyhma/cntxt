@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
-import { getQuests, updateQuest } from "./quests";
-import type { QuestTab } from "./quests";
+import { getGroups, updateGroup } from "./groups";
+import type { GroupTab } from "./groups";
 
 // Area/Project hierarchy, one self-referencing table instead of two fixed
 // tiers — see supabase/migrations/20261005130000_folders.sql. `kind` is the
@@ -8,7 +8,7 @@ import type { QuestTab } from "./quests";
 // broke once a Project can be created unparented (an ad-hoc, window-created
 // Project — see attach.ts), which looks identical to an Area by nesting
 // alone. A third tier, Section, existed briefly for resources to outlive
-// their originating Quest; removed once Project itself took over that role
+// their originating Group; removed once Project itself took over that role
 // (see supabase/migrations/20261007180000_remove_sections.sql) — a
 // Resource now attaches directly to a Project instead.
 export type FolderKind = "area" | "project";
@@ -21,15 +21,15 @@ export type Folder = {
   color?: string;
   createdAt: number;
   updatedAt: number;
-  // Project-only: this Project's own live tab list, and which child Quest
+  // Project-only: this Project's own live tab list, and which child Group
   // (if any) currently has its tabs swapped into this Project's window in
   // place of its own. Area rows never populate these, same as `color`
   // being a field not every tier uses.
-  tabs?: QuestTab[];
-  activeQuestId?: string;
-  // "Hidden but kept" — same shape and meaning as Quest.archivedAt (see
+  tabs?: GroupTab[];
+  activeGroupId?: string;
+  // "Hidden but kept" — same shape and meaning as Group.archivedAt (see
   // that field's own comment). Archiving a Project cascades to archive its
-  // child Quests too (see archiveFolder below); Areas have no cascade.
+  // child Groups too (see archiveFolder below); Areas have no cascade.
   archivedAt?: number;
   // "limit-reached"/"expired" now apply to a Project-kind folder (it's
   // quota-gated via create_project, see registerProject below) — an Area
@@ -61,7 +61,7 @@ async function setSyncStatus(id: string, syncStatus: Folder["syncStatus"]) {
   );
 }
 
-// Best-effort, fire-and-forget — same contract as registerQuest: never
+// Best-effort, fire-and-forget — same contract as registerGroup: never
 // awaited by createFolder, so a creation can never block on network/auth.
 // Area only — Project goes through registerProject below instead, since
 // it's quota-gated and a plain Area insert isn't.
@@ -92,10 +92,10 @@ async function registerFolder(folder: Folder) {
 // Project's counterpart to registerFolder: goes through the create_project
 // RPC instead of a plain insert, since ad-hoc window-created Projects (and
 // the dashboard's explicit "+ Project" button) must stay quota-gated the
-// same way Quest creation always has been — see
+// same way Group creation always has been — see
 // supabase/migrations/20261007170000_project_quest_restructure.sql's
-// count_workspace_like (Projects and Quests share one max_workspaces pool).
-// Same fire-and-forget contract and error-mapping as registerQuest.
+// count_group_like (Projects and Groups share one max_workspaces pool).
+// Same fire-and-forget contract and error-mapping as registerGroup.
 async function registerProject(folder: Folder) {
   if (!supabase) return;
   await setSyncStatus(folder.id, "syncing");
@@ -143,7 +143,7 @@ export async function createFolder(
   return folder;
 }
 
-// Mirrors reconcileQuestSyncStatus in utils/quests.ts.
+// Mirrors reconcileGroupSyncStatus in utils/groups.ts.
 export async function reconcileFolderSyncStatus() {
   const folders = await getFolders();
   for (const f of folders) {
@@ -151,13 +151,13 @@ export async function reconcileFolderSyncStatus() {
   }
 }
 
-// Mirrors pullRemoteQuests: last-write-wins merge by updated_at.
+// Mirrors pullRemoteGroups: last-write-wins merge by updated_at.
 export async function pullRemoteFolders(): Promise<number> {
   if (!supabase) return 0;
   const { data, error } = await supabase
     .from("folders")
     .select(
-      "id, name, parent_id, kind, color, created_at, updated_at, tabs, active_quest_id, archived_at",
+      "id, name, parent_id, kind, color, created_at, updated_at, tabs, active_group_id, archived_at",
     );
   if (error) throw new Error(error.message);
   if (!data) return 0;
@@ -177,8 +177,8 @@ export async function pullRemoteFolders(): Promise<number> {
       color: row.color ?? undefined,
       createdAt: Date.parse(row.created_at),
       updatedAt: Date.parse(row.updated_at),
-      tabs: (row.tabs as QuestTab[] | null) ?? [],
-      activeQuestId: row.active_quest_id ?? undefined,
+      tabs: (row.tabs as GroupTab[] | null) ?? [],
+      activeGroupId: row.active_group_id ?? undefined,
       archivedAt: row.archived_at ? Date.parse(row.archived_at) : undefined,
       syncStatus: "synced",
     };
@@ -195,8 +195,8 @@ export async function pullRemoteFolders(): Promise<number> {
   return applied;
 }
 
-// Mirrors pushDirtyQuests, including the same lastPushedAt dedup
-// contract — shares its map with quests since ids are UUIDs from two
+// Mirrors pushDirtyGroups, including the same lastPushedAt dedup
+// contract — shares its map with groups since ids are UUIDs from two
 // different tables and can't collide.
 export async function pushDirtyFolders(
   lastPushedAt: Record<string, number>,
@@ -215,7 +215,7 @@ export async function pushDirtyFolders(
         parent_id: f.parentId,
         color: f.color,
         tabs: f.tabs ?? [],
-        active_quest_id: f.activeQuestId ?? null,
+        active_group_id: f.activeGroupId ?? null,
         archived_at: f.archivedAt ? new Date(f.archivedAt).toISOString() : null,
       })
       .eq("id", f.id)
@@ -241,7 +241,7 @@ export async function updateFolder(
   patch: Partial<
     Pick<
       Folder,
-      "name" | "parentId" | "color" | "tabs" | "activeQuestId" | "archivedAt"
+      "name" | "parentId" | "color" | "tabs" | "activeGroupId" | "archivedAt"
     >
   >,
 ) {
@@ -254,9 +254,9 @@ export async function updateFolder(
 }
 
 // "Hidden but kept" — unlike deleteFolder, never removes anything. When
-// `id` is a Project, also archives every quest directly nested under it
+// `id` is a Project, also archives every group directly nested under it
 // (one level, same as deleteFolder's folderId reparenting walk below) —
-// cascading down matches how a Project visually "contains" its quests
+// cascading down matches how a Project visually "contains" its groups
 // everywhere else in the UI. Does NOT recurse into child folders (an Area
 // archiving its child Projects was never asked for) and unarchiveFolder
 // deliberately does NOT cascade back (see that function's own comment).
@@ -269,16 +269,16 @@ export async function archiveFolder(id: string) {
     ),
   );
   if (folder?.kind === "project") {
-    const quests = await getQuests();
-    for (const q of quests) {
+    const groups = await getGroups();
+    for (const q of groups) {
       if (q.folderId === id)
-        await updateQuest(q.id, { archivedAt: Date.now() });
+        await updateGroup(q.id, { archivedAt: Date.now() });
     }
   }
 }
 
 // Deliberately asymmetric with archiveFolder's cascade: un-hiding a Project
-// shouldn't drag back into view a Quest that was separately, manually
+// shouldn't drag back into view a Group that was separately, manually
 // archived for its own reason.
 export async function unarchiveFolder(id: string) {
   const folders = await getFolders();
@@ -289,7 +289,7 @@ export async function unarchiveFolder(id: string) {
   );
 }
 
-// Hard delete — no trash tier for folders (unlike quests), nothing in
+// Hard delete — no trash tier for folders (unlike groups), nothing in
 // the PRD asks for one yet. Mirrors the server's "on delete cascade"
 // (descendant folders) and "on delete set null" (workspaces.folder_id)
 // locally so the UI doesn't show stale nesting until the next pull
@@ -312,10 +312,10 @@ export async function deleteFolder(id: string) {
 
   await setFolders(folders.filter((f) => !toRemove.has(f.id)));
 
-  const quests = await getQuests();
-  for (const m of quests) {
+  const groups = await getGroups();
+  for (const m of groups) {
     if (m.folderId && toRemove.has(m.folderId)) {
-      await updateQuest(m.id, { folderId: null });
+      await updateGroup(m.id, { folderId: null });
     }
   }
 

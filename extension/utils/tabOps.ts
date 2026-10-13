@@ -1,8 +1,8 @@
 import type { Browser } from "wxt/browser";
 import { DASHBOARD_URL } from "./tabs";
-import type { QuestTab } from "./quests";
+import type { GroupTab } from "./groups";
 
-// Shared by restoreMachine (close-all / restore-all) and questSwapMachine
+// Shared by restoreMachine (close-all / restore-all) and groupSwapMachine
 // (close/open a single phase's subset) — the dashboard tab is never a
 // candidate for either, whatever the predicate says.
 export async function closeMatchingTabs(
@@ -19,7 +19,7 @@ export async function closeMatchingTabs(
 
 export async function openMissingTabs(
   windowId: number,
-  tabs: QuestTab[],
+  tabs: GroupTab[],
 ): Promise<void> {
   const open = await browser.tabs.query({ windowId });
   const openUrls = new Set(open.map((t) => t.url));

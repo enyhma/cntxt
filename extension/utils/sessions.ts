@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 import { getWindowBindingMap, setWindowBinding } from "./session";
-import { getQuests, updateQuest, type QuestTab } from "./quests";
+import { getGroups, updateGroup, type GroupTab } from "./groups";
 import { getFolders } from "./folders";
 import { resolveProjectLiveTarget } from "./projectLiveTabs";
 import { snapshotTabs } from "./tabs";
@@ -11,13 +11,13 @@ import { openMissingTabs } from "./tabOps";
 // entrypoints/background.ts's alarm), never edited after creation and never
 // auto-deleted (unlike Trash). One row per capture tick, one leg per window.
 export type SessionLeg = {
-  entityTable: "quests" | "folders";
+  entityTable: "groups" | "folders";
   entityId: string;
   // Denormalized snapshot at capture time, not a live join — so a session
-  // still displays sensibly even after the quest/folder it refers to is
+  // still displays sensibly even after the group/folder it refers to is
   // later deleted/purged.
   entityName: string;
-  tabs: QuestTab[];
+  tabs: GroupTab[];
 };
 
 export type Session = {
@@ -53,7 +53,7 @@ async function setSyncStatus(id: string, syncStatus: Session["syncStatus"]) {
 }
 
 // Fire-and-forget, same contract as registerResource — a session is
-// immutable after creation, so unlike registerQuest/registerFolder there's
+// immutable after creation, so unlike registerGroup/registerFolder there's
 // no pushDirtySessions: there's nothing to push later, only this one insert.
 async function registerSession(session: Session) {
   if (!supabase) return;
@@ -90,7 +90,7 @@ function legsEqual(a: SessionLeg[], b: SessionLeg[]): boolean {
 // recent capture, so idling doesn't spam a new row every tick.
 export async function captureSession(): Promise<void> {
   const bindingMap = await getWindowBindingMap();
-  const [quests, folders] = await Promise.all([getQuests(), getFolders()]);
+  const [groups, folders] = await Promise.all([getGroups(), getFolders()]);
   const legs: SessionLeg[] = [];
 
   for (const [windowIdStr, binding] of Object.entries(bindingMap)) {
@@ -108,32 +108,32 @@ export async function captureSession(): Promise<void> {
 
     const tabs = await snapshotTabs(windowId);
 
-    if (binding.kind === "quest") {
-      const quest = quests.find((q) => q.id === binding.questId);
-      if (!quest) continue;
+    if (binding.kind === "group") {
+      const group = groups.find((q) => q.id === binding.groupId);
+      if (!group) continue;
       legs.push({
-        entityTable: "quests",
-        entityId: quest.id,
-        entityName: quest.name,
+        entityTable: "groups",
+        entityId: group.id,
+        entityName: group.name,
         tabs,
       });
-      await updateQuest(quest.id, { lastSeenAt: Date.now() });
+      await updateGroup(group.id, { lastSeenAt: Date.now() });
       continue;
     }
 
     const project = folders.find((f) => f.id === binding.projectId);
     if (!project) continue;
     const target = resolveProjectLiveTarget(project);
-    if (target.table === "quests") {
-      const quest = quests.find((q) => q.id === target.id);
-      if (!quest) continue;
+    if (target.table === "groups") {
+      const group = groups.find((q) => q.id === target.id);
+      if (!group) continue;
       legs.push({
-        entityTable: "quests",
-        entityId: quest.id,
-        entityName: quest.name,
+        entityTable: "groups",
+        entityId: group.id,
+        entityName: group.name,
         tabs,
       });
-      await updateQuest(quest.id, { lastSeenAt: Date.now() });
+      await updateGroup(group.id, { lastSeenAt: Date.now() });
     } else {
       legs.push({
         entityTable: "folders",
@@ -222,8 +222,8 @@ export async function restoreSession(session: Session): Promise<void> {
     if (win?.id === undefined) continue;
     await setWindowBinding(
       win.id,
-      leg.entityTable === "quests"
-        ? { kind: "quest", questId: leg.entityId }
+      leg.entityTable === "groups"
+        ? { kind: "group", groupId: leg.entityId }
         : { kind: "project", projectId: leg.entityId },
     );
     await openMissingTabs(win.id, leg.tabs);

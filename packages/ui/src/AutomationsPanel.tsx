@@ -21,10 +21,10 @@ import { Plus, Trash2 } from "lucide-solid";
 // stays ignorant of the extension's storage schema, only the structural
 // shape it actually renders.
 export type AutomationBlockType =
-  | "questDoneAndStale"
-  | "questTabsEmpty"
-  | "setQuestStatus"
-  | "archiveQuest"
+  | "groupDoneAndStale"
+  | "groupTabsEmpty"
+  | "setGroupStatus"
+  | "archiveGroup"
   | "advanceNextSibling";
 
 export type AutomationNode = {
@@ -51,23 +51,23 @@ const BLOCK_INFO: Record<
   AutomationBlockType,
   { kind: "trigger" | "action"; label: string }
 > = {
-  questDoneAndStale: { kind: "trigger", label: "Quest done & stale" },
-  questTabsEmpty: { kind: "trigger", label: "Tabs closed" },
-  setQuestStatus: { kind: "action", label: "Set status" },
-  archiveQuest: { kind: "action", label: "Archive" },
+  groupDoneAndStale: { kind: "trigger", label: "Group done & stale" },
+  groupTabsEmpty: { kind: "trigger", label: "Tabs closed" },
+  setGroupStatus: { kind: "action", label: "Set status" },
+  archiveGroup: { kind: "action", label: "Archive" },
   advanceNextSibling: { kind: "action", label: "Advance to next sibling" },
 };
 const ACTION_BLOCK_TYPES: AutomationBlockType[] = [
-  "setQuestStatus",
-  "archiveQuest",
+  "setGroupStatus",
+  "archiveGroup",
   "advanceNextSibling",
 ];
 
 function summarize(node: AutomationNode): string {
-  if (node.blockType === "questDoneAndStale") {
+  if (node.blockType === "groupDoneAndStale") {
     return `${BLOCK_INFO[node.blockType].label} (${node.config.days ?? 30}d)`;
   }
-  if (node.blockType === "setQuestStatus") {
+  if (node.blockType === "setGroupStatus") {
     return `${BLOCK_INFO[node.blockType].label}: ${node.config.status ?? "done"}`;
   }
   return BLOCK_INFO[node.blockType].label;
@@ -136,7 +136,7 @@ function AutomationEditor(props: {
   const [selectedId, setSelectedId] = createSignal<string | undefined>();
   const selected = createMemo(() => chain().find((n) => n.id === selectedId()));
   const [addBlockType, setAddBlockType] =
-    createSignal<AutomationBlockType>("setQuestStatus");
+    createSignal<AutomationBlockType>("setGroupStatus");
 
   function syncFromChain(next: AutomationNode[]) {
     setChain(next);
@@ -264,7 +264,7 @@ function AutomationEditor(props: {
               {BLOCK_INFO[node().blockType].label}
             </span>
 
-            <Show when={node().blockType === "questDoneAndStale"}>
+            <Show when={node().blockType === "groupDoneAndStale"}>
               <label class="flex items-center gap-2 text-xs">
                 Days
                 <input
@@ -280,7 +280,7 @@ function AutomationEditor(props: {
               </label>
             </Show>
 
-            <Show when={node().blockType === "setQuestStatus"}>
+            <Show when={node().blockType === "setGroupStatus"}>
               <select
                 class="select select-sm border border-surface-alt3"
                 value={(node().config.status as string) ?? "done"}

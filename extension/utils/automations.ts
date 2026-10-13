@@ -40,20 +40,20 @@ function defaultAutomations(autoArchiveDays: number): Automation[] {
   return [
     {
       id: crypto.randomUUID(),
-      name: "Archive stale done quests",
+      name: "Archive stale done groups",
       enabled: true,
       nodes: [
         {
           id: "trigger",
           kind: "trigger",
-          blockType: "questDoneAndStale",
+          blockType: "groupDoneAndStale",
           config: { days: autoArchiveDays },
           position: { x: 0, y: 0 },
         },
         {
           id: "action",
           kind: "action",
-          blockType: "archiveQuest",
+          blockType: "archiveGroup",
           config: {},
           position: { x: 260, y: 0 },
         },
@@ -64,20 +64,20 @@ function defaultAutomations(autoArchiveDays: number): Automation[] {
     },
     {
       id: crypto.randomUUID(),
-      name: "Complete quest when tabs close",
+      name: "Complete group when tabs close",
       enabled: true,
       nodes: [
         {
           id: "trigger",
           kind: "trigger",
-          blockType: "questTabsEmpty",
+          blockType: "groupTabsEmpty",
           config: {},
           position: { x: 0, y: 0 },
         },
         {
           id: "action1",
           kind: "action",
-          blockType: "setQuestStatus",
+          blockType: "setGroupStatus",
           config: { status: "done" },
           position: { x: 260, y: 0 },
         },

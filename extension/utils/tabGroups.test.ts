@@ -35,7 +35,7 @@ describe("ensureLiveTabGroup", () => {
     const { group } = stubGroupApis();
     await ensureLiveTabGroup(
       1,
-      { table: "quests", id: "q1", name: "Quest" },
+      { table: "groups", id: "q1", name: "Group" },
       [],
     );
     expect(group).not.toHaveBeenCalled();
@@ -49,7 +49,7 @@ describe("ensureLiveTabGroup", () => {
       await expect(
         ensureLiveTabGroup(
           1,
-          { table: "quests", id: "q1", name: "Quest" },
+          { table: "groups", id: "q1", name: "Group" },
           [10],
         ),
       ).resolves.toBeUndefined();
@@ -62,7 +62,7 @@ describe("ensureLiveTabGroup", () => {
     const { group, update } = stubGroupApis();
     await ensureLiveTabGroup(
       1,
-      { table: "quests", id: "q1", name: "My Quest", color: "accent" },
+      { table: "groups", id: "q1", name: "My Group", color: "accent" },
       [10, 11],
     );
     expect(group).toHaveBeenCalledWith({
@@ -70,18 +70,18 @@ describe("ensureLiveTabGroup", () => {
       createProperties: { windowId: 1 },
     });
     expect(update).toHaveBeenCalledWith(1, {
-      title: "My Quest",
+      title: "My Group",
       color: "blue",
     });
-    expect(await findOwnedGroupId({ table: "quests", id: "q1" })).toBe(1);
+    expect(await findOwnedGroupId({ table: "groups", id: "q1" })).toBe(1);
   });
 
   it("reuses an already-owned group id", async () => {
     const { group } = stubGroupApis();
-    await setTabGroupOwner(7, { table: "quests", id: "q1" });
+    await setTabGroupOwner(7, { table: "groups", id: "q1" });
     await ensureLiveTabGroup(
       1,
-      { table: "quests", id: "q1", name: "My Quest" },
+      { table: "groups", id: "q1", name: "My Group" },
       [10],
     );
     expect(group).toHaveBeenCalledWith({ tabIds: [10], groupId: 7 });
@@ -92,11 +92,11 @@ describe("ensureLiveTabGroup", () => {
     vi.spyOn(browser.tabGroups, "get").mockRejectedValueOnce(
       new Error("no such group"),
     );
-    await setTabGroupOwner(7, { table: "quests", id: "q1" });
+    await setTabGroupOwner(7, { table: "groups", id: "q1" });
 
     await ensureLiveTabGroup(
       1,
-      { table: "quests", id: "q1", name: "My Quest" },
+      { table: "groups", id: "q1", name: "My Group" },
       [10],
     );
 
@@ -115,7 +115,7 @@ describe("ensureLiveTabGroup", () => {
     try {
       await ensureLiveTabGroup(
         1,
-        { table: "quests", id: "q1", name: "My Quest" },
+        { table: "groups", id: "q1", name: "My Group" },
         [10],
       );
     } finally {
@@ -127,7 +127,7 @@ describe("ensureLiveTabGroup", () => {
   it("swallows a browser-API failure instead of throwing", async () => {
     vi.spyOn(browser.tabs, "group").mockRejectedValue(new Error("boom"));
     await expect(
-      ensureLiveTabGroup(1, { table: "quests", id: "q1", name: "Quest" }, [10]),
+      ensureLiveTabGroup(1, { table: "groups", id: "q1", name: "Group" }, [10]),
     ).resolves.toBeUndefined();
   });
 });

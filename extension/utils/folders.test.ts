@@ -9,8 +9,8 @@ const update = vi.fn(() => ({ eq }));
 const deleteEq = vi.fn().mockResolvedValue({ error: null });
 const del = vi.fn(() => ({ eq: deleteEq }));
 const from = vi.fn(() => ({ select, insert, update, delete: del }));
-// createQuest (used by the deleteFolder test below) fires off
-// registerQuest's RPC call without awaiting it — needs a resolved stub
+// createGroup (used by the deleteFolder test below) fires off
+// registerGroup's RPC call without awaiting it — needs a resolved stub
 // or that unawaited call rejects with "rpc is not a function".
 const rpc = vi.fn().mockResolvedValue({ error: null });
 vi.mock("./supabase", () => ({ supabase: { from, rpc } }));
@@ -25,7 +25,7 @@ const {
   unarchiveFolder,
   updateFolder,
 } = await import("./folders");
-const { createQuest, getQuests, updateQuest } = await import("./quests");
+const { createGroup, getGroups, updateGroup } = await import("./groups");
 
 beforeEach(() => {
   fakeBrowser.reset();
@@ -71,7 +71,7 @@ it("pullRemoteFolders adds a remote folder missing locally", async () => {
         created_at: new Date(0).toISOString(),
         updated_at: new Date(0).toISOString(),
         tabs: [],
-        active_quest_id: null,
+        active_group_id: null,
       },
     ],
     error: null,
@@ -82,7 +82,7 @@ it("pullRemoteFolders adds a remote folder missing locally", async () => {
   expect((await getFolders()).map((f) => f.name)).toContain("Marketing");
 });
 
-it("pullRemoteFolders round-trips a Project's kind, tabs, and active_quest_id", async () => {
+it("pullRemoteFolders round-trips a Project's kind, tabs, and active_group_id", async () => {
   select.mockResolvedValue({
     data: [
       {
@@ -94,7 +94,7 @@ it("pullRemoteFolders round-trips a Project's kind, tabs, and active_quest_id", 
         created_at: new Date(0).toISOString(),
         updated_at: new Date(0).toISOString(),
         tabs: [{ url: "https://a.com", title: "A" }],
-        active_quest_id: "quest-9",
+        active_group_id: "group-9",
       },
     ],
     error: null,
@@ -104,7 +104,7 @@ it("pullRemoteFolders round-trips a Project's kind, tabs, and active_quest_id", 
   const project = (await getFolders()).find((f) => f.id === "remote-project-1");
   expect(project?.kind).toBe("project");
   expect(project?.tabs).toEqual([{ url: "https://a.com", title: "A" }]);
-  expect(project?.activeQuestId).toBe("quest-9");
+  expect(project?.activeGroupId).toBe("group-9");
 });
 
 it("pushDirtyFolders pushes a locally-renamed, already-synced folder", async () => {
@@ -125,14 +125,14 @@ it("pushDirtyFolders pushes a locally-renamed, already-synced folder", async () 
   );
 });
 
-it("pushDirtyFolders includes a Project's tabs and active_quest_id", async () => {
+it("pushDirtyFolders includes a Project's tabs and active_group_id", async () => {
   const folder = await createFolder("App Redesign", null, "project");
   await vi.waitFor(async () =>
     expect(await syncStatusOf(folder.id)).toBe("synced"),
   );
   await updateFolder(folder.id, {
     tabs: [{ url: "https://a.com", title: "A" }],
-    activeQuestId: "quest-9",
+    activeGroupId: "group-9",
   });
 
   single.mockResolvedValue({
@@ -144,7 +144,7 @@ it("pushDirtyFolders includes a Project's tabs and active_quest_id", async () =>
   expect(update).toHaveBeenCalledWith(
     expect.objectContaining({
       tabs: [{ url: "https://a.com", title: "A" }],
-      active_quest_id: "quest-9",
+      active_group_id: "group-9",
     }),
   );
 });
@@ -177,11 +177,11 @@ describe("createFolder with kind: 'project'", () => {
 });
 
 describe("deleteFolder", () => {
-  it("cascades to child folders and ungroups quests pointing at either", async () => {
+  it("cascades to child folders and ungroups groups pointing at either", async () => {
     const area = await createFolder("Engineering", null, "area");
     const project = await createFolder("App Redesign", area.id, "project");
-    const quest = await createQuest("Research", []);
-    await updateQuest(quest.id, { folderId: project.id });
+    const group = await createGroup("Research", []);
+    await updateGroup(group.id, { folderId: project.id });
 
     await deleteFolder(area.id);
 
@@ -189,16 +189,16 @@ describe("deleteFolder", () => {
     expect(folderIds).not.toContain(area.id);
     expect(folderIds).not.toContain(project.id);
 
-    const updated = (await getQuests()).find((m) => m.id === quest.id);
+    const updated = (await getGroups()).find((m) => m.id === group.id);
     expect(updated?.folderId).toBeNull();
   });
 });
 
 describe("archiveFolder", () => {
-  it("archiving a project cascades to archive its child quests", async () => {
+  it("archiving a project cascades to archive its child groups", async () => {
     const project = await createFolder("App Redesign", null, "project");
-    const quest = await createQuest("Research", []);
-    await updateQuest(quest.id, { folderId: project.id });
+    const group = await createGroup("Research", []);
+    await updateGroup(group.id, { folderId: project.id });
 
     await archiveFolder(project.id);
 
@@ -206,8 +206,8 @@ describe("archiveFolder", () => {
       (f) => f.id === project.id,
     );
     expect(updatedProject?.archivedAt).toBeGreaterThan(0);
-    const updatedQuest = (await getQuests()).find((q) => q.id === quest.id);
-    expect(updatedQuest?.archivedAt).toBeGreaterThan(0);
+    const updatedGroup = (await getGroups()).find((q) => q.id === group.id);
+    expect(updatedGroup?.archivedAt).toBeGreaterThan(0);
   });
 
   it("archiving an area does not cascade to its child projects", async () => {
@@ -224,10 +224,10 @@ describe("archiveFolder", () => {
     expect(updatedProject?.archivedAt).toBeUndefined();
   });
 
-  it("unarchiveFolder does not cascade back to child quests", async () => {
+  it("unarchiveFolder does not cascade back to child groups", async () => {
     const project = await createFolder("App Redesign", null, "project");
-    const quest = await createQuest("Research", []);
-    await updateQuest(quest.id, { folderId: project.id });
+    const group = await createGroup("Research", []);
+    await updateGroup(group.id, { folderId: project.id });
     await archiveFolder(project.id);
 
     await unarchiveFolder(project.id);
@@ -236,7 +236,7 @@ describe("archiveFolder", () => {
       (f) => f.id === project.id,
     );
     expect(updatedProject?.archivedAt).toBeUndefined();
-    const updatedQuest = (await getQuests()).find((q) => q.id === quest.id);
-    expect(updatedQuest?.archivedAt).toBeGreaterThan(0);
+    const updatedGroup = (await getGroups()).find((q) => q.id === group.id);
+    expect(updatedGroup?.archivedAt).toBeGreaterThan(0);
   });
 });

@@ -1,6 +1,6 @@
 import { getWindowBindingMap } from "./session";
 import { getFolders, updateFolder } from "./folders";
-import { createQuest, updateQuest } from "./quests";
+import { createGroup, updateGroup } from "./groups";
 import {
   getTabGroupOwners,
   isMirroring,
@@ -12,7 +12,8 @@ import { getTabGroupRules, matchRule } from "./tabGroupRules";
 
 // Grouping N tabs at once fires one tabs.onUpdated per tab, each carrying
 // the same groupId — debounce per windowId:groupId pair so a multi-tab
-// group only runs capture once, with every member tab already settled.
+// native tab group only runs capture once, with every member tab already
+// settled.
 const DEBOUNCE_MS = 250;
 const pending = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -30,12 +31,13 @@ export function scheduleCaptureCheck(windowId: number, groupId: number) {
   );
 }
 
-// Turns a newly-user-created native group into a persisted, nested Quest —
-// the "silent hero" capture path: no confirmation, grouping tabs natively is
-// itself the action. v1 scope: only windows bound to a Project (a standalone
-// Quest-bound window's tabs are already one group entirely via mirroring —
-// a second group appearing inside one has no clean semantic yet, so it's
-// simply not wired here, not specially blocked either).
+// Turns a newly-user-created *native* browser tab group into a persisted,
+// nested Group entity — the "silent hero" capture path: no confirmation,
+// grouping tabs natively is itself the action. v1 scope: only windows
+// bound to a Project (a standalone Group-bound window's tabs are already
+// one native tab group entirely via mirroring — a second native group
+// appearing inside one has no clean semantic yet, so it's simply not
+// wired here, not specially blocked either).
 export async function runCaptureCheck(windowId: number, groupId: number) {
   if (!groupingSupported() || isMirroring(windowId)) return;
 
@@ -45,15 +47,17 @@ export async function runCaptureCheck(windowId: number, groupId: number) {
   const binding = (await getWindowBindingMap())[windowId];
   if (!binding || binding.kind !== "project") return;
 
-  let group: { title?: string; color: string } = {
+  // The *native* browser tab group's own title/color — distinct from the
+  // Group entity (below) this capture is about to create from it.
+  let nativeGroup: { title?: string; color: string } = {
     title: undefined,
     color: "grey",
   };
   if (tabGroupsApiAvailable()) {
     try {
-      group = await browser.tabGroups.get(groupId);
+      nativeGroup = await browser.tabGroups.get(groupId);
     } catch {
-      return; // group vanished before the debounce fired
+      return; // native group vanished before the debounce fired
     }
   }
 
@@ -65,26 +69,26 @@ export async function runCaptureCheck(windowId: number, groupId: number) {
 
   const folders = await getFolders();
   const rules = await getTabGroupRules();
-  const rule = matchRule(rules, group);
+  const rule = matchRule(rules, nativeGroup);
   const ruleTargetValid = rule && folders.some((f) => f.id === rule.folderId);
   const targetFolderId = ruleTargetValid ? rule.folderId : binding.projectId;
 
-  const quest = await createQuest(
-    group.title || "Untitled quest",
+  const group = await createGroup(
+    nativeGroup.title || "Untitled group",
     tabs.map((t) => ({ url: t.url ?? "", title: t.title ?? "" })),
   );
-  await updateQuest(quest.id, { folderId: targetFolderId });
+  await updateGroup(group.id, { folderId: targetFolderId });
 
   const project = folders.find((f) => f.id === targetFolderId);
-  if (project && !project.activeQuestId) {
-    // No child quest active yet in the target project — these tabs are
+  if (project && !project.activeGroupId) {
+    // No child group active yet in the target project — these tabs are
     // already open and already "the thing you're doing", so make it live
-    // immediately, same as an explicit ACTIVATE_QUEST would.
-    await updateQuest(quest.id, { status: "active" });
-    await updateFolder(targetFolderId, { activeQuestId: quest.id });
+    // immediately, same as an explicit ACTIVATE_GROUP would.
+    await updateGroup(group.id, { status: "active" });
+    await updateFolder(targetFolderId, { activeGroupId: group.id });
   }
   // Else: leave it pending, don't touch the window or the already-active
-  // quest — reachable later via the existing double-click-to-switch UI.
+  // group — reachable later via the existing double-click-to-switch UI.
 
-  await setTabGroupOwner(groupId, { table: "quests", id: quest.id });
+  await setTabGroupOwner(groupId, { table: "groups", id: group.id });
 }

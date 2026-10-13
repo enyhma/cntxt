@@ -4,34 +4,34 @@ import { pullRemoteFolders, pushDirtyFolders } from "./folders";
 import { pullRemoteResources } from "./resources";
 import { pullRemoteSessions } from "./sessions";
 import {
-  pullRemoteQuests,
+  pullRemoteGroups,
   purgeExpiredLocalTrash,
-  pushDirtyQuests,
-} from "./quests";
+  pushDirtyGroups,
+} from "./groups";
 
 async function pullAndPurgeTrash(): Promise<number> {
-  // Folders first: a quest's folder_id pull below is only meaningful
+  // Folders first: a group's folder_id pull below is only meaningful
   // once the folder it points to already exists locally. Resources last —
-  // they reference a workspace_id, so pulling them before quests exist
-  // locally would just leave them attributed to a quest not there yet.
+  // they reference a group_id, so pulling them before groups exist
+  // locally would just leave them attributed to a group not there yet.
   // Sessions have no FK ordering dependency on either (entity references
   // live denormalized inside their own jsonb, not as real FKs) — pulled
   // last out of convenience, not necessity. No pushDirtySessions: a
   // session is immutable after creation, nothing to push.
   const folders = await pullRemoteFolders();
-  const quests = await pullRemoteQuests();
+  const groups = await pullRemoteGroups();
   const resources = await pullRemoteResources();
   const sessions = await pullRemoteSessions();
   const entitlements = await getCachedEntitlements();
   await purgeExpiredLocalTrash(entitlements?.accessExpiresAt);
-  return folders + quests + resources + sessions;
+  return folders + groups + resources + sessions;
 }
 
 async function pushDirty(
   lastPushedAt: Record<string, number>,
 ): Promise<Record<string, number>> {
   const afterFolders = await pushDirtyFolders(lastPushedAt);
-  return pushDirtyQuests(afterFolders);
+  return pushDirtyGroups(afterFolders);
 }
 
 type Context = {
@@ -57,7 +57,7 @@ const PULL_INTERVAL_MS = 5 * 60 * 1000;
 /**
  * Owns the sync engine's timing (docs/architecture-sync.md's push/pull/
  * offline diagrams) the way windowSyncMachine owns per-window tab-sync
- * timing: the actual storage.local reads/writes live in utils/quests.ts,
+ * timing: the actual storage.local reads/writes live in utils/groups.ts,
  * this just decides when to call them. One instance for the whole dashboard,
  * not per-window.
  *
@@ -114,7 +114,7 @@ export const syncMachine = setup({
         },
       },
       // A local change that lands mid-push isn't in this invoke's snapshot
-      // of dirty quests — flag it so onDone re-debounces instead of
+      // of dirty groups — flag it so onDone re-debounces instead of
       // going idle and losing it until the next periodic pull tick.
       on: { LOCAL_CHANGE: { actions: assign({ pendingPush: true }) } },
     },

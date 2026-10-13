@@ -8,15 +8,15 @@ const gte = vi.fn();
 const order = vi.fn();
 const select = vi.fn(() => ({ gte }));
 const from = vi.fn(() => ({ select, insert }));
-// createQuest/createFolder("project") each fire an unawaited
-// registerQuest/registerProject RPC call — needs a resolved stub or those
+// createGroup/createFolder("project") each fire an unawaited
+// registerGroup/registerProject RPC call — needs a resolved stub or those
 // calls reject with "rpc is not a function".
 const rpc = vi.fn().mockResolvedValue({ error: null });
 vi.mock("./supabase", () => ({ supabase: { from, rpc } }));
 
 const { captureSession, getSessions, pruneOldLocalSessions, restoreSession } =
   await import("./sessions");
-const { createQuest, getQuests } = await import("./quests");
+const { createGroup, getGroups } = await import("./groups");
 const { createFolder, updateFolder } = await import("./folders");
 const { getWindowBindingMap } = await import("./session");
 
@@ -35,7 +35,7 @@ describe("captureSession", () => {
     expect(await getSessions()).toEqual([]);
   });
 
-  it("captures a standalone quest-bound window's live tabs", async () => {
+  it("captures a standalone group-bound window's live tabs", async () => {
     const win = (await browser.windows.create({ focused: true }))!;
     await browser.tabs.create({ windowId: win.id, url: DASHBOARD_URL });
     // tabs.create's CreateProperties has no `title` — a tab's title comes
@@ -45,8 +45,8 @@ describe("captureSession", () => {
       windowId: win.id,
       url: "https://a.example/",
     });
-    const quest = await createQuest("Tracked", []);
-    await setWindowBinding(win.id!, { kind: "quest", questId: quest.id });
+    const group = await createGroup("Tracked", []);
+    await setWindowBinding(win.id!, { kind: "group", groupId: group.id });
 
     await captureSession();
 
@@ -54,26 +54,26 @@ describe("captureSession", () => {
     expect(sessions).toHaveLength(1);
     expect(sessions[0]!.windows).toEqual([
       {
-        entityTable: "quests",
-        entityId: quest.id,
+        entityTable: "groups",
+        entityId: group.id,
         entityName: "Tracked",
         tabs: [{ url: "https://a.example/", title: "" }],
       },
     ]);
   });
 
-  it("stamps lastSeenAt on a captured quest", async () => {
+  it("stamps lastSeenAt on a captured group", async () => {
     const win = (await browser.windows.create({ focused: true }))!;
-    const quest = await createQuest("Tracked", []);
-    await setWindowBinding(win.id!, { kind: "quest", questId: quest.id });
+    const group = await createGroup("Tracked", []);
+    await setWindowBinding(win.id!, { kind: "group", groupId: group.id });
 
     await captureSession();
 
-    const updated = (await getQuests()).find((q) => q.id === quest.id);
+    const updated = (await getGroups()).find((q) => q.id === group.id);
     expect(updated?.lastSeenAt).toBeGreaterThan(0);
   });
 
-  it("captures a project-bound window with no active quest as a folders leg", async () => {
+  it("captures a project-bound window with no active group as a folders leg", async () => {
     const win = (await browser.windows.create({ focused: true }))!;
     const project = await createFolder("Project", null, "project");
     await setWindowBinding(win.id!, {
@@ -94,11 +94,11 @@ describe("captureSession", () => {
     ]);
   });
 
-  it("captures a project-bound window with an active quest as a quests leg", async () => {
+  it("captures a project-bound window with an active group as a groups leg", async () => {
     const win = (await browser.windows.create({ focused: true }))!;
     const project = await createFolder("Project", null, "project");
-    const quest = await createQuest("Active child", []);
-    await updateFolder(project.id, { activeQuestId: quest.id });
+    const group = await createGroup("Active child", []);
+    await updateFolder(project.id, { activeGroupId: group.id });
     await setWindowBinding(win.id!, {
       kind: "project",
       projectId: project.id,
@@ -109,8 +109,8 @@ describe("captureSession", () => {
     const sessions = await getSessions();
     expect(sessions[0]!.windows).toEqual([
       {
-        entityTable: "quests",
-        entityId: quest.id,
+        entityTable: "groups",
+        entityId: group.id,
         entityName: "Active child",
         tabs: [],
       },
@@ -119,8 +119,8 @@ describe("captureSession", () => {
 
   it("skips writing a new session when nothing changed since the last capture", async () => {
     const win = (await browser.windows.create({ focused: true }))!;
-    const quest = await createQuest("Tracked", []);
-    await setWindowBinding(win.id!, { kind: "quest", questId: quest.id });
+    const group = await createGroup("Tracked", []);
+    await setWindowBinding(win.id!, { kind: "group", groupId: group.id });
 
     await captureSession();
     await captureSession();
@@ -130,8 +130,8 @@ describe("captureSession", () => {
 
   it("writes a new session when the live tabs changed", async () => {
     const win = (await browser.windows.create({ focused: true }))!;
-    const quest = await createQuest("Tracked", []);
-    await setWindowBinding(win.id!, { kind: "quest", questId: quest.id });
+    const group = await createGroup("Tracked", []);
+    await setWindowBinding(win.id!, { kind: "group", groupId: group.id });
 
     await captureSession();
     await browser.tabs.create({ windowId: win.id, url: "https://b.example/" });
@@ -142,8 +142,8 @@ describe("captureSession", () => {
 
   it("skips a window whose binding points at a since-closed window", async () => {
     const win = (await browser.windows.create({ focused: true }))!;
-    const quest = await createQuest("Tracked", []);
-    await setWindowBinding(win.id!, { kind: "quest", questId: quest.id });
+    const group = await createGroup("Tracked", []);
+    await setWindowBinding(win.id!, { kind: "group", groupId: group.id });
     await browser.windows.remove(win.id!);
     // windows.remove doesn't itself prune the binding map (background.ts's
     // onRemoved listener does that in production) — simulate the race where
@@ -157,13 +157,13 @@ describe("captureSession", () => {
 
   it("fires registerSession's insert with the captured windows", async () => {
     const win = (await browser.windows.create({ focused: true }))!;
-    const quest = await createQuest("Tracked", []);
-    await setWindowBinding(win.id!, { kind: "quest", questId: quest.id });
+    const group = await createGroup("Tracked", []);
+    await setWindowBinding(win.id!, { kind: "group", groupId: group.id });
 
     await captureSession();
     await vi.waitFor(() => expect(insert).toHaveBeenCalled());
     expect(insert.mock.calls[0]![0]).toMatchObject({
-      windows: [{ entityTable: "quests", entityId: quest.id }],
+      windows: [{ entityTable: "groups", entityId: group.id }],
     });
   });
 });
@@ -171,8 +171,8 @@ describe("captureSession", () => {
 describe("pruneOldLocalSessions", () => {
   it("removes sessions older than the given bound and keeps recent ones", async () => {
     const win = (await browser.windows.create({ focused: true }))!;
-    const quest = await createQuest("Tracked", []);
-    await setWindowBinding(win.id!, { kind: "quest", questId: quest.id });
+    const group = await createGroup("Tracked", []);
+    await setWindowBinding(win.id!, { kind: "group", groupId: group.id });
     await captureSession();
 
     const sessions = await getSessions();
@@ -195,7 +195,7 @@ describe("restoreSession", () => {
       capturedAt: Date.now(),
       windows: [
         {
-          entityTable: "quests" as const,
+          entityTable: "groups" as const,
           entityId: "q1",
           entityName: "Q",
           tabs: [{ url: "https://a.example/", title: "A" }],
@@ -217,7 +217,7 @@ describe("restoreSession", () => {
 
     const bindingMap = await getWindowBindingMap();
     const bindings = Object.values(bindingMap);
-    expect(bindings).toContainEqual({ kind: "quest", questId: "q1" });
+    expect(bindings).toContainEqual({ kind: "group", groupId: "q1" });
     expect(bindings).toContainEqual({ kind: "project", projectId: "f1" });
   });
 });

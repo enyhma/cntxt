@@ -6,17 +6,17 @@ export type Theme = "baseline" | "indigo" | "brass";
 export type Settings = {
   startupBehavior: StartupBehavior;
   // The window/binding this was last attached to — a Project or a
-  // standalone Quest — so "resume last used" (startupBehavior ===
+  // standalone Group — so "resume last used" (startupBehavior ===
   // "lastUsed") can reattach to whichever kind it was.
   lastActiveBinding?: WindowBinding;
   theme: Theme;
-  // Gates the "Pull quests now" control in the account menu (see
-  // App.tsx) behind an opt-in toggle in Settings — pullRemoteQuests
+  // Gates the "Pull groups now" control in the account menu (see
+  // App.tsx) behind an opt-in toggle in Settings — pullRemoteGroups
   // only runs automatically on sign-in/token refresh today (see
   // docs/implementation-plan-sync.md M6), so this is an escape hatch for
   // forcing a check rather than a fully-designed manual-sync feature.
   manualPullEnabled: boolean;
-  // How many days a "done" quest can go unreferenced by a Session (see
+  // How many days a "done" group can go unreferenced by a Session (see
   // utils/sessions.ts/utils/autoArchive.ts) before it's auto-archived.
   // Distinct from both Trash's hardcoded 7/30-day retention and
   // sessions.ts's own 7-day *local cache* bound — this is the one

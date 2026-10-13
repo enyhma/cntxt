@@ -84,7 +84,7 @@ export default defineBackground(() => {
   });
 
   // Session restore (utils/sessions.ts) is the first code path that creates
-  // brand-new windows programmatically — restoreMachine/questSwapMachine
+  // brand-new windows programmatically — restoreMachine/groupSwapMachine
   // only ever reuse the CURRENT, already-tracked window, so this gap never
   // mattered before. windowSyncMachine.syncTabs already no-ops safely with
   // no binding, so tracking an as-yet-unbound window (e.g. a plain Cmd+N) is
@@ -123,7 +123,7 @@ export default defineBackground(() => {
     notifyTabsChanged(info.windowId),
   );
 
-  // A dashboard-side rename/recolor of a Quest/Project fires no tab event,
+  // A dashboard-side rename/recolor of a Group/Project fires no tab event,
   // so without this the mirrored native group (utils/tabGroups.ts) would
   // only catch up whenever some unrelated tab event happens to occur next.
   // ponytail: rescans every tracked window rather than indexing which one
@@ -131,7 +131,7 @@ export default defineBackground(() => {
   // if this gets measurably expensive.
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (!("quests" in changes) && !("folders" in changes)) return;
+    if (!("groups" in changes) && !("folders" in changes)) return;
     for (const windowId of windowActors.keys()) notifyTabsChanged(windowId);
   });
 

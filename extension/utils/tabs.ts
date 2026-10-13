@@ -1,8 +1,8 @@
-import type { QuestTab } from "./quests";
+import type { GroupTab } from "./groups";
 
 export const DASHBOARD_URL = browser.runtime.getURL("/dashboard.html");
 
-export async function snapshotTabs(windowId: number): Promise<QuestTab[]> {
+export async function snapshotTabs(windowId: number): Promise<GroupTab[]> {
   const tabs = await browser.tabs.query({ windowId });
   return tabs
     .filter((t) => t.url !== DASHBOARD_URL)
@@ -16,7 +16,7 @@ export async function snapshotTabs(windowId: number): Promise<QuestTab[]> {
 // its own call site (attach.ts) with no use for ids.
 export async function snapshotTabsWithIds(
   windowId: number,
-): Promise<{ tabs: QuestTab[]; tabIds: number[] }> {
+): Promise<{ tabs: GroupTab[]; tabIds: number[] }> {
   const tabs = (await browser.tabs.query({ windowId })).filter(
     (t) => t.url !== DASHBOARD_URL,
   );

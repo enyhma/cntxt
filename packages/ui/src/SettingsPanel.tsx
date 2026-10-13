@@ -16,7 +16,7 @@ export function SettingsPanel(props: {
   // Usage & limits — all optional so this panel still renders sensibly
   // before entitlements have loaded (e.g. signed out, or mid-fetch).
   maxWorkspaces?: Accessor<number | undefined>;
-  questCount?: Accessor<number>;
+  groupCount?: Accessor<number>;
   projectCount?: Accessor<number>;
   syncedCount?: Accessor<number>;
   blockedCount?: Accessor<number>;
@@ -65,8 +65,8 @@ export function SettingsPanel(props: {
               />
             </div>
             <span class="text-xs text-surface-txt-hint">
-              {props.questCount?.() ?? 0} quest
-              {props.questCount?.() === 1 ? "" : "s"},{" "}
+              {props.groupCount?.() ?? 0} group
+              {props.groupCount?.() === 1 ? "" : "s"},{" "}
               {props.projectCount?.() ?? 0} project
               {props.projectCount?.() === 1 ? "" : "s"}
             </span>
@@ -128,7 +128,7 @@ export function SettingsPanel(props: {
             }
           >
             <option value="none">Start fresh</option>
-            <option value="lastUsed">Resume last used quest</option>
+            <option value="lastUsed">Resume last used group</option>
           </select>
         </label>
         <label class="flex flex-col gap-1.5 text-sm">
@@ -157,7 +157,7 @@ export function SettingsPanel(props: {
           <span class="flex flex-col gap-0.5">
             <span>Manual sync pull (experimental)</span>
             <span class="text-xs text-surface-txt-hint">
-              Adds a "Pull quests now" option to the account menu, to fetch from
+              Adds a "Pull groups now" option to the account menu, to fetch from
               your account on demand instead of waiting for sign-in or a token
               refresh.
             </span>
@@ -165,7 +165,7 @@ export function SettingsPanel(props: {
         </label>
         <label class="flex flex-col gap-1.5 text-sm">
           <span class="text-surface-txt-hint">
-            Auto-archive done quests after
+            Auto-archive done groups after
           </span>
           <div class="flex items-center gap-2">
             <input

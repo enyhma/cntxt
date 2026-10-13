@@ -9,7 +9,7 @@ import { createFolder, updateFolder } from "./folders";
 import { snapshotTabs } from "./tabs";
 
 /**
- * Ensures the given window is bound to something — a Project or a Quest —
+ * Ensures the given window is bound to something — a Project or a Group —
  * creating a Project if needed. Idempotent: safe to call from both the
  * background script and the dashboard page.
  */
@@ -32,8 +32,8 @@ export async function ensureBindingForWindow(
   }
 
   // "Every window is a workspace" — a window with nothing to resume gets a
-  // fresh Project (the window-bound workspace role Mission/Quest used to
-  // have alone), not a Quest.
+  // fresh Project (the window-bound workspace role Mission/Group used to
+  // have alone), not a Group.
   const tabs = await snapshotTabs(windowId);
   const project = await createFolder("Untitled Project", null, "project");
   await updateFolder(project.id, { tabs });

@@ -1,5 +1,5 @@
 // Dot/avatar colors are derived from a hash of a stable id rather than
-// stored, so tabs (and quests without an explicit color) get a
+// stored, so tabs (and groups without an explicit color) get a
 // consistent color without a schema migration. Paired with a matching
 // *-txt role (not always white — a light accent theme like Brass on
 // Obsidian needs dark ink on its own hue) so a color that happens to land
@@ -44,22 +44,22 @@ export function textColorFor(seed: string): string {
   return COLOR_TXT_CLASS[hashColorKey(seed)];
 }
 
-export function questColorKey(
+export function groupColorKey(
   m: { id: string; color?: string } | undefined,
 ): ColorKey {
   return (m?.color as ColorKey | undefined) ?? hashColorKey(m?.id ?? "cntxt");
 }
 
-export function questDotClass(
+export function groupDotClass(
   m: { id: string; color?: string } | undefined,
 ): string {
-  return COLOR_CLASS[questColorKey(m)];
+  return COLOR_CLASS[groupColorKey(m)];
 }
 
-export function questTxtClass(
+export function groupTxtClass(
   m: { id: string; color?: string } | undefined,
 ): string {
-  return COLOR_TXT_CLASS[questColorKey(m)];
+  return COLOR_TXT_CLASS[groupColorKey(m)];
 }
 
 export function domainOf(url: string): string {
