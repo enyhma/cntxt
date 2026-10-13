@@ -18,10 +18,10 @@ Shipped and wired up, ahead of this doc's original ordering — building it earl
 - Builds on Phase 1's account + entitlements — no separate auth step here.
 - No custom API layer: extension and web dashboard talk to Supabase directly via `supabase-js`, using its auto-generated PostgREST API. "Keep server dumb" becomes "no server."
 - Schema (Postgres, via Supabase — see `supabase/migrations/` for the full history):
-  - `quests (id, user_id, name, tabs jsonb, status, order_index, folder_id, deleted_at, created_at, updated_at)` — a short-lived sub-workspace; see `CLAUDE.md`'s "Entities" section for what this means
-  - `folders (id, user_id, parent_id, kind, name, color, tabs jsonb, active_quest_id, created_at, updated_at)` — one self-referencing table for Area/Project/Section, `kind` distinguishing the tier; a `kind:"project"` row is also window-bound (`tabs`/`active_quest_id`)
-  - `resources (id, quest_id, folder_id, type, url, note, created_at)`
-  - `entitlements (user_id, max_workspaces, access_expires_at, ...)` — Quest and Project creation share one pool against `max_workspaces` via `create_quest`/`create_project` (quota-checked RPCs), so a Project can't become a free, unlimited way around the limit
+  - `groups (id, user_id, name, tabs jsonb, status, order_index, folder_id, deleted_at, created_at, updated_at)` — a short-lived sub-workspace; see `CLAUDE.md`'s "Entities" section for what this means
+  - `folders (id, user_id, parent_id, kind, name, color, tabs jsonb, active_group_id, created_at, updated_at)` — one self-referencing table for Area/Project/Section, `kind` distinguishing the tier; a `kind:"project"` row is also window-bound (`tabs`/`active_group_id`)
+  - `resources (id, group_id, folder_id, type, url, note, created_at)`
+  - `entitlements (user_id, max_workspaces, access_expires_at, ...)` — Group and Project creation share one pool against `max_workspaces` via `create_group`/`create_project` (quota-checked RPCs), so a Project can't become a free, unlimited way around the limit
 - Authorization: Row-Level Security policies (`auth.uid() = user_id`) instead of app-level access checks — the DB enforces isolation, extension code doesn't have to.
 - Sync: last-write-wins via `updated_at` — good enough for one user on multiple devices, no CRDT/merge logic.
 - Web dashboard (`web/`): thin SPA using `supabase-js` against the same tables — still management-only, not a second full UI. Currently **out of sync** with the schema above (still queries a `workspaces` table that no longer exists) and excluded from the pnpm workspace until someone updates it.

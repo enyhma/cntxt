@@ -25,7 +25,7 @@ collapse into a plain thin client.
 
 ## Principle: local-first is a data-flow property, not a no-account promise
 
-For every Quest/Project operation _except creating a new one_ (see below),
+For every Group/Project operation _except creating a new one_ (see below),
 the extension still reads and writes `storage.local`/`storage.session`
 directly and instantly, never blocked on a network call — every diagram in
 `workflows.md` continues to describe exactly what happens, unmodified. Sync
@@ -35,7 +35,7 @@ loop ever waiting on it.
 
 Consequences of taking that seriously:
 
-- Once a Quest or Project exists, every local write to it (`updateQuest`/
+- Once a Group or Project exists, every local write to it (`updateGroup`/
   `updateFolder`, tab sync, ...) commits to `storage.local` first, full stop.
   Sync is notified after the fact, not in the write path.
 - The UI (`App.tsx`) never has a loading spinner for "syncing" ordinary
@@ -49,7 +49,7 @@ Consequences of taking that seriously:
 ## Accounts are mandatory — why that doesn't make this a thin client
 
 Signing in is a hard gate: there's no anonymous local-only mode, and no
-"claim your existing local Quests/Projects later" migration (an earlier draft
+"claim your existing local Groups/Projects later" migration (an earlier draft
 of this doc had one — deleted, since there's no pre-account period left for
 orphans to exist in). That single gate is also where most server-dependency lives, but not the
 only place — see "Entitlements" below for the general rule.
@@ -66,7 +66,7 @@ flowchart TB
     subgraph DeviceA["Device A (extension)"]
         BGA[background.ts]
         DashA[Dashboard UI]
-        LocalA[(storage.local<br/>quests, folders, settings)]
+        LocalA[(storage.local<br/>groups, folders, settings)]
         SyncA[Sync engine — new]
         BGA --> LocalA
         DashA --> LocalA
@@ -83,7 +83,7 @@ flowchart TB
 
     subgraph Supabase
         Auth[Supabase Auth]
-        PG[(Postgres<br/>quests, folders, resources<br/>RLS by user_id)]
+        PG[(Postgres<br/>groups, folders, resources<br/>RLS by user_id)]
     end
 
     SyncA <-->|supabase-js<br/>PostgREST| PG
@@ -130,13 +130,13 @@ sequenceDiagram
     actor User
     participant Local as storage.local
     participant Sync as Sync engine
-    participant PG as Supabase (quests)
+    participant PG as Supabase (groups)
 
-    User->>Local: (via existing Phase 1 flow) updateQuest(id, patch)
+    User->>Local: (via existing Phase 1 flow) updateGroup(id, patch)
     Note over Local: unchanged from workflows.md —<br/>this write already happened before sync exists
     Local-->>Sync: storage.onChanged
     Sync->>Sync: debounce (coalesce a burst of tab-sync writes)
-    Sync->>PG: upsert quests (id, user_id, name, tabs)
+    Sync->>PG: upsert groups (id, user_id, name, tabs)
     PG->>PG: trigger sets updated_at = now() — server clock, not the client's
     PG-->>Sync: returns the row, including the server's updated_at
     Sync->>Local: overwrite local updatedAt with the server's value
@@ -148,7 +148,7 @@ observes it after the fact via `storage.onChanged`, the same mechanism the
 dashboard already uses to react to background-script writes. It doesn't
 insert itself into the save/close/restore path at all. A `kind:"project"`
 Folder follows the identical push pattern against the `folders` table
-(`pushDirtyFolders`) — this diagram only shows the Quest side for brevity.
+(`pushDirtyFolders`) — this diagram only shows the Group side for brevity.
 
 ## Pull + conflict resolution
 
@@ -161,14 +161,14 @@ should win.
 sequenceDiagram
     actor Trigger as dashboard mount / periodic tick / focus
     participant Sync as Sync engine
-    participant PG as Supabase (quests)
+    participant PG as Supabase (groups)
     participant Local as storage.local
 
     Trigger->>Sync: run a sync tick
     Sync->>PG: select * where updated_at > lastSyncedAt
     PG-->>Sync: changed rows (possibly none)
     loop each changed row R
-        Sync->>Local: read local quest with id = R.id
+        Sync->>Local: read local group with id = R.id
         alt local has no pending (unpushed) change for this id
             Sync->>Local: overwrite with R — server is the only writer left
         else local has a pending change too
@@ -213,21 +213,21 @@ needed for the core UI to stay correct.
 
 ## Local model vs. Postgres schema
 
-|                       | Local (`utils/quests.ts`)                 | Postgres (`supabase/migrations/...`)                             | Note                                                                                                                                                                                                             |
+|                       | Local (`utils/groups.ts`)                 | Postgres (`supabase/migrations/...`)                             | Note                                                                                                                                                                                                             |
 | --------------------- | ----------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | id                    | `crypto.randomUUID()`, client-generated   | `uuid default gen_random_uuid()`                                 | Already compatible — locally-created ids need no remapping on first sync.                                                                                                                                        |
 | name                  | `text`                                    | `text`                                                           | Direct.                                                                                                                                                                                                          |
-| tabs                  | `QuestTab[]` (`{url, title}`)             | `jsonb`                                                          | Direct serialization.                                                                                                                                                                                            |
-| status / order        | `QuestStatus`, `number`                   | `text` (check constraint), `order_index integer`                 | `order` → `order_index` is the one field-name mismatch (`order` is reserved in SQL), mapped explicitly in `pullRemoteQuests`/`pushDirtyQuests`.                                                                  |
-| folderId              | `string \| null \| undefined`             | `folder_id uuid references folders(id) on delete set null`       | Which Area, Project, or (if null) ungrouped — never a Section. A Project-parented Quest is also the one `questSwapMachine` can swap (`Folder.active_quest_id`).                                                  |
+| tabs                  | `GroupTab[]` (`{url, title}`)             | `jsonb`                                                          | Direct serialization.                                                                                                                                                                                            |
+| status / order        | `GroupStatus`, `number`                   | `text` (check constraint), `order_index integer`                 | `order` → `order_index` is the one field-name mismatch (`order` is reserved in SQL), mapped explicitly in `pullRemoteGroups`/`pushDirtyGroups`.                                                                  |
+| folderId              | `string \| null \| undefined`             | `folder_id uuid references folders(id) on delete set null`       | Which Area, Project, or (if null) ungrouped — never a Section. A Project-parented Group is also the one `groupSwapMachine` can swap (`Folder.active_group_id`).                                                  |
 | createdAt / updatedAt | `number` (client `Date.now()`)            | `timestamptz`, `updated_at` server-set via `moddatetime` trigger | **Not the same clock.** See Push diagram — after any round-trip, local `updatedAt` must be replaced with the server's value, never compared as client-generated ms against another device's client-generated ms. |
-| ownership             | none (single-profile, implicit)           | `user_id` (RLS: `auth.uid() = user_id`)                          | No claiming step needed — every Quest/Project is created after sign-in (see "Entitlements"), so it always has an owner from the moment it exists locally.                                                        |
-| resources             | `Resource.questId` (`utils/resources.ts`) | `resources` table, FK to `quests` (nullable) or `folders`        | Built — a Resource is parented to exactly one of a Quest or a Section, enforced at the call site, not the schema.                                                                                                |
+| ownership             | none (single-profile, implicit)           | `user_id` (RLS: `auth.uid() = user_id`)                          | No claiming step needed — every Group/Project is created after sign-in (see "Entitlements"), so it always has an owner from the moment it exists locally.                                                        |
+| resources             | `Resource.groupId` (`utils/resources.ts`) | `resources` table, FK to `groups` (nullable) or `folders`        | Built — a Resource is parented to exactly one of a Group or a Section, enforced at the call site, not the schema.                                                                                                |
 | deletion              | `deletedAt` soft-delete, Trash view       | `deleted_at timestamptz`, `pg_cron`-purged past retention        | Resolved — see `implementation-plan-sync.md` M7: soft delete fits the existing poll (an update, not a disappearance); a scheduled purge hard-deletes past the retention window.                                  |
 
 A `kind:"project"` Folder (`utils/folders.ts`) has its own, smaller local/
-Postgres mapping for the fields a Quest doesn't have: `kind`, `tabs` (its own
-live tab list when no child Quest is swapped in), and `active_quest_id` — see
+Postgres mapping for the fields a Group doesn't have: `kind`, `tabs` (its own
+live tab list when no child Group is swapped in), and `active_group_id` — see
 `CLAUDE.md`'s "Entities" section.
 
 ## Entitlements: what the server gates, and how the client stays fast
@@ -265,14 +265,14 @@ sequenceDiagram
 ```
 
 > **The cache is advisory, never authoritative.** It exists so the UI can
-> gray out "New quest"/"New project" or show "approaching your tab limit"
+> gray out "New group"/"New project" or show "approaching your tab limit"
 > without a round-trip just to render that state. A stale or tampered local cache must
 > never be what actually allows or blocks a write.
 
-### The write-time check — resolved for Quest/Project creation: local-first wins, sync is what's gated
+### The write-time check — resolved for Group/Project creation: local-first wins, sync is what's gated
 
 An earlier draft of this doc had the entitlement check block creation
-itself — reject the write, and the Quest/Project simply doesn't exist yet.
+itself — reject the write, and the Group/Project simply doesn't exist yet.
 That's wrong for this product specifically: `ensureBindingForWindow` creates
 a Project automatically every time a browser window opens (see `CLAUDE.md`),
 with no click to intercept and no UI in `background.ts` to show a rejection.
@@ -281,14 +281,14 @@ or while already at your plan's limit, would silently fail to create that
 window's Project — breaking the "every window is a workspace" guarantee the
 whole product is built on. Resolved: creation is **local-first,
 unconditionally** — it never fails, online or off, at-limit or not. What the
-entitlement actually gates is whether that Quest/Project gets a server-side
+entitlement actually gates is whether that Group/Project gets a server-side
 counterpart at all.
 
-Explicit Quest creation (the dashboard's "+ Quest" buttons) _does_ have a
+Explicit Group creation (the dashboard's "+ Group" buttons) _does_ have a
 click to intercept, unlike the automatic Project case — but it deliberately
 uses the exact same local-first-always pattern anyway, for one reason:
-consistency. A Quest and a Project share one quota pool
-(`count_workspace_like()`, see `supabase/migrations/20261007170000_project_quest_restructure.sql`),
+consistency. A Group and a Project share one quota pool
+(`count_group_like()`, see `supabase/migrations/20261007170000_project_quest_restructure.sql`),
 so having one creation path fail loudly and the other not would mean the
 same limit behaves differently depending on which button you clicked.
 
@@ -299,35 +299,35 @@ sequenceDiagram
     participant Local as storage.local
     participant PG as Supabase
 
-    User->>Dashboard: a new Quest (explicit click) or Project (explicit click, or a window just opened)
+    User->>Dashboard: a new Group (explicit click) or Project (explicit click, or a window just opened)
     Dashboard->>Local: create it — always succeeds, no check first
     Note over Dashboard,Local: same commit as every other local-first write;<br/>the UI never waits on this
-    Dashboard-->>PG: create_quest / create_project RPC, fire-and-forget (same local id, so no remapping)
+    Dashboard-->>PG: create_group / create_project RPC, fire-and-forget (same local id, so no remapping)
     alt under the shared limit and access not expired
-        PG-->>Dashboard: row created — this Quest/Project now has a synced counterpart
+        PG-->>Dashboard: row created — this Group/Project now has a synced counterpart
     else at the limit, expired, or offline
         PG-->>Dashboard: rejected or unreachable — silently ignored
         Note over Dashboard: it stays exactly as usable, just unsynced —<br/>no error surfaced, no retry
     end
 ```
 
-`extension/utils/quests.ts`'s `registerQuest` and `extension/utils/folders.ts`'s
-`registerProject` are this — a non-blocking `.rpc('create_quest'/'create_project', ...)`
+`extension/utils/groups.ts`'s `registerGroup` and `extension/utils/folders.ts`'s
+`registerProject` are this — a non-blocking `.rpc('create_group'/'create_project', ...)`
 call whose result nobody awaits or reports. The dashboard's cached entitlements
-(`utils/entitlements.ts`) still gray out the "New quest"/"New project" tooltip
+(`utils/entitlements.ts`) still gray out the "New group"/"New project" tooltip
 as an early warning ("this won't sync"), but that's advisory framing only —
 clicking through anyway still works, it just stays local-only, which is the
 whole point of this design.
 
-This resolves the offline question below for Quest/Project creation
+This resolves the offline question below for Group/Project creation
 specifically; the equivalent question for a tab-count entitlement (no
 click to intercept at all, not even an implicit one) is still open — see
 below.
 
 ### Open problem: an entitlement with no click to intercept
 
-Explicit Quest/Project creation is a deliberate action — there's a moment to
-say "no" (even though, per above, nothing actually does). A tabs-per-quest
+Explicit Group/Project creation is a deliberate action — there's a moment to
+say "no" (even though, per above, nothing actually does). A tabs-per-group
 limit doesn't have that: tabs arrive via live sync
 (`workflows.md` → "Live tab sync") as a side effect of ordinary browsing,
 not a request the extension can reject. Undecided, and worth a product
@@ -391,7 +391,7 @@ way every other table access in this document does. Something has to sit at
 a public HTTPS endpoint, verify the payload actually came from Creem
 (signature check), and only then write. Postgres has no notion of an
 inbound HTTP endpoint, so this is unavoidably a second exception to "the
-server is just tables and RLS" — alongside `create_quest`/`create_project`,
+server is just tables and RLS" — alongside `create_group`/`create_project`,
 and for the same underlying reason: an operation exists that a bare
 client-side insert cannot safely perform. Implemented: `supabase/functions/creem-webhook/`.
 
@@ -401,9 +401,9 @@ explicitly _advisory_ — a UX shortcut, never the actual gate. Expiry is the
 one place that distinction really matters for the business model, and it's
 now enforced where it needs to be: `has_active_access(user_id)`
 (`supabase/migrations/20261005120000_freeze_writes_on_expiry.sql`) is
-required by every write policy on `quests`, `folders`, and `resources` — an
+required by every write policy on `groups`, `folders`, and `resources` — an
 expired user's `update`/`insert`/`delete` fails at the RLS layer itself, not
-just at `create_quest`/`create_project` time. Reads stay unrestricted so the
+just at `create_group`/`create_project` time. Reads stay unrestricted so the
 dashboard still renders.
 
 **Resolved, not just an open question:** what happens to a user's synced
@@ -415,21 +415,21 @@ section used to list as still-undecided.
 - **Delete propagation — resolved.** `deletedAt`/`deleted_at` soft delete
   (delete becomes an update, fits the existing poll), with a `pg_cron`-driven
   purge past the plan's retention window. See `implementation-plan-sync.md`
-  M7 and `quest-sync-semantics.md`'s "Dormant" framing.
+  M7 and `group-sync-semantics.md`'s "Dormant" framing.
 - **Push batching.** Live tab sync (`workflows.md` → "Live tab sync") can
-  fire several `updateQuest`/`updateFolder` calls in quick succession while
+  fire several `updateGroup`/`updateFolder` calls in quick succession while
   someone's actively browsing. The Push diagram above debounces before
   hitting Supabase — without that, a busy window would generate a write per
   tab event.
-- **Resources sync — resolved, built.** `Resource.questId`/`folderId`
+- **Resources sync — resolved, built.** `Resource.groupId`/`folderId`
   (`extension/utils/resources.ts`) sync against the `resources` table like
   everything else in this document.
 - **What happens offline at the point of an entitlement-gated write?**
-  Resolved for Quest/Project creation — see "The write-time check" above:
+  Resolved for Group/Project creation — see "The write-time check" above:
   creation always succeeds locally, offline or not; the entitlement check
   only gates whether it gets a synced server-side counterpart. Still open
   for any future entitlement that isn't tied to a creation event at all
-  (e.g. a tabs-per-quest or size cap) — see the tab-count problem below.
+  (e.g. a tabs-per-group or size cap) — see the tab-count problem below.
 - **The tab-count entitlement problem has no chosen answer** — see
   "Entitlements → Open problem" above.
 
@@ -437,7 +437,7 @@ section used to list as still-undecided.
 
 - No CRDT or field-level merge — last-write-wins, whole-row.
 - No custom API server — `supabase-js` talks to PostgREST/Auth directly,
-  except the `create_quest`/`create_project` RPCs (atomic limit enforcement,
+  except the `create_group`/`create_project` RPCs (atomic limit enforcement,
   now sharing one quota pool) and the Creem webhook Edge Function (the only
   inbound request with no user session to authenticate it through RLS).
   Exceptions, all because an operation exists that a plain client-side table

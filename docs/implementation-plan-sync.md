@@ -61,13 +61,13 @@ null default 10`, `access_expires_at timestamptz` (null until a
       row on signup. Verified: a fresh `auth.users` insert produces a
       matching `entitlements` row with the default limit.
 
-## M2 — The one exception: `create_quest`
+## M2 — The one exception: `create_group`
 
 **Status: done.** Migration `20260912162121_entitlements.sql`, tests in
 `supabase/tests/`. Later extended with a sibling `create_project` RPC
-(Project/Quest restructuring,
+(Project/Group restructuring,
 `supabase/migrations/20261007170000_project_quest_restructure.sql`), mirroring
-this exact pattern and sharing its quota check via a `count_workspace_like()`
+this exact pattern and sharing its quota check via a `count_group_like()`
 helper — a second exception by the same name, not a third kind.
 
 - [x] One `plpgsql` function, `security definer` — **not** `invoker` as
@@ -81,11 +81,11 @@ FOR UPDATE` checks the UPDATE policy's `USING` clause, not just
       check was skipped rather than erroring. `security definer` runs as
       the function's owner, which bypasses RLS the same way any table owner
       does, so ownership is enforced explicitly via `auth.uid()` inside the
-      function instead of through the `quests` policy.
+      function instead of through the `groups` policy.
 - [x] Body: lock the caller's `entitlements` row (`for update`), count
       their workspaces, compare to the limit, insert-and-return on success,
       raise otherwise.
-- [x] Exposed automatically as `supabase.rpc('create_quest', {...})` —
+- [x] Exposed automatically as `supabase.rpc('create_group', {...})` —
       PostgREST does this for free once the function exists; no extra
       server-side wiring.
 - [x] pgTAP tests (`supabase/tests/create_workspace_test.sql`,
@@ -179,33 +179,33 @@ FOR UPDATE` checks the UPDATE policy's `USING` clause, not just
       limit — a tooltip, not a disabled button (see M5: creation itself is
       never blocked).
 
-## M5 — Quest/Project creation: local-first always, sync is what's gated
+## M5 — Group/Project creation: local-first always, sync is what's gated
 
 **Status: done, resolved differently than originally planned** — see
-`architecture-sync.md` → "The write-time check — resolved for Quest/Project
+`architecture-sync.md` → "The write-time check — resolved for Group/Project
 creation". The original plan below (RPC-gates-creation, fail loudly
 offline) was never implemented: `ensureBindingForWindow` creates a
 Project on every window open with no click to intercept and no UI in
 `background.ts` to show a rejection, so gating it on the server would break
 window-opening itself while offline or at-limit. Built instead (described
-below for Quest/`create_quest`, since that's what existed when this
+below for Group/`create_group`, since that's what existed when this
 milestone was written; `create_project` was added later, mirroring the exact
-same pattern and sharing its quota pool — see the Project/Quest
+same pattern and sharing its quota pool — see the Project/Group
 restructuring plan, `supabase/migrations/20261007170000_project_quest_restructure.sql`):
 
-- [x] `createQuest` (`utils/quests.ts`) writes to `storage.local`
+- [x] `createGroup` (`utils/groups.ts`) writes to `storage.local`
       first and unconditionally, exactly as before this milestone, then
-      fires `registerQuest` — a non-blocking `create_quest` RPC call
+      fires `registerGroup` — a non-blocking `create_group` RPC call
       (passing the local `p_id`) whose result nobody awaits or surfaces.
       `ensureBindingForWindow` (`utils/attach.ts`) gets this for free,
-      since it calls the same `createQuest`.
-- [x] `create_quest`'s SQL signature grew an optional `p_id uuid`
+      since it calls the same `createGroup`.
+- [x] `create_group`'s SQL signature grew an optional `p_id uuid`
       (migration `20260928163000_create_workspace_client_id_and_expiry.sql`)
       so the server row lands under the same id the extension already
       generated — no id remapping needed once M6 exists to read it back.
       Backward compatible: existing 2-arg calls still work.
 - [x] Same migration adds the `access_expires_at` check flagged as missing
-      in M9 below: `create_quest` now rejects once a caller's access has
+      in M9 below: `create_group` now rejects once a caller's access has
       lapsed, _even though_ `max_workspaces` was left inflated (the Creem
       webhook only ever touches `access_expires_at` on expiry, never claws
       back `max_workspaces`). Free-tier accounts have a permanently-null
@@ -218,28 +218,28 @@ restructuring plan, `supabase/migrations/20261007170000_project_quest_restructur
       Docker/Podman, so `supabase test db --local` couldn't actually be
       executed; treat these as reviewed-by-hand, not verified, until that
       run happens.
-- [x] The broader "should `quests` RLS itself freeze reads/writes past
+- [x] The broader "should `groups` RLS itself freeze reads/writes past
       expiry" question from `architecture-sync.md` → "Payments" is now also
       resolved (`has_active_access(user_id)`, migration
-      `20261005120000_freeze_writes_on_expiry.sql`, applied to `quests`,
-      `folders`, and `resources`) — not just `create_quest`'s own check.
+      `20261005120000_freeze_writes_on_expiry.sql`, applied to `groups`,
+      `folders`, and `resources`) — not just `create_group`'s own check.
 
 ## M6 — Sync engine: push and pull
 
-- [x] **Pull, with conflict resolution** — `pullRemoteQuests`
-      (`utils/quests.ts`): a plain `select` of the caller's own
-      `quests` rows (RLS-scoped, no RPC). A row missing locally is
+- [x] **Pull, with conflict resolution** — `pullRemoteGroups`
+      (`utils/groups.ts`): a plain `select` of the caller's own
+      `groups` rows (RLS-scoped, no RPC). A row missing locally is
       added; a row that exists locally is overwritten only when the
       server's `updated_at` is strictly newer than the local copy's —
       last-write-wins exactly as diagrammed in `architecture-sync.md` →
       "Pull + conflict resolution". An unpushed local edit always has a
       newer local `updatedAt` than its still-stale server row, so it's
       left alone rather than clobbered.
-- [x] **Push** — `pushDirtyQuests` (`utils/quests.ts`), driven by
+- [x] **Push** — `pushDirtyGroups` (`utils/groups.ts`), driven by
       `utils/sync.ts`'s `syncMachine` listening to `storage.onChanged`:
-      debounce, then `update` (not `upsert` — `quests.user_id` has no
+      debounce, then `update` (not `upsert` — `groups.user_id` has no
       column default, so upsert's insert branch would fail a not-null
-      check on a row that already exists) the `quests` table via a
+      check on a row that already exists) the `groups` table via a
       plain `supabase-js` call for every `syncStatus === "synced"`
       workspace whose local `updatedAt` has moved. Not an RPC — updates to
       an existing, already-owned workspace aren't entitlement-gated.
@@ -262,17 +262,17 @@ soft-delete (every read filtering `.is("deleted_at", null)`), deleted
 workspaces are user-visible in a Trash view for a retention window — 7
 days free, 30 days paid — before being purged for good.
 
-- [x] `deleted_at timestamptz` added to `quests`
+- [x] `deleted_at timestamptz` added to `groups`
       (`supabase/migrations/20260930200000_trash_and_purge.sql`).
-      `deleteQuest` (`utils/quests.ts`) sets it (soft delete,
+      `deleteGroup` (`utils/groups.ts`) sets it (soft delete,
       local-first, propagated by the existing push path) instead of
-      removing the row; `restoreQuest` clears it; the Trash view's
-      explicit "Delete forever" (`permanentlyDeleteQuest`) is the one
+      removing the row; `restoreGroup` clears it; the Trash view's
+      explicit "Delete forever" (`permanentlyDeleteGroup`) is the one
       path that still does a real `delete`.
 - [x] Reads are **not** filtered to active-only server-side — the client
       pulls trashed rows too (so trash state itself syncs across
       devices) and filters active-vs-trashed locally
-      (`App.tsx`'s `activeQuests`/`trashedQuests`).
+      (`App.tsx`'s `activeGroups`/`trashedGroups`).
 - [x] Scheduled purge: a `pg_cron` job (hourly) calls
       `purge_trashed_workspaces()`, which hard-deletes rows past their
       retention window — 30 days if `entitlements.access_expires_at` is
@@ -282,7 +282,7 @@ days free, 30 days paid — before being purged for good.
       `purgeExpiredLocalTrash` mirrors the same rule client-side so a
       workspace's countdown hitting zero removes it from the dashboard
       immediately rather than lagging behind the next hourly tick.
-- [x] `create_quest`'s limit check now excludes `deleted_at is not null`
+- [x] `create_group`'s limit check now excludes `deleted_at is not null`
       rows — trashing a workspace frees its quota slot instead of holding
       it until purge.
 
@@ -331,23 +331,23 @@ events, not one-time orders.
       the _current_ period is no longer paid up — all three immediately set
       `access_expires_at = now()`, revoking access right away rather than
       waiting for a timestamp that may already be stale.
-- [x] `create_quest` now checks `access_expires_at` (M5,
+- [x] `create_group` now checks `access_expires_at` (M5,
       `20260928163000_create_workspace_client_id_and_expiry.sql`) — the one
       write path that existed to gate. Expiry has a real effect: a lapsed
       account can no longer create new workspaces (locally it still can —
       see M5 — but they won't sync).
-- [x] The broader ask — `quests` (and other user-scoped tables') RLS
+- [x] The broader ask — `groups` (and other user-scoped tables') RLS
       requiring active access on every read/write, not just creation — is
       now also resolved: `has_active_access(user_id)`, migration
       `20261005120000_freeze_writes_on_expiry.sql`, required by every write
-      policy on `quests`/`folders`/`resources`. Answers the "what happens to
+      policy on `groups`/`folders`/`resources`. Answers the "what happens to
       data at expiry" question too — freeze writes, keep serving reads.
 
 ## Deliberately not in this plan
 
 - Edge Functions.
 - A custom REST/GraphQL server.
-- A generalized entitlement engine — only `create_quest`/`create_project`
+- A generalized entitlement engine — only `create_group`/`create_project`
   exist (sharing one quota check) until a genuinely different kind of gated
   action is actually being built (tab-count/size limits are still an open
   product question per `architecture-sync.md`).
