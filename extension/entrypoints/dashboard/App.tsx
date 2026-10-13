@@ -56,6 +56,7 @@ import {
   Trash2,
   TriangleAlert,
   Unplug,
+  Workflow as AutomationsIcon,
   X,
 } from "lucide-solid";
 import {
@@ -90,6 +91,12 @@ import {
 } from "@/utils/quests";
 import { type Session, getSessions, restoreSession } from "@/utils/sessions";
 import {
+  type Automation,
+  getAutomations,
+  updateAutomation,
+  deleteAutomation,
+} from "@/utils/automations";
+import {
   type ColorKey,
   COLOR_CLASS,
   COLOR_KEYS,
@@ -103,6 +110,8 @@ import {
   TabRow,
   TrashPanel,
   HistoryPanel,
+  AutomationsPanel,
+  type Automation as UiAutomation,
   FolderPage,
   QuestDot,
   QuestRow,
@@ -181,13 +190,14 @@ function closeOpenDropdowns() {
 }
 
 const NAV_ITEMS: Array<{
-  key: "quests" | "trash" | "history" | "settings";
+  key: "quests" | "trash" | "history" | "automations" | "settings";
   label: string;
   icon: (props: LucideProps) => JSX.Element;
 }> = [
   { key: "quests", label: "Quests", icon: QuestsIcon },
   { key: "trash", label: "Trash", icon: Trash2 },
   { key: "history", label: "History", icon: HistoryIcon },
+  { key: "automations", label: "Automations", icon: AutomationsIcon },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -1882,8 +1892,9 @@ function App() {
   const [manualPullEnabled, setManualPullEnabled] = createSignal(false);
   const [autoArchiveDays, setAutoArchiveDays] = createSignal(30);
   const [nav, setNav] = createSignal<
-    "quests" | "trash" | "history" | "settings"
+    "quests" | "trash" | "history" | "automations" | "settings"
   >("quests");
+  const [automations, setAutomations] = createSignal<Automation[]>([]);
   const [jumpToSessionId, setJumpToSessionId] = createSignal<string>();
   const [state, send] = useMachine(restoreMachine);
   const [questSwapState, questSwapSend] = useMachine(questSwapMachine);
@@ -2178,6 +2189,7 @@ function App() {
     setResources(await getResources());
     setSessions(await getSessions());
     setWindowMap(await getWindowBindingMap());
+    setAutomations(await getAutomations());
   }
 
   onMount(async () => {
@@ -2339,6 +2351,24 @@ function App() {
 
   async function handleRestoreSession(session: Session) {
     await restoreSession(session);
+  }
+
+  async function handleToggleAutomationEnabled(id: string, enabled: boolean) {
+    await updateAutomation(id, { enabled });
+    await refresh();
+  }
+
+  async function handleSaveAutomation(
+    id: string,
+    patch: Pick<UiAutomation, "nodes" | "edges">,
+  ) {
+    await updateAutomation(id, patch);
+    await refresh();
+  }
+
+  async function handleDeleteAutomation(id: string) {
+    await deleteAutomation(id);
+    await refresh();
   }
 
   // tokens.css keys every non-baseline theme off data-theme on the root
@@ -2643,6 +2673,16 @@ function App() {
                     sessions={sessions}
                     onRestoreSession={handleRestoreSession}
                     jumpToSessionId={jumpToSessionId}
+                  />
+                </div>
+              </Match>
+              <Match when={nav() === "automations"}>
+                <div class="flex flex-1 items-stretch overflow-hidden">
+                  <AutomationsPanel
+                    automations={automations}
+                    onToggleEnabled={handleToggleAutomationEnabled}
+                    onSaveAutomation={handleSaveAutomation}
+                    onDeleteAutomation={handleDeleteAutomation}
                   />
                 </div>
               </Match>

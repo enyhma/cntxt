@@ -25,17 +25,41 @@ async function closeForEvent(): Promise<number | null> {
   return win.id;
 }
 
+// Finds the next `pending` sibling by `order` and swaps it in (opens its
+// tabs, activates it), or clears `activeQuestId` if there's none. Shared
+// by the explicit COMPLETE_QUEST path below and by the automation
+// engine's "advanceNextSibling" action block (utils/automationBlocks.ts), which
+// fires this same effect from a passive trigger instead of a user click.
+export async function advanceNextSibling(
+  project: Folder,
+  quest: Quest,
+  windowId: number | null,
+): Promise<void> {
+  const siblings = (await getQuests()).filter((q) => q.folderId === project.id);
+  const next = siblings
+    .filter((s) => s.id !== quest.id && s.status === "pending")
+    .sort((a, b) => a.order - b.order)[0];
+  if (next) {
+    if (windowId !== null) {
+      await openMissingTabs(windowId, next.tabs);
+    }
+    await updateFolder(project.id, { activeQuestId: next.id });
+    await updateQuest(next.id, { status: "active" });
+  } else {
+    await updateFolder(project.id, { activeQuestId: undefined });
+  }
+}
+
 async function openAndPersist(input: {
   windowId: number | null;
   mode: Mode;
   project: Folder;
   quest: Quest;
 }) {
-  const siblings = (await getQuests()).filter(
-    (q) => q.folderId === input.project.id,
-  );
-
   if (input.mode === "activate") {
+    const siblings = (await getQuests()).filter(
+      (q) => q.folderId === input.project.id,
+    );
     if (input.windowId !== null) {
       await openMissingTabs(input.windowId, input.quest.tabs);
     }
@@ -54,18 +78,7 @@ async function openAndPersist(input: {
   // ACTIVATE_QUEST (which works identically regardless of prior status).
   // Then auto-advance to the next pending sibling by order, if any.
   await updateQuest(input.quest.id, { status: "done" });
-  const next = siblings
-    .filter((s) => s.id !== input.quest.id && s.status === "pending")
-    .sort((a, b) => a.order - b.order)[0];
-  if (next) {
-    if (input.windowId !== null) {
-      await openMissingTabs(input.windowId, next.tabs);
-    }
-    await updateFolder(input.project.id, { activeQuestId: next.id });
-    await updateQuest(next.id, { status: "active" });
-  } else {
-    await updateFolder(input.project.id, { activeQuestId: undefined });
-  }
+  await advanceNextSibling(input.project, input.quest, input.windowId);
 }
 
 /**

@@ -1,22 +1,10 @@
-import { getSettings } from "./settings";
-import { archiveQuest, getQuests } from "./quests";
+import { runScheduledAutomations } from "./automationEngine";
 
-// Archives a "done" quest once it's gone unreferenced by a session capture
-// (see utils/sessions.ts's lastSeenAt side-write) for Settings.autoArchiveDays.
-// Only ever archives Quests — Folders have no `status`, so "done + inactive"
-// can't apply to a Project; a Project is only ever archived manually (see
-// archiveFolder in utils/folders.ts), whose cascade to child quests is a
-// separate, manual-path concern.
-export async function runAutoArchiveCheck(): Promise<void> {
-  const { autoArchiveDays } = await getSettings();
-  const cutoffMs = autoArchiveDays * 24 * 60 * 60 * 1000;
-  for (const quest of await getQuests()) {
-    if (quest.archivedAt || quest.deletedAt || quest.status !== "done") {
-      continue;
-    }
-    const lastSeen = quest.lastSeenAt ?? quest.createdAt;
-    if (Date.now() - lastSeen > cutoffMs) {
-      await archiveQuest(quest.id);
-    }
-  }
-}
+// This used to be the hardcoded check (status "done" + unreferenced by a
+// session capture for Settings.autoArchiveDays); it's now expressed as
+// the seeded "Archive stale done quests" Automation (utils/automations.ts),
+// run by the generic schedule runner alongside any other
+// "scheduleTick"-triggered automation — see utils/automationEngine.ts and
+// utils/automationBlocks.ts. Kept as a thin re-export so
+// entrypoints/background.ts's alarm-tick call site didn't need to change.
+export const runAutoArchiveCheck = runScheduledAutomations;

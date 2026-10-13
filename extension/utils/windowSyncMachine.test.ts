@@ -1,9 +1,9 @@
 import { createActor } from "xstate";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBrowser } from "wxt/testing/fake-browser";
 import { setWindowBinding } from "./session";
 import { windowSyncMachine } from "./windowSyncMachine";
-import { createQuest, getQuests } from "./quests";
+import { createQuest, getQuests, updateQuest } from "./quests";
 import { createFolder, getFolders, updateFolder } from "./folders";
 
 beforeEach(() => {
@@ -12,6 +12,16 @@ beforeEach(() => {
 
 async function flushAsyncWork() {
   await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// Under vi.useFakeTimers(), a bare setTimeout-based flush never fires on
+// its own — repeatedly yielding the microtask queue is what drains the
+// chained awaits instead (same technique as utils/sync.test.ts's `flush`,
+// just more iterations: the auto-complete path chains through
+// getAutomations/matchesTrigger/runAutomationChain/advanceNextSibling, a
+// deeper chain than sync.ts's debounce).
+async function flushMicrotasks() {
+  for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
 describe("windowSyncMachine", () => {
@@ -112,5 +122,93 @@ describe("windowSyncMachine", () => {
     actor.send({ type: "WINDOW_CLOSED" });
 
     expect(actor.getSnapshot().status).toBe("done");
+  });
+});
+
+describe("windowSyncMachine auto-complete on empty tabs", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("auto-completes a standalone quest once tabs stay empty past the debounce", async () => {
+    const win = (await browser.windows.create({ focused: true }))!;
+    const quest = await createQuest("Standalone", []);
+    await updateQuest(quest.id, { status: "active" });
+    await setWindowBinding(win.id!, { kind: "quest", questId: quest.id });
+
+    createActor(windowSyncMachine, { input: { windowId: win.id! } }).start();
+    await flushMicrotasks();
+
+    await vi.advanceTimersByTimeAsync(45_000);
+
+    const updated = (await getQuests()).find((q) => q.id === quest.id);
+    expect(updated?.status).toBe("done");
+    expect(updated?.tabs).toEqual([]);
+  });
+
+  it("cancels the pending auto-complete if a tab reappears before the debounce elapses", async () => {
+    const win = (await browser.windows.create({ focused: true }))!;
+    const quest = await createQuest("Standalone", []);
+    await updateQuest(quest.id, { status: "active" });
+    await setWindowBinding(win.id!, { kind: "quest", questId: quest.id });
+
+    const actor = createActor(windowSyncMachine, {
+      input: { windowId: win.id! },
+    }).start();
+    await flushMicrotasks();
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    await browser.tabs.create({ windowId: win.id, url: "https://a.example/" });
+    actor.send({ type: "TABS_CHANGED" });
+    await flushMicrotasks();
+
+    await vi.advanceTimersByTimeAsync(45_000);
+
+    const updated = (await getQuests()).find((q) => q.id === quest.id);
+    expect(updated?.status).toBe("active");
+  });
+
+  it("auto-completes a nested quest and advances to the next pending sibling", async () => {
+    const win = (await browser.windows.create({ focused: true }))!;
+    const project = await createFolder("Project", null, "project");
+    const active = await createQuest("Active", []);
+    await updateQuest(active.id, {
+      folderId: project.id,
+      status: "active",
+      order: 0,
+    });
+    const pending = await createQuest("Pending", [
+      { url: "https://b.example/", title: "" },
+    ]);
+    await updateQuest(pending.id, {
+      folderId: project.id,
+      status: "pending",
+      order: 1,
+    });
+    await updateFolder(project.id, { activeQuestId: active.id });
+    await setWindowBinding(win.id!, {
+      kind: "project",
+      projectId: project.id,
+    });
+
+    createActor(windowSyncMachine, { input: { windowId: win.id! } }).start();
+    await flushMicrotasks();
+
+    await vi.advanceTimersByTimeAsync(45_000);
+
+    const quests = await getQuests();
+    expect(quests.find((q) => q.id === active.id)?.status).toBe("done");
+    expect(quests.find((q) => q.id === pending.id)?.status).toBe("active");
+
+    const folders = await getFolders();
+    expect(folders.find((f) => f.id === project.id)?.activeQuestId).toBe(
+      pending.id,
+    );
+
+    const openTabs = await browser.tabs.query({ windowId: win.id });
+    expect(openTabs.some((t) => t.url === "https://b.example/")).toBe(true);
   });
 });

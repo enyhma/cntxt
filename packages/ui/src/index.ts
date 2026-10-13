@@ -10,3 +10,4 @@ export * from "./TabRow";
 export * from "./SettingsPanel";
 export * from "./TrashPanel";
 export * from "./HistoryPanel";
+export * from "./AutomationsPanel";
