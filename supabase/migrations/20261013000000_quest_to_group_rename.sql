@@ -5,8 +5,8 @@
 --
 -- Also fixes three leftovers the earlier workspaces->quests rename
 -- (20261007170000_project_quest_restructure.sql) never caught: the
--- updated_at trigger, the trash-purge function, and the resources policy
--- name all still said "workspace(s)".
+-- updated_at trigger, the trash-purge function, and the resources
+-- policies' names all still said "workspace(s)".
 
 alter table quests rename to groups;
 
@@ -21,7 +21,14 @@ alter policy "quests: owner read" on groups rename to "groups: owner read";
 alter policy "quests: owner write while active" on groups rename to "groups: owner write while active";
 alter policy "quests: owner update while active" on groups rename to "groups: owner update while active";
 alter policy "quests: owner delete while active" on groups rename to "groups: owner delete while active";
-alter policy "resources: owner full access via workspace" on resources rename to "resources: owner full access via group";
+-- The original single "resources: owner full access via workspace" policy
+-- (20260912040442_init_workspaces.sql) was dropped and replaced by these
+-- four narrower ones in 20261005120000_freeze_writes_on_expiry.sql — that
+-- policy name no longer exists, these are the real current ones.
+alter policy "resources: owner read via workspace" on resources rename to "resources: owner read via group";
+alter policy "resources: owner write via workspace while active" on resources rename to "resources: owner write via group while active";
+alter policy "resources: owner update via workspace while active" on resources rename to "resources: owner update via group while active";
+alter policy "resources: owner delete via workspace while active" on resources rename to "resources: owner delete via group while active";
 
 alter trigger workspaces_set_updated_at on groups rename to groups_set_updated_at;
 
