@@ -33,7 +33,16 @@ export async function ensureDashboardTab(windowId: number) {
     url: DASHBOARD_URL,
     windowId,
   });
-  if (existing) return;
+  if (existing) {
+    // Re-pin on every sync, not just at creation: pinning is also how a tab
+    // gets kicked out of a native tab group (Chrome unpins a tab when it
+    // joins one), so this doubles as "never let the dashboard tab end up
+    // grouped" with no separate group-membership check needed.
+    if (!existing.pinned && existing.id !== undefined) {
+      await browser.tabs.update(existing.id, { pinned: true });
+    }
+    return;
+  }
   await browser.tabs.create({
     windowId,
     url: DASHBOARD_URL,

@@ -1,6 +1,6 @@
 import { setup } from "xstate";
 import { getWindowBindingMap } from "./session";
-import { snapshotTabsWithIds } from "./tabs";
+import { ensureDashboardTab, snapshotTabsWithIds } from "./tabs";
 import { getGroups, updateGroup } from "./groups";
 import { getFolders, updateFolder } from "./folders";
 import type { Folder } from "./folders";
@@ -75,6 +75,12 @@ async function syncTabs(windowId: number) {
   const map = await getWindowBindingMap();
   const binding = map[windowId];
   if (!binding) return;
+
+  // Every bound window keeps its dashboard tab open and pinned — re-checked
+  // on every sync so a manual close or an unpin (e.g. from joining a native
+  // tab group) self-heals on the next tab event instead of staying broken
+  // until the user clicks the extension icon again.
+  await ensureDashboardTab(windowId);
 
   const { tabs, tabIds } = await snapshotTabsWithIds(windowId);
 
