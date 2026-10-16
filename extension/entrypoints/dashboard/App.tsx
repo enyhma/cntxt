@@ -19,6 +19,7 @@ import { syncMachine } from "@/utils/sync";
 import { getWindowBindingMap, type WindowBinding } from "@/utils/session";
 import { ensureLiveTabGroup, findOwnedGroupId } from "@/utils/tabGroups";
 import { syncTabs } from "@/utils/windowSyncMachine";
+import { activateGroupInProject } from "@/utils/groupActivation";
 import { addTabGroupRule } from "@/utils/tabGroupRules";
 import {
   type Settings,
@@ -695,9 +696,20 @@ function Dashboard(props: {
   // final syncTabs call (restoreMachine.ts's own pattern for the same
   // race) overwrites whatever a mid-sequence live-sync pass wrote, so the
   // blank tab lands on the new group, not the Project's own tab list.
-  async function revealNewGroupTab(group: Group, projectId: string) {
+  //
+  // Then hand off to activateGroupInProject (groupActivation.ts) to mark
+  // it "active" and demote whatever sibling was active before — this
+  // group is already expanded natively (collapsed: false above), and
+  // leaving it un-"active" locally breaks the invariant every other
+  // activation path maintains: background.ts's tabGroups.onUpdated
+  // listener reads "expanded but not active" as "the user just expanded a
+  // previously-collapsed group" and re-activates on the very next
+  // unrelated native update (e.g. renaming it), which re-pushes this
+  // group's own stored name back onto the native tab group and reverts
+  // whatever was just typed.
+  async function revealNewGroupTab(group: Group, project: Folder) {
     const windowId = myWindowId();
-    if (projectId !== currentId() || windowId === undefined) return;
+    if (project.id !== currentId() || windowId === undefined) return;
     const tab = await browser.tabs.create({ windowId });
     if (tab.id === undefined) return;
     await ensureLiveTabGroup(
@@ -712,13 +724,16 @@ function Dashboard(props: {
       [tab.id],
     );
     await syncTabs(windowId);
+    const refreshed = (await getGroups()).find((g) => g.id === group.id);
+    if (refreshed) await activateGroupInProject(windowId, project, refreshed);
   }
 
   async function handleAddGroupIn(folderId: string) {
     const group = await createGroup("Untitled group", []);
     await updateGroup(group.id, { folderId });
-    if (folders().find((f) => f.id === folderId)?.kind === "project") {
-      await revealNewGroupTab(group, folderId);
+    const folder = folders().find((f) => f.id === folderId);
+    if (folder?.kind === "project") {
+      await revealNewGroupTab(group, folder);
     }
     await refresh();
     showGroup(group.id);
@@ -1592,7 +1607,7 @@ function Dashboard(props: {
                   const order = groupsIn(project.id).length;
                   const group = await createGroup(name, []);
                   await updateGroup(group.id, { folderId: project.id, order });
-                  await revealNewGroupTab(group, project.id);
+                  await revealNewGroupTab(group, project);
                   await refresh();
                 }}
               />
