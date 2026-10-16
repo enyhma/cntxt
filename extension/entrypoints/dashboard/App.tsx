@@ -17,7 +17,8 @@ import { restoreMachine } from "@/utils/restoreMachine";
 import { groupSwapMachine } from "@/utils/groupSwapMachine";
 import { syncMachine } from "@/utils/sync";
 import { getWindowBindingMap, type WindowBinding } from "@/utils/session";
-import { findOwnedGroupId } from "@/utils/tabGroups";
+import { ensureLiveTabGroup, findOwnedGroupId } from "@/utils/tabGroups";
+import { syncTabs } from "@/utils/windowSyncMachine";
 import { addTabGroupRule } from "@/utils/tabGroupRules";
 import {
   type Settings,
@@ -687,9 +688,38 @@ function Dashboard(props: {
     await refresh();
     startRenameFolder(folder);
   }
+  // A brand-new group has no tabs yet, so there's nothing for
+  // ensureLiveTabGroup to group on its own — give it one blank tab so it
+  // actually shows up as a native tab group right away, if the Project it
+  // just landed in is the one this window is currently connected to. One
+  // final syncTabs call (restoreMachine.ts's own pattern for the same
+  // race) overwrites whatever a mid-sequence live-sync pass wrote, so the
+  // blank tab lands on the new group, not the Project's own tab list.
+  async function revealNewGroupTab(group: Group, projectId: string) {
+    const windowId = myWindowId();
+    if (projectId !== currentId() || windowId === undefined) return;
+    const tab = await browser.tabs.create({ windowId });
+    if (tab.id === undefined) return;
+    await ensureLiveTabGroup(
+      windowId,
+      {
+        table: "groups",
+        id: group.id,
+        name: group.name,
+        color: group.color as ColorKey | undefined,
+        collapsed: false,
+      },
+      [tab.id],
+    );
+    await syncTabs(windowId);
+  }
+
   async function handleAddGroupIn(folderId: string) {
     const group = await createGroup("Untitled group", []);
     await updateGroup(group.id, { folderId });
+    if (folders().find((f) => f.id === folderId)?.kind === "project") {
+      await revealNewGroupTab(group, folderId);
+    }
     await refresh();
     showGroup(group.id);
   }
@@ -1562,6 +1592,7 @@ function Dashboard(props: {
                   const order = groupsIn(project.id).length;
                   const group = await createGroup(name, []);
                   await updateGroup(group.id, { folderId: project.id, order });
+                  await revealNewGroupTab(group, project.id);
                   await refresh();
                 }}
               />
