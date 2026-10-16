@@ -11,7 +11,9 @@ import {
   deactivateGroup,
 } from "@/utils/groupActivation";
 import { getGroups } from "@/utils/groups";
+import type { Group } from "@/utils/groups";
 import { getFolders } from "@/utils/folders";
+import type { Folder } from "@/utils/folders";
 import { captureSession, pruneOldLocalSessions } from "@/utils/sessions";
 import { runAutoArchiveCheck } from "@/utils/autoArchive";
 
@@ -168,6 +170,26 @@ export default defineBackground(() => {
     await deactivateGroup(ctx.group, ctx.project);
   });
 
+  // True only when some entity's `name`/`color` actually differs between
+  // the two snapshots — the two fields syncTabs itself never touches. Used
+  // below to tell an actual dashboard-side rename/recolor apart from
+  // syncTabs's own `tabs`/`updatedAt`-only writes to the same storage key:
+  // without this check, resyncing on every "groups"/"folders" write would
+  // make syncTabs's own write retrigger itself via this very listener,
+  // forever (each write bumps `updatedAt`, which is itself a change).
+  function nameOrColorChanged<
+    T extends { id: string; name: string; color?: string },
+  >(oldList: T[] | undefined, newList: T[] | undefined): boolean {
+    if (!oldList || !newList) return false;
+    const oldById = new Map(oldList.map((e) => [e.id, e]));
+    return newList.some((e) => {
+      const old = oldById.get(e.id);
+      return (
+        old !== undefined && (old.name !== e.name || old.color !== e.color)
+      );
+    });
+  }
+
   // A dashboard-side rename/recolor of a Group/Project fires no tab event,
   // so without this the mirrored native group (utils/tabGroups.ts) would
   // only catch up whenever some unrelated tab event happens to occur next.
@@ -176,7 +198,16 @@ export default defineBackground(() => {
   // if this gets measurably expensive.
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (!("groups" in changes) && !("folders" in changes)) return;
+    const changed =
+      nameOrColorChanged(
+        changes.groups?.oldValue as Group[] | undefined,
+        changes.groups?.newValue as Group[] | undefined,
+      ) ||
+      nameOrColorChanged(
+        changes.folders?.oldValue as Folder[] | undefined,
+        changes.folders?.newValue as Folder[] | undefined,
+      );
+    if (!changed) return;
     for (const windowId of windowActors.keys()) notifyTabsChanged(windowId);
   });
 
