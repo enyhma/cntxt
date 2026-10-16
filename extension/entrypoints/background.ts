@@ -1,6 +1,12 @@
 import { type ActorRefFrom, createActor } from "xstate";
 import { ensureBindingForWindow } from "@/utils/attach";
-import { getWindowBindingMap, removeWindowBinding } from "@/utils/session";
+import {
+  clearWindowBindingMap,
+  getWindowBindingBackup,
+  getWindowBindingMap,
+  removeWindowBinding,
+  setWindowBinding,
+} from "@/utils/session";
 import { updateSettings } from "@/utils/settings";
 import { DASHBOARD_URL, ensureDashboardTab } from "@/utils/tabs";
 import { windowSyncMachine } from "@/utils/windowSyncMachine";
@@ -62,11 +68,34 @@ export default defineBackground(() => {
     windowActors.get(windowId)?.send({ type: "TABS_CHANGED" });
   }
 
-  // Service workers restart often (idle unload, browser startup); rehydrate
-  // the in-memory actor registry from the persisted window->binding map
-  // every time this callback runs so tab-sync survives a restart.
+  // Service workers restart often (idle unload, browser startup, or — the
+  // one that actually prompted this — a dev-server reload / crash
+  // recovery); rehydrate the in-memory actor registry from the persisted
+  // window->binding map every time this callback runs so tab-sync
+  // survives a restart.
   (async () => {
-    const map = await getWindowBindingMap();
+    let map = await getWindowBindingMap();
+    if (Object.keys(map).length === 0) {
+      // storage.session (unlike storage.local) is also wiped by a
+      // mid-session extension reload, even though every window id is
+      // still exactly what it was — recover from the storage.local
+      // backup (utils/session.ts) rather than treating every open
+      // window as freshly unbound. Each entry is checked against the
+      // browser's actual window list first, so a closed window just
+      // drops instead of attaching to whatever unrelated window
+      // happens to reuse its id later.
+      const backup = await getWindowBindingBackup();
+      for (const [idStr, binding] of Object.entries(backup)) {
+        const windowId = Number(idStr);
+        try {
+          await browser.windows.get(windowId);
+        } catch {
+          continue;
+        }
+        await setWindowBinding(windowId, binding);
+      }
+      map = await getWindowBindingMap();
+    }
     for (const windowId of Object.keys(map).map(Number)) {
       trackWindow(windowId);
     }
@@ -93,6 +122,17 @@ export default defineBackground(() => {
   })();
 
   browser.runtime.onStartup.addListener(async () => {
+    // A genuine browser restart, unlike the reload above, DOES invalidate
+    // every window id — Chrome can (and does) reuse small ids after a
+    // relaunch. Wipe first so this pass always rebuilds every binding
+    // fresh via ensureBindingForWindow, regardless of whatever the boot
+    // rehydration above already restored from the storage.local backup.
+    // ponytail: these two async passes aren't mutually locked, so a
+    // backup-restore write that happens to land after this wipe could in
+    // theory still slip a stale id-collided entry back in — accepted as a
+    // rare, self-correcting race (the next tab event re-syncs the right
+    // target anyway) rather than adding real cross-task coordination for it.
+    await clearWindowBindingMap();
     const windows = await browser.windows.getAll({ windowTypes: ["normal"] });
     for (const win of windows) {
       if (win.id === undefined) continue;
