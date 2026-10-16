@@ -104,7 +104,7 @@ export function isMirroring(windowId: number): boolean {
 // it must never take down the sync this is called from.
 export async function ensureLiveTabGroup(
   windowId: number,
-  target: GroupOwner & { name: string; color?: ColorKey },
+  target: GroupOwner & { name: string; color?: ColorKey; collapsed?: boolean },
   tabIds: number[],
 ): Promise<void> {
   if (!groupingSupported() || tabIds.length === 0) return;
@@ -136,6 +136,9 @@ export async function ensureLiveTabGroup(
       await browser.tabGroups.update(newGroupId, {
         title: target.name,
         ...(target.color ? { color: COLOR_TO_NATIVE[target.color] } : {}),
+        ...(target.collapsed !== undefined
+          ? { collapsed: target.collapsed }
+          : {}),
       });
     }
   } catch (e) {

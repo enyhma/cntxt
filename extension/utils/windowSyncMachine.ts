@@ -1,11 +1,16 @@
 import { setup } from "xstate";
 import { getWindowBindingMap } from "./session";
-import { ensureDashboardTab, snapshotTabsWithIds } from "./tabs";
+import {
+  ensureDashboardTab,
+  snapshotTabsWithIds,
+  snapshotTabsByGroup,
+} from "./tabs";
 import { getGroups, updateGroup } from "./groups";
+import type { Group, GroupTab } from "./groups";
 import { getFolders, updateFolder } from "./folders";
 import type { Folder } from "./folders";
-import { resolveProjectLiveTarget } from "./projectLiveTabs";
-import { ensureLiveTabGroup } from "./tabGroups";
+import { liveChildGroups } from "./projectLiveTabs";
+import { ensureLiveTabGroup, getTabGroupOwners } from "./tabGroups";
 import {
   getEnabledAutomationsFor,
   matchesTrigger,
@@ -68,10 +73,70 @@ async function runEmptyTabsAutomations(
   }
 }
 
+// Splits a Project-bound window's currently-open tabs between the Project's
+// own (ungrouped) tabs and each live child Group's own tabs. Native
+// tab-group ownership (utils/tabGroups.ts's tabGroupOwners map) is the
+// primary signal — same one captureGroups.ts's reverse capture already
+// trusts — but it depends on tabs.group() having actually succeeded, which
+// isn't guaranteed (no tabGroups support, or simply hasn't run yet this
+// instant). Falling back to URL identity against each live group's own
+// last-known tabs (same identity rule as everywhere else tab sync uses,
+// see groups.ts's GroupTab comment) means a group's tabs still land in the
+// right bucket even when native grouping can't be trusted. Shared with
+// utils/sessions.ts's captureSession, which needs the same split for its
+// per-window session legs.
+export async function partitionProjectWindowTabs(
+  windowId: number,
+  projectId: string,
+  groups: Group[],
+): Promise<{
+  projectTabs: GroupTab[];
+  groupTabs: Map<string, { tabs: GroupTab[]; tabIds: number[] }>;
+}> {
+  const rows = await snapshotTabsByGroup(windowId);
+  const owners = await getTabGroupOwners();
+  const live = liveChildGroups(projectId, groups);
+  const liveIds = new Set(live.map((g) => g.id));
+
+  const urlOwner = new Map<string, string>();
+  for (const g of live) {
+    for (const t of g.tabs) {
+      if (!urlOwner.has(t.url)) urlOwner.set(t.url, g.id);
+    }
+  }
+
+  const projectTabs: GroupTab[] = [];
+  const groupTabs = new Map<string, { tabs: GroupTab[]; tabIds: number[] }>();
+
+  for (const row of rows) {
+    const nativeOwner = row.groupId !== -1 ? owners[row.groupId] : undefined;
+    const ownerId =
+      nativeOwner?.table === "groups" && liveIds.has(nativeOwner.id)
+        ? nativeOwner.id
+        : urlOwner.get(row.url);
+
+    if (ownerId) {
+      const entry = groupTabs.get(ownerId) ?? { tabs: [], tabIds: [] };
+      entry.tabs.push({ url: row.url, title: row.title });
+      entry.tabIds.push(row.id);
+      groupTabs.set(ownerId, entry);
+    } else {
+      projectTabs.push({ url: row.url, title: row.title });
+    }
+  }
+
+  return { projectTabs, groupTabs };
+}
+
 // Each Group/Project tab list is a plain snapshot now — no per-tab metadata
 // (like the old phaseId tag) survives a resync, so there's nothing to merge
-// by URL, just write the fresh list straight through.
-async function syncTabs(windowId: number) {
+// by URL, just write the fresh list straight through. Exported so
+// restoreMachine.ts can run one authoritative pass right after it finishes
+// opening a Project's own tabs and every live child Group's — guaranteeing
+// the final persisted state is correct even if a live-sync pass triggered
+// by an intermediate tabs.onCreated mid-sequence saw a partially-opened
+// window (tabOps.ts's openMissingTabs awaits each tab create in turn).
+export async function syncTabs(windowId: number) {
   const map = await getWindowBindingMap();
   const binding = map[windowId];
   if (!binding) return;
@@ -110,11 +175,20 @@ async function syncTabs(windowId: number) {
   const project = (await getFolders()).find((f) => f.id === binding.projectId);
   if (!project) return;
 
-  const target = resolveProjectLiveTarget(project);
-  if (target.table === "groups") {
-    await updateGroup(target.id, { tabs });
-    const group = (await getGroups()).find((q) => q.id === target.id);
-    if (group) {
+  const groups = await getGroups();
+  const live = liveChildGroups(project.id, groups);
+  const { projectTabs, groupTabs } = await partitionProjectWindowTabs(
+    windowId,
+    project.id,
+    groups,
+  );
+
+  await updateFolder(project.id, { tabs: projectTabs });
+
+  for (const group of live) {
+    const entry = groupTabs.get(group.id);
+    if (entry) {
+      await updateGroup(group.id, { tabs: entry.tabs });
       await ensureLiveTabGroup(
         windowId,
         {
@@ -122,27 +196,21 @@ async function syncTabs(windowId: number) {
           id: group.id,
           name: group.name,
           color: group.color as ColorKey | undefined,
+          collapsed: group.status !== "active",
         },
-        tabIds,
+        entry.tabIds,
       );
-      if (tabs.length > 0) {
-        cancelEmptyTabsCheck(group.id);
-      } else if (group.status !== "done") {
-        scheduleEmptyTabsCheck(group.id, windowId, project);
-      }
+      cancelEmptyTabsCheck(group.id);
+    } else if (group.tabs.length === 0 && group.status !== "done") {
+      // No tab is attributable to this group right now. Only treat that as
+      // confirmed-empty when its own stored tabs were already empty —
+      // otherwise this is either a mid-open race (restoreMachine is still
+      // partway through opening several groups' tabs at once, so this
+      // group's just haven't landed yet) or, lacking tabGroups support, an
+      // unresolvable "can't tell" state. Either way, writing tabs:[] here
+      // would destroy the one record of what to reopen, so leave it alone.
+      scheduleEmptyTabsCheck(group.id, windowId, project);
     }
-  } else {
-    await updateFolder(target.id, { tabs });
-    await ensureLiveTabGroup(
-      windowId,
-      {
-        table: "folders",
-        id: project.id,
-        name: project.name,
-        color: project.color as ColorKey | undefined,
-      },
-      tabIds,
-    );
   }
 }
 

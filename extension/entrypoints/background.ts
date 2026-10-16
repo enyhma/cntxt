@@ -5,8 +5,30 @@ import { updateSettings } from "@/utils/settings";
 import { DASHBOARD_URL, ensureDashboardTab } from "@/utils/tabs";
 import { windowSyncMachine } from "@/utils/windowSyncMachine";
 import { scheduleCaptureCheck } from "@/utils/captureGroups";
+import { getTabGroupOwners, removeTabGroupOwner } from "@/utils/tabGroups";
+import {
+  activateGroupInProject,
+  deactivateGroup,
+} from "@/utils/groupActivation";
+import { getGroups } from "@/utils/groups";
+import { getFolders } from "@/utils/folders";
 import { captureSession, pruneOldLocalSessions } from "@/utils/sessions";
 import { runAutoArchiveCheck } from "@/utils/autoArchive";
+
+// A native tab group the user just expanded/removed, resolved back to the
+// nested Group entity + its parent Project it mirrors (utils/tabGroups.ts) —
+// shared by both new tabGroups listeners below, which only ever act on a
+// "groups"-table owner (a mirrored Project tab group, which has no
+// activation concept, is ignored).
+async function ownedGroupContext(nativeGroupId: number) {
+  const owner = (await getTabGroupOwners())[nativeGroupId];
+  if (owner?.table !== "groups") return null;
+  const group = (await getGroups()).find((g) => g.id === owner.id);
+  if (!group?.folderId) return null;
+  const project = (await getFolders()).find((f) => f.id === group.folderId);
+  if (!project) return null;
+  return { group, project };
+}
 
 const SESSION_ALARM_NAME = "cntxt-session-capture";
 const SESSION_CAPTURE_INTERVAL_MINUTES = 15;
@@ -122,6 +144,29 @@ export default defineBackground(() => {
   browser.tabs.onMoved.addListener((_tabId, info) =>
     notifyTabsChanged(info.windowId),
   );
+
+  // The user expanding a nested Group's collapsed native tab group is how
+  // it gets activated outside the dashboard (see utils/groupActivation.ts).
+  // Collapsing is deliberately not wired to anything — only closing all of
+  // a group's tabs (onRemoved, below) deactivates it.
+  browser.tabGroups?.onUpdated.addListener(async (group) => {
+    if (group.collapsed) return;
+    const ctx = await ownedGroupContext(group.id);
+    if (!ctx || ctx.group.status === "active") return;
+    await activateGroupInProject(group.windowId, ctx.project, ctx.group);
+  });
+
+  // Chrome removes a native tab group automatically once its last tab
+  // closes — that's the browser-side signal that a nested Group's tabs got
+  // closed directly (not via the dashboard's "Complete group"), so it
+  // should drop back to "pending" rather than staying "active" with
+  // nothing open.
+  browser.tabGroups?.onRemoved.addListener(async (group) => {
+    const ctx = await ownedGroupContext(group.id);
+    await removeTabGroupOwner(group.id);
+    if (!ctx) return;
+    await deactivateGroup(ctx.group, ctx.project);
+  });
 
   // A dashboard-side rename/recolor of a Group/Project fires no tab event,
   // so without this the mirrored native group (utils/tabGroups.ts) would

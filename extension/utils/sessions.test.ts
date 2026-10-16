@@ -16,7 +16,7 @@ vi.mock("./supabase", () => ({ supabase: { from, rpc } }));
 
 const { captureSession, getSessions, pruneOldLocalSessions, restoreSession } =
   await import("./sessions");
-const { createGroup, getGroups } = await import("./groups");
+const { createGroup, getGroups, updateGroup } = await import("./groups");
 const { createFolder, updateFolder } = await import("./folders");
 const { getWindowBindingMap } = await import("./session");
 
@@ -94,25 +94,40 @@ describe("captureSession", () => {
     ]);
   });
 
-  it("captures a project-bound window with an active group as a groups leg", async () => {
+  it("captures a project-bound window with a live child group as both a folders leg and a groups leg", async () => {
     const win = (await browser.windows.create({ focused: true }))!;
     const project = await createFolder("Project", null, "project");
-    const group = await createGroup("Active child", []);
+    // Pre-declared like restoreMachine would have left it after opening —
+    // fakeBrowser doesn't implement tabs.group(), so URL identity against
+    // the group's own last-known tabs is what attributes the open tab
+    // below to the group instead of the project (see
+    // windowSyncMachine.ts's partitionProjectWindowTabs).
+    const group = await createGroup("Active child", [
+      { url: "https://a.example/", title: "" },
+    ]);
+    await updateGroup(group.id, { folderId: project.id, status: "active" });
     await updateFolder(project.id, { activeGroupId: group.id });
     await setWindowBinding(win.id!, {
       kind: "project",
       projectId: project.id,
     });
+    await browser.tabs.create({ windowId: win.id, url: "https://a.example/" });
 
     await captureSession();
 
     const sessions = await getSessions();
     expect(sessions[0]!.windows).toEqual([
       {
+        entityTable: "folders",
+        entityId: project.id,
+        entityName: "Project",
+        tabs: [],
+      },
+      {
         entityTable: "groups",
         entityId: group.id,
         entityName: "Active child",
-        tabs: [],
+        tabs: [{ url: "https://a.example/", title: "" }],
       },
     ]);
   });

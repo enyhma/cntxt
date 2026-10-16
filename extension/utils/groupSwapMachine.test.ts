@@ -26,9 +26,10 @@ async function groupById(id: string) {
 }
 
 /**
- * A Project with three sibling groups (g1 active & open in the window, g2
- * and g3 pending) — mirrors "only the active sibling's tabs are open right
- * now".
+ * A Project with three sibling groups (g1 active, g2 and g3 pending) and
+ * every one of their own tabs already open in the window — mirrors what
+ * restoreMachine's openBindingTabs does on connect: every live sibling's
+ * tabs open at once, not just the active one's.
  */
 async function setUpProjectWithSiblings() {
   const win = (await browser.windows.create({ focused: true }))!;
@@ -66,6 +67,11 @@ async function setUpProjectWithSiblings() {
     windowId: win.id,
     url: "https://research.example/",
   });
+  await browser.tabs.create({
+    windowId: win.id,
+    url: "https://draft.example/",
+  });
+  await browser.tabs.create({ windowId: win.id, url: "https://qa.example/" });
 
   const freshProject = (await getFolders()).find((f) => f.id === project.id)!;
   return {
@@ -78,7 +84,7 @@ async function setUpProjectWithSiblings() {
 }
 
 describe("groupSwapMachine", () => {
-  it("ACTIVATE_GROUP closes everything open and swaps to the target group's own tabs", async () => {
+  it("ACTIVATE_GROUP activates the target group without closing any sibling's tabs", async () => {
     const { windowId, project, g1, g2 } = await setUpProjectWithSiblings();
 
     const actor = createActor(groupSwapMachine).start();
@@ -86,7 +92,11 @@ describe("groupSwapMachine", () => {
     await waitFor(actor, (state) => state.matches("idle"));
     await flushAsyncWork();
 
-    expect(await openUrlsIn(windowId)).toEqual(["https://draft.example/"]);
+    expect(await openUrlsIn(windowId)).toEqual([
+      "https://research.example/",
+      "https://draft.example/",
+      "https://qa.example/",
+    ]);
 
     const updatedProject = (await getFolders()).find(
       (f) => f.id === project.id,
@@ -96,7 +106,7 @@ describe("groupSwapMachine", () => {
     expect((await groupById(g1.id)).status).toBe("pending");
   });
 
-  it("COMPLETE_GROUP closes its tabs (keeping the record) and auto-advances to the next pending sibling by order", async () => {
+  it("COMPLETE_GROUP closes only its own tabs (keeping the record) and auto-advances to the next pending sibling by order", async () => {
     const { windowId, project, g1, g2 } = await setUpProjectWithSiblings();
 
     const actor = createActor(groupSwapMachine).start();
@@ -104,7 +114,10 @@ describe("groupSwapMachine", () => {
     await waitFor(actor, (state) => state.matches("idle"));
     await flushAsyncWork();
 
-    expect(await openUrlsIn(windowId)).toEqual(["https://draft.example/"]);
+    expect(await openUrlsIn(windowId)).toEqual([
+      "https://draft.example/",
+      "https://qa.example/",
+    ]);
 
     const completed = await groupById(g1.id);
     expect(completed.status).toBe("done");
@@ -128,16 +141,24 @@ describe("groupSwapMachine", () => {
     await waitFor(actor, (state) => state.matches("idle"));
     await flushAsyncWork();
 
-    expect(await openUrlsIn(windowId)).toEqual([]);
+    expect(await openUrlsIn(windowId)).not.toContain(
+      "https://research.example/",
+    );
     const updatedProject = (await getFolders()).find(
       (f) => f.id === project.id,
     );
     expect(updatedProject?.activeGroupId).toBeUndefined();
   });
 
-  it("ACTIVATE_GROUP reopens a done group the same way as a pending one", async () => {
+  it("ACTIVATE_GROUP reopens a done group's tabs if they aren't already open", async () => {
     const { windowId, project, g1, g2 } = await setUpProjectWithSiblings();
     await updateGroup(g2.id, { status: "done" });
+    // Simulate the normal outcome of a prior Complete group — its tabs are
+    // actually closed, unlike setup's blanket "everything open".
+    const draftTab = (await browser.tabs.query({ windowId })).find(
+      (t) => t.url === "https://draft.example/",
+    );
+    await browser.tabs.remove(draftTab!.id!);
     const doneGroup = await groupById(g2.id);
 
     const actor = createActor(groupSwapMachine).start();
@@ -145,7 +166,7 @@ describe("groupSwapMachine", () => {
     await waitFor(actor, (state) => state.matches("idle"));
     await flushAsyncWork();
 
-    expect(await openUrlsIn(windowId)).toEqual(["https://draft.example/"]);
+    expect(await openUrlsIn(windowId)).toContain("https://draft.example/");
     expect((await groupById(g2.id)).status).toBe("active");
     expect((await groupById(g1.id)).status).toBe("pending");
   });

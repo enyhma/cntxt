@@ -1,7 +1,7 @@
 import { archiveGroup, updateGroup } from "./groups";
 import type { Group } from "./groups";
 import type { Folder } from "./folders";
-import { advanceNextSibling } from "./groupSwapMachine";
+import { advanceNextSibling } from "./groupActivation";
 
 // The block registry is the one place a Group-automation block's behavior
 // lives — both the editor (packages/ui/src/AutomationsPanel.tsx, label/

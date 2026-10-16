@@ -167,17 +167,25 @@ type JumpTarget =
   | { kind: "project"; id: string }
   | { kind: "area"; id: string };
 
-// A Project's live tabs are either its own base tabs, or — once a child
-// Group has been swapped in via groupSwapMachine — that Group's tabs
-// instead. Mirrors utils/projectLiveTabs.ts's resolveProjectLiveTarget, but
-// as a pure read over already-loaded data rather than storage. Module-level
-// (not a Dashboard-local closure) so the global navbar's search can use it
-// too, without depending on Dashboard being mounted.
+// Every tab currently open for a Project: its own base tabs, plus every
+// live (pending or active, not done) child Group's own tabs — everything
+// that opens together when connecting to this Project. Mirrors
+// utils/projectLiveTabs.ts's liveChildGroups, but as a pure read over
+// already-loaded data rather than storage. Module-level (not a
+// Dashboard-local closure) so the global navbar's search can use it too,
+// without depending on Dashboard being mounted.
 function projectLiveTabs(project: Folder, groups: Group[]) {
-  if (project.activeGroupId) {
-    return groups.find((q) => q.id === project.activeGroupId)?.tabs ?? [];
-  }
-  return project.tabs ?? [];
+  const own = project.tabs ?? [];
+  const child = groups
+    .filter(
+      (g) =>
+        g.folderId === project.id &&
+        !g.deletedAt &&
+        !g.archivedAt &&
+        g.status !== "done",
+    )
+    .flatMap((g) => g.tabs);
+  return [...own, ...child];
 }
 function projectLiveTabCount(project: Folder, groups: Group[]) {
   return projectLiveTabs(project, groups).length;
@@ -544,7 +552,10 @@ function Dashboard(props: {
     showGroup(group.id);
   }
 
-  const rootFolders = () => folders().filter((f) => !f.parentId);
+  // Areas only — a standalone/ad-hoc Project also has parentId null (see
+  // attach.ts), so filtering on parentId alone would double-list it here
+  // *and* again via standaloneProjects() below, everywhere this is used.
+  const rootFolders = () => folders().filter((f) => f.kind === "area");
   const childFolders = (parentId: string) =>
     folders().filter((f) => f.parentId === parentId);
   const groupsIn = (folderId: string) =>
@@ -1076,7 +1087,7 @@ function Dashboard(props: {
           <nav class="flex w-60 shrink-0 flex-col border-r border-surface-alt2 bg-surface-alt1">
             <div class="flex h-11 shrink-0 items-center gap-2 border-b border-surface-alt2 pr-2.5 pl-3.5">
               <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
-                GROUPS
+                AREAS
               </span>
               <button
                 type="button"

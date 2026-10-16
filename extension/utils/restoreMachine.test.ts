@@ -4,7 +4,7 @@ import { fakeBrowser } from "wxt/testing/fake-browser";
 import { restoreMachine } from "./restoreMachine";
 import { getWindowBindingMap, setWindowBinding } from "./session";
 import { DASHBOARD_URL } from "./tabs";
-import { createGroup, getGroups } from "./groups";
+import { createGroup, getGroups, updateGroup } from "./groups";
 import { createFolder } from "./folders";
 import { windowSyncMachine } from "./windowSyncMachine";
 
@@ -146,10 +146,51 @@ describe("restoreMachine", () => {
     const map = await getWindowBindingMap();
     expect(map[win.id!]).toEqual({ kind: "project", projectId: project.id });
 
-    const openUrls = (await browser.tabs.query({ windowId: win.id })).map(
-      (t) => t.url,
-    );
+    const openUrls = (await browser.tabs.query({ windowId: win.id }))
+      .map((t) => t.url)
+      .filter((url) => url !== DASHBOARD_URL);
     expect(openUrls).toEqual(["https://p1.example/"]);
+  });
+
+  it("restoring a project also opens every live child group's own tabs, done ones excluded", async () => {
+    const win = (await browser.windows.create({ focused: true }))!;
+    const project = await createFolder("Untitled Project", null, "project");
+    const projectWithTabs = {
+      ...project,
+      tabs: [{ url: "https://p1.example/", title: "P1" }],
+    };
+    const pending = await createGroup("Pending", [
+      { url: "https://pending.example/", title: "Pending" },
+    ]);
+    await updateGroup(pending.id, { folderId: project.id, status: "pending" });
+    const active = await createGroup("Active", [
+      { url: "https://active.example/", title: "Active" },
+    ]);
+    await updateGroup(active.id, { folderId: project.id, status: "active" });
+    const done = await createGroup("Done", [
+      { url: "https://done.example/", title: "Done" },
+    ]);
+    await updateGroup(done.id, { folderId: project.id, status: "done" });
+
+    const actor = createActor(restoreMachine).start();
+    actor.send({
+      type: "RESTORE",
+      target: { kind: "project", project: projectWithTabs },
+    });
+    await waitFor(actor, (state) => state.matches("idle"));
+    await flushAsyncWork();
+
+    const openUrls = (await browser.tabs.query({ windowId: win.id }))
+      .map((t) => t.url)
+      .filter((url) => url !== DASHBOARD_URL);
+    expect(openUrls).toEqual(
+      expect.arrayContaining([
+        "https://p1.example/",
+        "https://pending.example/",
+        "https://active.example/",
+      ]),
+    );
+    expect(openUrls).not.toContain("https://done.example/");
   });
 
   it("COMPLETE_GROUP detaches and closes a standalone group's tabs while marking it done", async () => {

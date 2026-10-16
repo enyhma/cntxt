@@ -28,6 +28,27 @@ export async function snapshotTabsWithIds(
   };
 }
 
+// Another sibling of snapshotTabs, this time carrying each tab's native
+// tab-group id — needed by windowSyncMachine.ts to tell a Project's own
+// (ungrouped) tabs apart from a child Group's (natively grouped) ones.
+// `groupId` is `-1` (browser.tabGroups.TAB_GROUP_ID_NONE) for an ungrouped
+// tab.
+export async function snapshotTabsByGroup(
+  windowId: number,
+): Promise<{ id: number; url: string; title: string; groupId: number }[]> {
+  const tabs = (await browser.tabs.query({ windowId })).filter(
+    (t) => t.url !== DASHBOARD_URL,
+  );
+  return tabs
+    .filter((t): t is typeof t & { id: number } => t.id !== undefined)
+    .map((t) => ({
+      id: t.id,
+      url: t.url ?? "",
+      title: t.title ?? "",
+      groupId: t.groupId ?? -1,
+    }));
+}
+
 export async function ensureDashboardTab(windowId: number) {
   const [existing] = await browser.tabs.query({
     url: DASHBOARD_URL,

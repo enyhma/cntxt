@@ -2,7 +2,8 @@ import { supabase } from "./supabase";
 import { getWindowBindingMap, setWindowBinding } from "./session";
 import { getGroups, updateGroup, type GroupTab } from "./groups";
 import { getFolders } from "./folders";
-import { resolveProjectLiveTarget } from "./projectLiveTabs";
+import { liveChildGroups } from "./projectLiveTabs";
+import { partitionProjectWindowTabs } from "./windowSyncMachine";
 import { snapshotTabs } from "./tabs";
 import { openMissingTabs } from "./tabOps";
 
@@ -106,11 +107,10 @@ export async function captureSession(): Promise<void> {
     }
     if (!win) continue;
 
-    const tabs = await snapshotTabs(windowId);
-
     if (binding.kind === "group") {
       const group = groups.find((q) => q.id === binding.groupId);
       if (!group) continue;
+      const tabs = await snapshotTabs(windowId);
       legs.push({
         entityTable: "groups",
         entityId: group.id,
@@ -123,24 +123,32 @@ export async function captureSession(): Promise<void> {
 
     const project = folders.find((f) => f.id === binding.projectId);
     if (!project) continue;
-    const target = resolveProjectLiveTarget(project);
-    if (target.table === "groups") {
-      const group = groups.find((q) => q.id === target.id);
-      if (!group) continue;
+
+    // A Project window logs one leg for its own tabs, plus one leg per live
+    // child Group that currently has tabs open — mirrors
+    // windowSyncMachine.ts's own partition of the same window, reusing its
+    // helper rather than re-deriving ownership another way.
+    const { projectTabs, groupTabs } = await partitionProjectWindowTabs(
+      windowId,
+      project.id,
+      groups,
+    );
+    legs.push({
+      entityTable: "folders",
+      entityId: project.id,
+      entityName: project.name,
+      tabs: projectTabs,
+    });
+    for (const group of liveChildGroups(project.id, groups)) {
+      const entry = groupTabs.get(group.id);
+      if (!entry || entry.tabs.length === 0) continue;
       legs.push({
         entityTable: "groups",
         entityId: group.id,
         entityName: group.name,
-        tabs,
+        tabs: entry.tabs,
       });
       await updateGroup(group.id, { lastSeenAt: Date.now() });
-    } else {
-      legs.push({
-        entityTable: "folders",
-        entityId: project.id,
-        entityName: project.name,
-        tabs,
-      });
     }
   }
 

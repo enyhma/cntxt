@@ -17,15 +17,22 @@ export async function closeMatchingTabs(
   if (ids.length > 0) await browser.tabs.remove(ids);
 }
 
+// Returns the id of every tab in `tabs` once open — pre-existing or just
+// created — so a caller can hand them straight to ensureLiveTabGroup
+// (utils/tabGroups.ts) without a second query.
 export async function openMissingTabs(
   windowId: number,
   tabs: GroupTab[],
-): Promise<void> {
+): Promise<number[]> {
   const open = await browser.tabs.query({ windowId });
-  const openUrls = new Set(open.map((t) => t.url));
+  const byUrl = new Map(open.map((t) => [t.url, t.id]));
+  const ids: number[] = [];
   for (const tab of tabs) {
-    if (!openUrls.has(tab.url)) {
-      await browser.tabs.create({ windowId, url: tab.url });
+    let id = byUrl.get(tab.url);
+    if (id === undefined) {
+      id = (await browser.tabs.create({ windowId, url: tab.url })).id;
     }
+    if (id !== undefined) ids.push(id);
   }
+  return ids;
 }

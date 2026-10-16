@@ -1,9 +1,9 @@
 import { assign, fromPromise, setup } from "xstate";
-import { closeMatchingTabs, openMissingTabs } from "./tabOps";
-import { getGroups, updateGroup } from "./groups";
+import { closeMatchingTabs } from "./tabOps";
+import { updateGroup } from "./groups";
 import type { Group } from "./groups";
-import { updateFolder } from "./folders";
 import type { Folder } from "./folders";
+import { activateGroupInProject, advanceNextSibling } from "./groupActivation";
 
 type Mode = "activate" | "complete";
 
@@ -18,87 +18,50 @@ type Event =
   | { type: "ACTIVATE_GROUP"; project: Folder; group: Group }
   | { type: "COMPLETE_GROUP"; project: Folder; group: Group };
 
-async function closeForEvent(): Promise<number | null> {
+async function currentWindowId(): Promise<number | null> {
   const win = await browser.windows.getCurrent();
-  if (win.id === undefined) return null;
-  await closeMatchingTabs(win.id, () => true);
-  return win.id;
+  return win.id ?? null;
 }
 
-// Finds the next `pending` sibling by `order` and swaps it in (opens its
-// tabs, activates it), or clears `activeGroupId` if there's none. Shared
-// by the explicit COMPLETE_GROUP path below and by the automation
-// engine's "advanceNextSibling" action block (utils/automationBlocks.ts),
-// which fires this same effect from a passive trigger instead of a user
-// click.
-export async function advanceNextSibling(
-  project: Folder,
-  group: Group,
-  windowId: number | null,
-): Promise<void> {
-  const siblings = (await getGroups()).filter((g) => g.folderId === project.id);
-  const next = siblings
-    .filter((s) => s.id !== group.id && s.status === "pending")
-    .sort((a, b) => a.order - b.order)[0];
-  if (next) {
-    if (windowId !== null) {
-      await openMissingTabs(windowId, next.tabs);
-    }
-    await updateFolder(project.id, { activeGroupId: next.id });
-    await updateGroup(next.id, { status: "active" });
-  } else {
-    await updateFolder(project.id, { activeGroupId: undefined });
-  }
-}
-
-async function openAndPersist(input: {
+async function run(input: {
   windowId: number | null;
   mode: Mode;
   project: Folder;
   group: Group;
 }) {
   if (input.mode === "activate") {
-    const siblings = (await getGroups()).filter(
-      (g) => g.folderId === input.project.id,
-    );
-    if (input.windowId !== null) {
-      await openMissingTabs(input.windowId, input.group.tabs);
-    }
-    await updateFolder(input.project.id, { activeGroupId: input.group.id });
-    await updateGroup(input.group.id, { status: "active" });
-    for (const sib of siblings) {
-      if (sib.id !== input.group.id && sib.status === "active") {
-        await updateGroup(sib.id, { status: "pending" });
-      }
-    }
+    await activateGroupInProject(input.windowId, input.project, input.group);
     return;
   }
 
-  // Complete: close its tabs and mark it done — `group.tabs` is NEVER
-  // cleared, so this stays a full record, reopenable later via another
-  // ACTIVATE_GROUP (which works identically regardless of prior status).
-  // Then auto-advance to the next pending sibling by order, if any.
+  // Complete: close only this group's own tabs (never clearing
+  // `group.tabs` itself, so it stays a full record, reopenable later via
+  // another ACTIVATE_GROUP) — every other live sibling's tabs are
+  // untouched, unlike the old whole-window close. Then auto-advance to the
+  // next pending sibling by order, if any.
+  if (input.windowId !== null) {
+    const urls = new Set(input.group.tabs.map((t) => t.url));
+    await closeMatchingTabs(input.windowId, (tab) => urls.has(tab.url ?? ""));
+  }
   await updateGroup(input.group.id, { status: "done" });
   await advanceNextSibling(input.project, input.group, input.windowId);
 }
 
 /**
- * Swaps which child Group of a Project has its tabs live in the Project's
- * window: activating one closes whatever's currently open and opens that
- * group's own full tab list; completing one closes its tabs (never
- * clearing them) and auto-advances to the next pending sibling by order.
- * Only `Folder.activeGroupId` ever changes here — the window's
- * WindowBinding stays pointed at the Project throughout, unlike
- * restoreMachine's RESTORE/DISCONNECT, which do change it. Shares
- * closingTabs/openingTabs shape and tabOps.ts helpers with restoreMachine,
- * but close/open here is always everything-at-once (no detach/reattach),
- * so it stays its own small machine rather than branchy shared context.
+ * Activates or completes a child Group of a Project. Every live sibling's
+ * tabs are already open in the window (opened once at connect time by
+ * restoreMachine, as a collapsed native tab group) — activating just
+ * expands the target's native group and collapses whatever was previously
+ * active, no window-wide close/reopen; completing closes only the one
+ * group's own tabs. Only `Group.status`/`Folder.activeGroupId` change
+ * here — the window's WindowBinding stays pointed at the Project
+ * throughout, unlike restoreMachine's RESTORE/DISCONNECT.
  */
 export const groupSwapMachine = setup({
   types: {} as { context: Context; events: Event },
   actors: {
-    closeForEvent: fromPromise(() => closeForEvent()),
-    openAndPersist: fromPromise(
+    resolveWindowId: fromPromise(() => currentWindowId()),
+    run: fromPromise(
       ({
         input,
       }: {
@@ -108,7 +71,7 @@ export const groupSwapMachine = setup({
           project: Folder;
           group: Group;
         };
-      }) => openAndPersist(input),
+      }) => run(input),
     ),
   },
 }).createMachine({
@@ -118,7 +81,7 @@ export const groupSwapMachine = setup({
     idle: {
       on: {
         ACTIVATE_GROUP: {
-          target: "closingTabs",
+          target: "resolvingWindow",
           actions: assign(({ event }) => ({
             project: event.project,
             group: event.group,
@@ -126,7 +89,7 @@ export const groupSwapMachine = setup({
           })),
         },
         COMPLETE_GROUP: {
-          target: "closingTabs",
+          target: "resolvingWindow",
           actions: assign(({ event }) => ({
             project: event.project,
             group: event.group,
@@ -135,18 +98,18 @@ export const groupSwapMachine = setup({
         },
       },
     },
-    closingTabs: {
+    resolvingWindow: {
       invoke: {
-        src: "closeForEvent",
+        src: "resolveWindowId",
         onDone: {
-          target: "openingTabs",
+          target: "running",
           actions: assign({ windowId: ({ event }) => event.output }),
         },
       },
     },
-    openingTabs: {
+    running: {
       invoke: {
-        src: "openAndPersist",
+        src: "run",
         input: ({ context }) => ({
           windowId: context.windowId,
           mode: context.mode!,

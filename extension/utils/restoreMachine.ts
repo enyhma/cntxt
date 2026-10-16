@@ -1,10 +1,13 @@
 import { assign, fromPromise, setup } from "xstate";
 import { removeWindowBinding, setWindowBinding } from "./session";
 import { closeMatchingTabs, openMissingTabs } from "./tabOps";
-import { resolveProjectLiveTarget } from "./projectLiveTabs";
+import { liveChildGroups } from "./projectLiveTabs";
+import { ensureLiveTabGroup } from "./tabGroups";
+import { syncTabs } from "./windowSyncMachine";
 import { getGroups, updateGroup } from "./groups";
 import type { Group } from "./groups";
 import type { Folder } from "./folders";
+import type { ColorKey } from "@cntxt/ui";
 
 type RestoreTarget =
   { kind: "project"; project: Folder } | { kind: "group"; group: Group };
@@ -61,16 +64,35 @@ async function openBindingTabs(input: {
     return;
   }
 
+  const project = input.target.project;
   await setWindowBinding(input.windowId, {
     kind: "project",
-    projectId: input.target.project.id,
+    projectId: project.id,
   });
-  const resolved = resolveProjectLiveTarget(input.target.project);
-  const tabs =
-    resolved.table === "groups"
-      ? ((await getGroups()).find((q) => q.id === resolved.id)?.tabs ?? [])
-      : (input.target.project.tabs ?? []);
-  await openMissingTabs(input.windowId, tabs);
+  await openMissingTabs(input.windowId, project.tabs ?? []);
+
+  const groups = await getGroups();
+  for (const group of liveChildGroups(project.id, groups)) {
+    const tabIds = await openMissingTabs(input.windowId, group.tabs);
+    if (tabIds.length === 0) continue;
+    await ensureLiveTabGroup(
+      input.windowId,
+      {
+        table: "groups",
+        id: group.id,
+        name: group.name,
+        color: group.color as ColorKey | undefined,
+        collapsed: group.status !== "active",
+      },
+      tabIds,
+    );
+  }
+
+  // One authoritative resync now that every open has actually completed —
+  // see windowSyncMachine.ts's syncTabs for why this matters: a live-sync
+  // pass triggered mid-loop by one of the tabs.onCreated events above could
+  // otherwise persist a partially-opened snapshot as the final state.
+  await syncTabs(input.windowId);
 }
 
 /**

@@ -84,10 +84,22 @@ describe("windowSyncMachine", () => {
     expect((await getGroups()).length).toBe(0);
   });
 
-  it("syncs a project-bound window with an active group into that group's tabs", async () => {
+  it("syncs a project-bound window with a live child group into that group's tabs", async () => {
     const win = (await browser.windows.create({ focused: true }))!;
     const project = await createFolder("Untitled Project", null, "project");
-    const group = await createGroup("Swapped in", []);
+    // Pre-declared like restoreMachine would have left it after opening —
+    // fakeBrowser doesn't implement tabs.group(), so URL identity against
+    // the group's own last-known tabs (windowSyncMachine.ts's
+    // partitionProjectWindowTabs fallback) is what attributes the tab
+    // below to the group instead of the project.
+    const group = await createGroup("Swapped in", [
+      { url: "https://a.example/", title: "" },
+    ]);
+    await updateGroup(group.id, {
+      folderId: project.id,
+      status: "active",
+      order: 0,
+    });
     await updateFolder(project.id, { activeGroupId: group.id });
     await setWindowBinding(win.id!, {
       kind: "project",
