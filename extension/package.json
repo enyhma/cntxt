@@ -16,6 +16,7 @@
     "zip:edge": "wxt zip -b edge",
     "compile": "tsc --noEmit",
     "test": "vitest run",
+    "e2e": "playwright test",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
@@ -29,6 +30,7 @@
     "xstate": "^5.32.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "^4.3.3",
     "@wxt-dev/module-solid": "^1.1.4",
     "daisyui": "^5.7.46",

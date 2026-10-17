@@ -1,6 +1,8 @@
 node_modules
 extension/.output
 extension/.wxt
+extension/test-results
+extension/playwright-report
 marketing/.astro
 marketing/dist
 marketing/tina/__generated__
