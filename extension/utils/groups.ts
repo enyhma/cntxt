@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { withStorageLock } from "./storageLock";
 
 // Identity across a resync is by URL (see windowSyncMachine.ts's syncTabs),
 // matching how the rest of this codebase already treats tab identity; a
@@ -83,6 +84,26 @@ async function setGroups(groups: Group[]) {
   await browser.storage.local.set({ [STORAGE_KEY]: groups });
 }
 
+// Every mutation below goes through this instead of its own
+// getGroups()+setGroups() pair, serialized per utils/storageLock.ts — two
+// concurrent mutators (e.g. a tabGroups.onUpdated handler and a routine
+// resync landing around the same time) would otherwise both read the same
+// snapshot and the second write could silently discard the first. Returning
+// `undefined` from `mutator` skips the write entirely (used by pull/purge
+// below, which only have something to persist when they actually changed
+// something).
+async function mutateGroups(
+  mutator: (groups: Group[]) => Group[] | undefined,
+): Promise<Group[]> {
+  return withStorageLock(STORAGE_KEY, async () => {
+    const current = await getGroups();
+    const next = mutator(current);
+    if (next === undefined) return current;
+    await setGroups(next);
+    return next;
+  });
+}
+
 export async function createGroup(
   name: string,
   tabs: GroupTab[],
@@ -95,15 +116,15 @@ export async function createGroup(
     updatedAt: Date.now(),
     order: 0,
   };
-  const groups = await getGroups();
-  await setGroups([...groups, group]);
+  await mutateGroups((groups) => [...groups, group]);
   registerGroup(group);
   return group;
 }
 
 async function setSyncStatus(id: string, syncStatus: SyncStatus) {
-  const groups = await getGroups();
-  await setGroups(groups.map((m) => (m.id === id ? { ...m, syncStatus } : m)));
+  await mutateGroups((groups) =>
+    groups.map((m) => (m.id === id ? { ...m, syncStatus } : m)),
+  );
 }
 
 // Best-effort: registers the group under the account's entitlement
@@ -178,38 +199,39 @@ export async function pullRemoteGroups(): Promise<number> {
   if (error) throw new Error(error.message);
   if (!data) return 0;
 
-  const local = await getGroups();
-  const localById = new Map(local.map((m) => [m.id, m]));
   let applied = 0;
-  const next = [...local];
+  await mutateGroups((local) => {
+    const localById = new Map(local.map((m) => [m.id, m]));
+    const next = [...local];
 
-  for (const row of data) {
-    const existing = localById.get(row.id);
-    const remote: Group = {
-      id: row.id,
-      name: row.name,
-      tabs: (row.tabs as GroupTab[] | null) ?? [],
-      createdAt: Date.parse(row.created_at),
-      updatedAt: Date.parse(row.updated_at),
-      deletedAt: row.deleted_at ? Date.parse(row.deleted_at) : undefined,
-      folderId: row.folder_id,
-      status: row.status ?? undefined,
-      order: row.order_index ?? 0,
-      archivedAt: row.archived_at ? Date.parse(row.archived_at) : undefined,
-      lastSeenAt: row.last_seen_at ? Date.parse(row.last_seen_at) : undefined,
-      syncStatus: "synced",
-    };
-    if (!existing) {
-      next.push(remote);
-      applied++;
-    } else if (remote.updatedAt > existing.updatedAt) {
-      const idx = next.findIndex((m) => m.id === row.id);
-      next[idx] = { ...remote, color: existing.color, icon: existing.icon };
-      applied++;
+    for (const row of data) {
+      const existing = localById.get(row.id);
+      const remote: Group = {
+        id: row.id,
+        name: row.name,
+        tabs: (row.tabs as GroupTab[] | null) ?? [],
+        createdAt: Date.parse(row.created_at),
+        updatedAt: Date.parse(row.updated_at),
+        deletedAt: row.deleted_at ? Date.parse(row.deleted_at) : undefined,
+        folderId: row.folder_id,
+        status: row.status ?? undefined,
+        order: row.order_index ?? 0,
+        archivedAt: row.archived_at ? Date.parse(row.archived_at) : undefined,
+        lastSeenAt: row.last_seen_at ? Date.parse(row.last_seen_at) : undefined,
+        syncStatus: "synced",
+      };
+      if (!existing) {
+        next.push(remote);
+        applied++;
+      } else if (remote.updatedAt > existing.updatedAt) {
+        const idx = next.findIndex((m) => m.id === row.id);
+        next[idx] = { ...remote, color: existing.color, icon: existing.icon };
+        applied++;
+      }
     }
-  }
 
-  if (applied > 0) await setGroups(next);
+    return applied > 0 ? next : undefined;
+  });
   return applied;
 }
 
@@ -224,11 +246,12 @@ export async function purgeExpiredLocalTrash(
   accessExpiresAt: string | null | undefined,
 ): Promise<void> {
   const cutoffMs = trashRetentionDays(accessExpiresAt) * 24 * 60 * 60 * 1000;
-  const local = await getGroups();
-  const kept = local.filter(
-    (m) => !m.deletedAt || Date.now() - m.deletedAt < cutoffMs,
-  );
-  if (kept.length !== local.length) await setGroups(kept);
+  await mutateGroups((local) => {
+    const kept = local.filter(
+      (m) => !m.deletedAt || Date.now() - m.deletedAt < cutoffMs,
+    );
+    return kept.length !== local.length ? kept : undefined;
+  });
 }
 
 // Pushes every locally-edited, already-synced group up to Supabase —
@@ -276,8 +299,7 @@ export async function pushDirtyGroups(
 
     const serverUpdatedAt = Date.parse(data.updated_at);
     next[m.id] = serverUpdatedAt;
-    const fresh = await getGroups();
-    await setGroups(
+    await mutateGroups((fresh) =>
       fresh.map((x) =>
         x.id === m.id ? { ...x, updatedAt: serverUpdatedAt } : x,
       ),
@@ -304,8 +326,7 @@ export async function updateGroup(
     >
   >,
 ) {
-  const groups = await getGroups();
-  await setGroups(
+  await mutateGroups((groups) =>
     groups.map((m) =>
       m.id === id ? { ...m, ...patch, updatedAt: Date.now() } : m,
     ),
@@ -317,8 +338,7 @@ export async function updateGroup(
 // round-trip. `updatedAt` bumps too, so pushDirtyGroups picks this up
 // like any other edit and propagates deletedAt to the server.
 export async function deleteGroup(id: string) {
-  const groups = await getGroups();
-  await setGroups(
+  await mutateGroups((groups) =>
     groups.map((m) =>
       m.id === id ? { ...m, deletedAt: Date.now(), updatedAt: Date.now() } : m,
     ),
@@ -326,8 +346,7 @@ export async function deleteGroup(id: string) {
 }
 
 export async function restoreGroup(id: string) {
-  const groups = await getGroups();
-  await setGroups(
+  await mutateGroups((groups) =>
     groups.map((m) =>
       m.id === id ? { ...m, deletedAt: undefined, updatedAt: Date.now() } : m,
     ),
@@ -337,8 +356,7 @@ export async function restoreGroup(id: string) {
 // "Hidden but kept" — unlike deleteGroup, never schedules removal and has
 // no retention countdown. See Group.archivedAt's own comment.
 export async function archiveGroup(id: string) {
-  const groups = await getGroups();
-  await setGroups(
+  await mutateGroups((groups) =>
     groups.map((m) =>
       m.id === id ? { ...m, archivedAt: Date.now(), updatedAt: Date.now() } : m,
     ),
@@ -346,8 +364,7 @@ export async function archiveGroup(id: string) {
 }
 
 export async function unarchiveGroup(id: string) {
-  const groups = await getGroups();
-  await setGroups(
+  await mutateGroups((groups) =>
     groups.map((m) =>
       m.id === id ? { ...m, archivedAt: undefined, updatedAt: Date.now() } : m,
     ),
@@ -360,7 +377,6 @@ export async function unarchiveGroup(id: string) {
 // style as registerGroup — offline or signed out just means the
 // server-side row is left for purge_trashed_groups to catch later).
 export async function permanentlyDeleteGroup(id: string) {
-  const groups = await getGroups();
-  await setGroups(groups.filter((m) => m.id !== id));
+  await mutateGroups((groups) => groups.filter((m) => m.id !== id));
   await supabase?.from("groups").delete().eq("id", id);
 }

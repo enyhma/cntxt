@@ -1,3 +1,5 @@
+import { withStorageLock } from "./storageLock";
+
 // Renamed from "windowWorkspaceMap" — this is a storage.session key, and
 // renaming it has no user-facing benefit (session storage is wiped on
 // browser restart anyway), but there's no wire-compat reason not to either.
@@ -46,19 +48,28 @@ async function persist(map: WindowBindingMap) {
   await browser.storage.local.set({ [BACKUP_KEY]: map });
 }
 
+// Serialized (utils/storageLock.ts) against every other mutation of this
+// same map — two windows closing/binding around the same moment (e.g. two
+// browser.windows.onRemoved firing close together) would otherwise race:
+// both read the same snapshot, and whichever persist() lands last silently
+// drops the other's change.
 export async function setWindowBinding(
   windowId: number,
   binding: WindowBinding,
 ) {
-  const map = await getWindowBindingMap();
-  map[windowId] = binding;
-  await persist(map);
+  await withStorageLock(STORAGE_KEY, async () => {
+    const map = await getWindowBindingMap();
+    map[windowId] = binding;
+    await persist(map);
+  });
 }
 
 export async function removeWindowBinding(windowId: number) {
-  const map = await getWindowBindingMap();
-  delete map[windowId];
-  await persist(map);
+  await withStorageLock(STORAGE_KEY, async () => {
+    const map = await getWindowBindingMap();
+    delete map[windowId];
+    await persist(map);
+  });
 }
 
 // Called only on a genuine browser restart (background.ts's `onStartup`)

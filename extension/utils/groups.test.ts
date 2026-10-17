@@ -324,6 +324,28 @@ describe("permanentlyDeleteGroup", () => {
   });
 });
 
+describe("concurrent mutations", () => {
+  it("doesn't lose either field when two updateGroup calls race", async () => {
+    // Regression: getGroups()+setGroups() used to be a plain, unserialized
+    // read-modify-write — two concurrent updates to the same group (e.g. a
+    // tabGroups.onUpdated handler and a routine resync landing together)
+    // could both read the same snapshot, and whichever write landed last
+    // silently discarded the other's change. Promise.all starts both calls
+    // on the same tick, so without utils/storageLock.ts this reliably lost
+    // one of the two fields below.
+    const group = await createGroup("A", []);
+
+    await Promise.all([
+      updateGroup(group.id, { name: "Renamed" }),
+      updateGroup(group.id, { color: "accent" }),
+    ]);
+
+    const [m] = await getGroups();
+    expect(m?.name).toBe("Renamed");
+    expect(m?.color).toBe("accent");
+  });
+});
+
 describe("purgeExpiredLocalTrash", () => {
   it("removes a group trashed past the free 7-day window", async () => {
     const group = await createGroup("A", []);

@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { getGroups, updateGroup } from "./groups";
 import type { GroupTab } from "./groups";
+import { withStorageLock } from "./storageLock";
 
 // Area/Project hierarchy, one self-referencing table instead of two fixed
 // tiers — see supabase/migrations/20261005130000_folders.sql. `kind` is the
@@ -54,9 +55,23 @@ async function setFolders(folders: Folder[]) {
   await browser.storage.local.set({ [STORAGE_KEY]: folders });
 }
 
+// Mirrors utils/groups.ts's mutateGroups — see its own comment for why
+// every mutation below goes through this instead of its own
+// getFolders()+setFolders() pair.
+async function mutateFolders(
+  mutator: (folders: Folder[]) => Folder[] | undefined,
+): Promise<Folder[]> {
+  return withStorageLock(STORAGE_KEY, async () => {
+    const current = await getFolders();
+    const next = mutator(current);
+    if (next === undefined) return current;
+    await setFolders(next);
+    return next;
+  });
+}
+
 async function setSyncStatus(id: string, syncStatus: Folder["syncStatus"]) {
-  const folders = await getFolders();
-  await setFolders(
+  await mutateFolders((folders) =>
     folders.map((f) => (f.id === id ? { ...f, syncStatus } : f)),
   );
 }
@@ -136,8 +151,7 @@ export async function createFolder(
     updatedAt: Date.now(),
     ...(kind === "project" ? { tabs: [] } : {}),
   };
-  const folders = await getFolders();
-  await setFolders([...folders, folder]);
+  await mutateFolders((folders) => [...folders, folder]);
   if (kind === "project") registerProject(folder);
   else registerFolder(folder);
   return folder;
@@ -162,36 +176,37 @@ export async function pullRemoteFolders(): Promise<number> {
   if (error) throw new Error(error.message);
   if (!data) return 0;
 
-  const local = await getFolders();
-  const localById = new Map(local.map((f) => [f.id, f]));
   let applied = 0;
-  const next = [...local];
+  await mutateFolders((local) => {
+    const localById = new Map(local.map((f) => [f.id, f]));
+    const next = [...local];
 
-  for (const row of data) {
-    const existing = localById.get(row.id);
-    const remote: Folder = {
-      id: row.id,
-      name: row.name,
-      parentId: row.parent_id,
-      kind: row.kind,
-      color: row.color ?? undefined,
-      createdAt: Date.parse(row.created_at),
-      updatedAt: Date.parse(row.updated_at),
-      tabs: (row.tabs as GroupTab[] | null) ?? [],
-      activeGroupId: row.active_group_id ?? undefined,
-      archivedAt: row.archived_at ? Date.parse(row.archived_at) : undefined,
-      syncStatus: "synced",
-    };
-    if (!existing) {
-      next.push(remote);
-      applied++;
-    } else if (remote.updatedAt > existing.updatedAt) {
-      next[next.findIndex((f) => f.id === row.id)] = remote;
-      applied++;
+    for (const row of data) {
+      const existing = localById.get(row.id);
+      const remote: Folder = {
+        id: row.id,
+        name: row.name,
+        parentId: row.parent_id,
+        kind: row.kind,
+        color: row.color ?? undefined,
+        createdAt: Date.parse(row.created_at),
+        updatedAt: Date.parse(row.updated_at),
+        tabs: (row.tabs as GroupTab[] | null) ?? [],
+        activeGroupId: row.active_group_id ?? undefined,
+        archivedAt: row.archived_at ? Date.parse(row.archived_at) : undefined,
+        syncStatus: "synced",
+      };
+      if (!existing) {
+        next.push(remote);
+        applied++;
+      } else if (remote.updatedAt > existing.updatedAt) {
+        next[next.findIndex((f) => f.id === row.id)] = remote;
+        applied++;
+      }
     }
-  }
 
-  if (applied > 0) await setFolders(next);
+    return applied > 0 ? next : undefined;
+  });
   return applied;
 }
 
@@ -225,8 +240,7 @@ export async function pushDirtyFolders(
 
     const serverUpdatedAt = Date.parse(data.updated_at);
     next[f.id] = serverUpdatedAt;
-    const fresh = await getFolders();
-    await setFolders(
+    await mutateFolders((fresh) =>
       fresh.map((x) =>
         x.id === f.id ? { ...x, updatedAt: serverUpdatedAt } : x,
       ),
@@ -245,8 +259,7 @@ export async function updateFolder(
     >
   >,
 ) {
-  const folders = await getFolders();
-  await setFolders(
+  await mutateFolders((folders) =>
     folders.map((f) =>
       f.id === id ? { ...f, ...patch, updatedAt: Date.now() } : f,
     ),
@@ -261,13 +274,13 @@ export async function updateFolder(
 // archiving its child Projects was never asked for) and unarchiveFolder
 // deliberately does NOT cascade back (see that function's own comment).
 export async function archiveFolder(id: string) {
-  const folders = await getFolders();
-  const folder = folders.find((f) => f.id === id);
-  await setFolders(
-    folders.map((f) =>
+  let folder: Folder | undefined;
+  await mutateFolders((folders) => {
+    folder = folders.find((f) => f.id === id);
+    return folders.map((f) =>
       f.id === id ? { ...f, archivedAt: Date.now(), updatedAt: Date.now() } : f,
-    ),
-  );
+    );
+  });
   if (folder?.kind === "project") {
     const groups = await getGroups();
     for (const q of groups) {
@@ -281,8 +294,7 @@ export async function archiveFolder(id: string) {
 // shouldn't drag back into view a Group that was separately, manually
 // archived for its own reason.
 export async function unarchiveFolder(id: string) {
-  const folders = await getFolders();
-  await setFolders(
+  await mutateFolders((folders) =>
     folders.map((f) =>
       f.id === id ? { ...f, archivedAt: undefined, updatedAt: Date.now() } : f,
     ),
@@ -295,22 +307,24 @@ export async function unarchiveFolder(id: string) {
 // locally so the UI doesn't show stale nesting until the next pull
 // reconciles it.
 export async function deleteFolder(id: string) {
-  const folders = await getFolders();
-  const toRemove = new Set([id]);
-  // Folders only ever nest one level deep in practice, but this walks any
-  // depth rather than assuming it, since nothing in the schema enforces two.
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const f of folders) {
-      if (f.parentId && toRemove.has(f.parentId) && !toRemove.has(f.id)) {
-        toRemove.add(f.id);
-        grew = true;
+  let toRemove = new Set<string>();
+  await mutateFolders((folders) => {
+    toRemove = new Set([id]);
+    // Folders only ever nest one level deep in practice, but this walks
+    // any depth rather than assuming it, since nothing in the schema
+    // enforces two.
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const f of folders) {
+        if (f.parentId && toRemove.has(f.parentId) && !toRemove.has(f.id)) {
+          toRemove.add(f.id);
+          grew = true;
+        }
       }
     }
-  }
-
-  await setFolders(folders.filter((f) => !toRemove.has(f.id)));
+    return folders.filter((f) => !toRemove.has(f.id));
+  });
 
   const groups = await getGroups();
   for (const m of groups) {
