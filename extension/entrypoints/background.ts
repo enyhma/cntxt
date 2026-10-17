@@ -11,7 +11,11 @@ import { updateSettings } from "@/utils/settings";
 import { DASHBOARD_URL, ensureDashboardTab } from "@/utils/tabs";
 import { windowSyncMachine } from "@/utils/windowSyncMachine";
 import { scheduleCaptureCheck } from "@/utils/captureGroups";
-import { getTabGroupOwners, removeTabGroupOwner } from "@/utils/tabGroups";
+import {
+  getTabGroupOwners,
+  observeCollapsed,
+  removeTabGroupOwner,
+} from "@/utils/tabGroups";
 import {
   activateGroupInProject,
   deactivateGroup,
@@ -208,7 +212,16 @@ export default defineBackground(() => {
       await updateGroup(ctx.group.id, { name: group.title });
     }
 
-    if (group.collapsed || ctx.group.status === "active") return;
+    // Only a genuine collapsed -> expanded transition counts as "the user
+    // just expanded this group" (observeCollapsed, utils/tabGroups.ts) —
+    // not every update where it merely happens to already be expanded
+    // (this same rename, a recolor, or a group left expanded-but-not-
+    // "active" by whatever created it). Those must not re-trigger
+    // activation, which demotes and collapses whatever sibling actually
+    // is active right now.
+    const wasCollapsed = observeCollapsed(group.id, group.collapsed);
+    if (group.collapsed || wasCollapsed !== true) return;
+    if (ctx.group.status === "active") return;
     await activateGroupInProject(group.windowId, ctx.project, ctx.group);
   });
 

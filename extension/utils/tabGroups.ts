@@ -66,6 +66,29 @@ export async function removeTabGroupOwner(groupId: number) {
   const map = await getTabGroupOwners();
   delete map[groupId];
   await browser.storage.session.set({ [OWNERS_KEY]: map });
+  lastObservedCollapsed.delete(groupId);
+}
+
+// Session-lifetime only (in-memory, like mirroringWindows below) — the last
+// `collapsed` state actually observed for each native tab group, regardless
+// of who caused it (us or the user). browser.tabGroups.onUpdated hands back
+// the group's current state with no before/after diff of its own, so
+// background.ts's listener uses this to tell a genuine user-driven
+// collapsed -> expanded transition (the "activate by expanding" gesture)
+// apart from any other update that merely happens to already be expanded —
+// a rename, a recolor, or a group left expanded-but-not-"active" by
+// whatever created it (e.g. a silently-captured native group, which starts
+// expanded and may not be this Project's active one). Without this, such
+// an update gets misread as "the user just expanded it", which demotes and
+// collapses whatever sibling genuinely is active.
+const lastObservedCollapsed = new Map<number, boolean>();
+export function observeCollapsed(
+  groupId: number,
+  collapsed: boolean,
+): boolean | undefined {
+  const previous = lastObservedCollapsed.get(groupId);
+  lastObservedCollapsed.set(groupId, collapsed);
+  return previous;
 }
 
 export async function findOwnedGroupId(
