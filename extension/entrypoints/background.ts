@@ -16,7 +16,7 @@ import {
   activateGroupInProject,
   deactivateGroup,
 } from "@/utils/groupActivation";
-import { getGroups } from "@/utils/groups";
+import { getGroups, updateGroup } from "@/utils/groups";
 import type { Group } from "@/utils/groups";
 import { getFolders } from "@/utils/folders";
 import type { Folder } from "@/utils/folders";
@@ -191,10 +191,24 @@ export default defineBackground(() => {
   // it gets activated outside the dashboard (see utils/groupActivation.ts).
   // Collapsing is deliberately not wired to anything — only closing all of
   // a group's tabs (onRemoved, below) deactivates it.
+  //
+  // A native rename is the other direction this same event carries: reverse
+  // mirroring is name-only (not color — see docs/capabilities.md's "Reverse
+  // color sync" roadmap note on the lossy 9->5 native-color mapping that'd
+  // need). The equality check below is what keeps this from ping-ponging
+  // against ensureLiveTabGroup's own cntxt->native title push: once the two
+  // match, neither this listener nor a later syncTabs pass writes anything
+  // further, regardless of whether Chrome fires onUpdated again for that
+  // push.
   browser.tabGroups?.onUpdated.addListener(async (group) => {
-    if (group.collapsed) return;
     const ctx = await ownedGroupContext(group.id);
-    if (!ctx || ctx.group.status === "active") return;
+    if (!ctx) return;
+
+    if (group.title && group.title !== ctx.group.name) {
+      await updateGroup(ctx.group.id, { name: group.title });
+    }
+
+    if (group.collapsed || ctx.group.status === "active") return;
     await activateGroupInProject(group.windowId, ctx.project, ctx.group);
   });
 
