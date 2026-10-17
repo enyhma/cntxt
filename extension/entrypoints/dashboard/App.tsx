@@ -16,7 +16,12 @@ import { ensureBindingForWindow } from "@/utils/attach";
 import { restoreMachine } from "@/utils/restoreMachine";
 import { groupSwapMachine } from "@/utils/groupSwapMachine";
 import { syncMachine } from "@/utils/sync";
-import { getWindowBindingMap, type WindowBinding } from "@/utils/session";
+import {
+  getWindowBindingMap,
+  removeWindowBinding,
+  type WindowBinding,
+} from "@/utils/session";
+import { closeMatchingTabs } from "@/utils/tabOps";
 import { ensureLiveTabGroup, findOwnedGroupId } from "@/utils/tabGroups";
 import { syncTabs } from "@/utils/windowSyncMachine";
 import { activateGroupInProject } from "@/utils/groupActivation";
@@ -991,6 +996,29 @@ function Dashboard(props: {
 
   async function handleDeleteGroup(group: Group) {
     if (!confirm(`Delete "${group.name}"?`)) return;
+
+    // Close whatever's actually open for this group in the browser, same
+    // window this dashboard is running in — a deleted group shouldn't
+    // leave its tabs sitting open with nothing left to point at them.
+    // Only handles this window (matches the rest of the group-activation
+    // code's own scope, e.g. groupActivation.ts) — a window elsewhere
+    // isn't reachable from here.
+    const windowId = myWindowId();
+    if (windowId !== undefined) {
+      if (group.id === currentId()) {
+        // Standalone: this whole window is bound to the group being
+        // deleted — close everything and detach, same as Disconnect.
+        await closeMatchingTabs(windowId, () => true);
+        await removeWindowBinding(windowId);
+      } else if (group.folderId && group.folderId === currentId()) {
+        // Nested under the Project connected to this window: close only
+        // this group's own tabs, same as Complete group — the Project
+        // and its other live siblings stay open.
+        const urls = new Set(group.tabs.map((t) => t.url));
+        await closeMatchingTabs(windowId, (tab) => urls.has(tab.url ?? ""));
+      }
+    }
+
     await deleteGroup(group.id);
     if (viewedId() === group.id) setViewedId(currentId());
     await refresh();
