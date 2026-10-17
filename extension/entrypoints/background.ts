@@ -12,35 +12,12 @@ import { DASHBOARD_URL, ensureDashboardTab } from "@/utils/tabs";
 import { windowSyncMachine } from "@/utils/windowSyncMachine";
 import { scheduleCaptureCheck } from "@/utils/captureGroups";
 import {
-  getTabGroupOwners,
-  observeCollapsed,
-  removeTabGroupOwner,
-} from "@/utils/tabGroups";
-import {
-  activateGroupInProject,
-  deactivateGroup,
-} from "@/utils/groupActivation";
-import { getGroups, updateGroup } from "@/utils/groups";
-import type { Group } from "@/utils/groups";
-import { getFolders } from "@/utils/folders";
-import type { Folder } from "@/utils/folders";
+  handleTabGroupRemoved,
+  handleTabGroupUpdated,
+  shouldResyncOnStorageChange,
+} from "@/utils/backgroundEvents";
 import { captureSession, pruneOldLocalSessions } from "@/utils/sessions";
 import { runAutoArchiveCheck } from "@/utils/autoArchive";
-
-// A native tab group the user just expanded/removed, resolved back to the
-// nested Group entity + its parent Project it mirrors (utils/tabGroups.ts) —
-// shared by both new tabGroups listeners below, which only ever act on a
-// "groups"-table owner (a mirrored Project tab group, which has no
-// activation concept, is ignored).
-async function ownedGroupContext(nativeGroupId: number) {
-  const owner = (await getTabGroupOwners())[nativeGroupId];
-  if (owner?.table !== "groups") return null;
-  const group = (await getGroups()).find((g) => g.id === owner.id);
-  if (!group?.folderId) return null;
-  const project = (await getFolders()).find((f) => f.id === group.folderId);
-  if (!project) return null;
-  return { group, project };
-}
 
 const SESSION_ALARM_NAME = "cntxt-session-capture";
 const SESSION_CAPTURE_INTERVAL_MINUTES = 15;
@@ -191,90 +168,16 @@ export default defineBackground(() => {
     notifyTabsChanged(info.windowId),
   );
 
-  // The user expanding a nested Group's collapsed native tab group is how
-  // it gets activated outside the dashboard (see utils/groupActivation.ts).
-  // Collapsing is deliberately not wired to anything — only closing all of
-  // a group's tabs (onRemoved, below) deactivates it.
-  //
-  // A native rename is the other direction this same event carries: reverse
-  // mirroring is name-only (not color — see docs/capabilities.md's "Reverse
-  // color sync" roadmap note on the lossy 9->5 native-color mapping that'd
-  // need). The equality check below is what keeps this from ping-ponging
-  // against ensureLiveTabGroup's own cntxt->native title push: once the two
-  // match, neither this listener nor a later syncTabs pass writes anything
-  // further, regardless of whether Chrome fires onUpdated again for that
-  // push.
-  browser.tabGroups?.onUpdated.addListener(async (group) => {
-    const ctx = await ownedGroupContext(group.id);
-    if (!ctx) return;
+  // See utils/backgroundEvents.ts for what each of these three decides —
+  // kept there, not here, so it's unit-testable.
+  browser.tabGroups?.onUpdated.addListener(handleTabGroupUpdated);
+  browser.tabGroups?.onRemoved.addListener(handleTabGroupRemoved);
 
-    if (group.title && group.title !== ctx.group.name) {
-      await updateGroup(ctx.group.id, { name: group.title });
-    }
-
-    // Only a genuine collapsed -> expanded transition counts as "the user
-    // just expanded this group" (observeCollapsed, utils/tabGroups.ts) —
-    // not every update where it merely happens to already be expanded
-    // (this same rename, a recolor, or a group left expanded-but-not-
-    // "active" by whatever created it). Those must not re-trigger
-    // activation, which demotes and collapses whatever sibling actually
-    // is active right now.
-    const wasCollapsed = observeCollapsed(group.id, group.collapsed);
-    if (group.collapsed || wasCollapsed !== true) return;
-    if (ctx.group.status === "active") return;
-    await activateGroupInProject(group.windowId, ctx.project, ctx.group);
-  });
-
-  // Chrome removes a native tab group automatically once its last tab
-  // closes — that's the browser-side signal that a nested Group's tabs got
-  // closed directly (not via the dashboard's "Complete group"), so it
-  // should drop back to "pending" rather than staying "active" with
-  // nothing open.
-  browser.tabGroups?.onRemoved.addListener(async (group) => {
-    const ctx = await ownedGroupContext(group.id);
-    await removeTabGroupOwner(group.id);
-    if (!ctx) return;
-    await deactivateGroup(ctx.group, ctx.project);
-  });
-
-  // True only when some entity's `name`/`color` actually differs between
-  // the two snapshots — the two fields syncTabs itself never touches. Used
-  // below to tell an actual dashboard-side rename/recolor apart from
-  // syncTabs's own `tabs`/`updatedAt`-only writes to the same storage key:
-  // without this check, resyncing on every "groups"/"folders" write would
-  // make syncTabs's own write retrigger itself via this very listener,
-  // forever (each write bumps `updatedAt`, which is itself a change).
-  function nameOrColorChanged<
-    T extends { id: string; name: string; color?: string },
-  >(oldList: T[] | undefined, newList: T[] | undefined): boolean {
-    if (!oldList || !newList) return false;
-    const oldById = new Map(oldList.map((e) => [e.id, e]));
-    return newList.some((e) => {
-      const old = oldById.get(e.id);
-      return (
-        old !== undefined && (old.name !== e.name || old.color !== e.color)
-      );
-    });
-  }
-
-  // A dashboard-side rename/recolor of a Group/Project fires no tab event,
-  // so without this the mirrored native group (utils/tabGroups.ts) would
-  // only catch up whenever some unrelated tab event happens to occur next.
   // ponytail: rescans every tracked window rather than indexing which one
   // owns the changed entity — fine at expected scale, add a reverse index
   // if this gets measurably expensive.
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local") return;
-    const changed =
-      nameOrColorChanged(
-        changes.groups?.oldValue as Group[] | undefined,
-        changes.groups?.newValue as Group[] | undefined,
-      ) ||
-      nameOrColorChanged(
-        changes.folders?.oldValue as Folder[] | undefined,
-        changes.folders?.newValue as Folder[] | undefined,
-      );
-    if (!changed) return;
+    if (!shouldResyncOnStorageChange(changes, area)) return;
     for (const windowId of windowActors.keys()) notifyTabsChanged(windowId);
   });
 
