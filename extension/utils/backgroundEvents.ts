@@ -13,6 +13,7 @@ import { getGroups, updateGroup } from "./groups";
 import type { Group } from "./groups";
 import { getFolders } from "./folders";
 import type { Folder } from "./folders";
+import type { Settings } from "./settings";
 
 // Derived from the real listener signatures rather than importing a
 // `Browser.tabGroups.TabGroup`/`Browser.storage.onChanged` type by name —
@@ -126,4 +127,27 @@ export function shouldResyncOnStorageChange(
       changes.folders?.newValue as Folder[] | undefined,
     )
   );
+}
+
+// Settings' own write (updateSettings) always rewrites the whole object, so
+// any edit fires this listener — most of which (theme, startupBehavior,
+// ...) the alarm doesn't care about. Returns the new interval only when it
+// actually differs, so background.ts knows to re-arm the alarm rather than
+// recreating it (and resetting its live countdown) on every unrelated
+// settings change.
+export function changedSessionCaptureInterval(
+  changes: StorageChanges,
+  area: StorageAreaName,
+): number | undefined {
+  if (area !== "local") return undefined;
+  const oldValue = changes.settings?.oldValue as Settings | undefined;
+  const newValue = changes.settings?.newValue as Settings | undefined;
+  if (
+    newValue === undefined ||
+    oldValue?.sessionCaptureIntervalMinutes ===
+      newValue.sessionCaptureIntervalMinutes
+  ) {
+    return undefined;
+  }
+  return newValue.sessionCaptureIntervalMinutes;
 }

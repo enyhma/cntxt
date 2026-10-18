@@ -26,6 +26,10 @@ export type Settings = {
   // currently just Shortcuts. Off by default so half-finished features
   // don't surface to users who haven't asked for them.
   experimentalFeaturesEnabled: boolean;
+  // How often background.ts's alarm captures a Session snapshot of every
+  // open window (see utils/sessions.ts). Minimum 1 — browser.alarms
+  // rejects sub-minute periods for a packed (non-dev) extension.
+  sessionCaptureIntervalMinutes: number;
 };
 
 const STORAGE_KEY = "settings";
@@ -35,6 +39,7 @@ const DEFAULT_SETTINGS: Settings = {
   manualPullEnabled: false,
   autoArchiveDays: 30,
   experimentalFeaturesEnabled: false,
+  sessionCaptureIntervalMinutes: 15,
 };
 
 export async function getSettings(): Promise<Settings> {

@@ -7,11 +7,12 @@ import {
   removeWindowBinding,
   setWindowBinding,
 } from "@/utils/session";
-import { updateSettings } from "@/utils/settings";
+import { getSettings, updateSettings } from "@/utils/settings";
 import { DASHBOARD_URL, ensureDashboardTab } from "@/utils/tabs";
 import { windowSyncMachine } from "@/utils/windowSyncMachine";
 import { scheduleCaptureCheck } from "@/utils/captureGroups";
 import {
+  changedSessionCaptureInterval,
   handleTabGroupRemoved,
   handleTabGroupUpdated,
   shouldResyncOnStorageChange,
@@ -20,7 +21,6 @@ import { captureSession, pruneOldLocalSessions } from "@/utils/sessions";
 import { runAutoArchiveCheck } from "@/utils/autoArchive";
 
 const SESSION_ALARM_NAME = "cntxt-session-capture";
-const SESSION_CAPTURE_INTERVAL_MINUTES = 15;
 
 export default defineBackground(() => {
   const windowActors = new Map<
@@ -93,11 +93,13 @@ export default defineBackground(() => {
   (async () => {
     // check-then-create: alarms persist across service-worker restarts, and
     // unconditionally re-creating on every wake would keep resetting a live
-    // 15-minute timer on a frequently-woken worker, potentially delaying it
-    // indefinitely.
+    // timer on a frequently-woken worker, potentially delaying it
+    // indefinitely. A later change to the setting is instead caught by the
+    // storage.onChanged listener below, which re-arms deliberately.
     if (!(await browser.alarms.get(SESSION_ALARM_NAME))) {
+      const { sessionCaptureIntervalMinutes } = await getSettings();
       browser.alarms.create(SESSION_ALARM_NAME, {
-        periodInMinutes: SESSION_CAPTURE_INTERVAL_MINUTES,
+        periodInMinutes: sessionCaptureIntervalMinutes,
       });
     }
   })();
@@ -177,8 +179,17 @@ export default defineBackground(() => {
   // owns the changed entity — fine at expected scale, add a reverse index
   // if this gets measurably expensive.
   browser.storage.onChanged.addListener((changes, area) => {
-    if (!shouldResyncOnStorageChange(changes, area)) return;
-    for (const windowId of windowActors.keys()) notifyTabsChanged(windowId);
+    if (shouldResyncOnStorageChange(changes, area)) {
+      for (const windowId of windowActors.keys()) notifyTabsChanged(windowId);
+    }
+    const newInterval = changedSessionCaptureInterval(changes, area);
+    if (newInterval !== undefined) {
+      browser.alarms.clear(SESSION_ALARM_NAME).then(() =>
+        browser.alarms.create(SESSION_ALARM_NAME, {
+          periodInMinutes: newInterval,
+        }),
+      );
+    }
   });
 
   browser.action.onClicked.addListener(async (tab) => {

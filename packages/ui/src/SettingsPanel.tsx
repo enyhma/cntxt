@@ -15,6 +15,8 @@ export function SettingsPanel(props: {
   onExperimentalFeaturesEnabledChange: (v: boolean) => void;
   autoArchiveDays: Accessor<number>;
   onAutoArchiveDaysChange: (v: number) => void;
+  sessionCaptureIntervalMinutes: Accessor<number>;
+  onSessionCaptureIntervalMinutesChange: (v: number) => void;
   // Usage & limits — all optional so this panel still renders sensibly
   // before entitlements have loaded (e.g. signed out, or mid-fetch).
   maxWorkspaces?: Accessor<number | undefined>;
@@ -201,6 +203,23 @@ export function SettingsPanel(props: {
             <span class="text-xs text-surface-txt-hint">
               days of inactivity
             </span>
+          </div>
+        </label>
+        <label class="flex flex-col gap-1.5 text-sm">
+          <span class="text-surface-txt-hint">Capture a snapshot every</span>
+          <div class="flex items-center gap-2">
+            <input
+              type="number"
+              min="1"
+              class="input input-sm w-20 bg-surface-alt1 shadow-[var(--shadow-card)]"
+              value={props.sessionCaptureIntervalMinutes()}
+              onChange={(e) =>
+                props.onSessionCaptureIntervalMinutesChange(
+                  Math.max(1, Number(e.currentTarget.value) || 1),
+                )
+              }
+            />
+            <span class="text-xs text-surface-txt-hint">minutes</span>
           </div>
         </label>
       </div>

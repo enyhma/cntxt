@@ -2016,6 +2016,8 @@ function App() {
   const [experimentalFeaturesEnabled, setExperimentalFeaturesEnabled] =
     createSignal(false);
   const [autoArchiveDays, setAutoArchiveDays] = createSignal(30);
+  const [sessionCaptureIntervalMinutes, setSessionCaptureIntervalMinutes] =
+    createSignal(15);
   const [nav, setNav] = createSignal<
     "groups" | "trash" | "history" | "automations" | "bookmarks" | "settings"
   >("groups");
@@ -2345,6 +2347,7 @@ function App() {
     setManualPullEnabled(settings.manualPullEnabled);
     setExperimentalFeaturesEnabled(settings.experimentalFeaturesEnabled);
     setAutoArchiveDays(settings.autoArchiveDays);
+    setSessionCaptureIntervalMinutes(settings.sessionCaptureIntervalMinutes);
 
     // A "workspaces" write also notifies syncMachine, so a local rename or
     // the background script's live tab-sync gets pushed — see
@@ -2478,6 +2481,11 @@ function App() {
   async function handleAutoArchiveDaysChange(value: number) {
     setAutoArchiveDays(value);
     await updateSettings({ autoArchiveDays: value });
+  }
+
+  async function handleSessionCaptureIntervalMinutesChange(value: number) {
+    setSessionCaptureIntervalMinutes(value);
+    await updateSettings({ sessionCaptureIntervalMinutes: value });
   }
 
   // Forces the same pull syncMachine already runs on sign-in/token refresh
@@ -2955,6 +2963,12 @@ function App() {
                     }
                     autoArchiveDays={autoArchiveDays}
                     onAutoArchiveDaysChange={handleAutoArchiveDaysChange}
+                    sessionCaptureIntervalMinutes={
+                      sessionCaptureIntervalMinutes
+                    }
+                    onSessionCaptureIntervalMinutesChange={
+                      handleSessionCaptureIntervalMinutesChange
+                    }
                     maxWorkspaces={() => entitlements()?.maxMissions}
                     groupCount={() => activeGroups().length}
                     projectCount={() => projects().length}
