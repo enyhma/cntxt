@@ -8,12 +8,16 @@ import { supabase } from "./supabase";
 // pushDirtyResources: creation registers itself immediately (like
 // registerWorkspace/registerFolder), and there's nothing left to push later.
 //
-// A resource is parented to exactly one of a Group (groupId — the
-// original "save this open tab" flow) or a Project (folderId — "save this
-// permanently" so it survives the Group it was found in being deleted).
-// Both optional rather than a tagged union so the Supabase row shape maps
-// straight across: exactly one column is ever non-null, enforced at the
-// call site (addResource), not the type.
+// A resource ("bookmark" in the UI) is parented to a Folder — a Project or
+// an Area, folderId pointing at either — never a Group: bookmarking was
+// originally also available per-Group (groupId, "save this open tab"), but
+// that flow was removed as part of gating bookmarks behind the
+// experimental-features toggle (see App.tsx), leaving only the Project/Area
+// paths. groupId stays on the type for old synced rows created before that
+// change; addResource no longer has a call site that sets it. Both fields
+// optional rather than a tagged union so the Supabase row shape maps
+// straight across: at most one column is ever non-null, enforced at the
+// (current) call sites, not the type.
 export type Resource = {
   id: string;
   groupId?: string;

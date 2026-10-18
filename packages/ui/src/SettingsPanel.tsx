@@ -11,6 +11,8 @@ export function SettingsPanel(props: {
   onThemeChange: (v: Theme) => void;
   manualPullEnabled: Accessor<boolean>;
   onManualPullEnabledChange: (v: boolean) => void;
+  experimentalFeaturesEnabled: Accessor<boolean>;
+  onExperimentalFeaturesEnabledChange: (v: boolean) => void;
   autoArchiveDays: Accessor<number>;
   onAutoArchiveDaysChange: (v: number) => void;
   // Usage & limits — all optional so this panel still renders sensibly
@@ -160,6 +162,23 @@ export function SettingsPanel(props: {
               Adds a "Pull groups now" option to the account menu, to fetch from
               your account on demand instead of waiting for sign-in or a token
               refresh.
+            </span>
+          </span>
+        </label>
+        <label class="flex items-start gap-2.5 text-sm">
+          <input
+            type="checkbox"
+            class="checkbox checkbox-sm mt-0.5"
+            checked={props.experimentalFeaturesEnabled()}
+            onChange={(e) =>
+              props.onExperimentalFeaturesEnabledChange(e.currentTarget.checked)
+            }
+          />
+          <span class="flex flex-col gap-0.5">
+            <span>Experimental features</span>
+            <span class="text-xs text-surface-txt-hint">
+              Turns on in-progress features, like Shortcuts, that aren't fully
+              finished yet.
             </span>
           </span>
         </label>

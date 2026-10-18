@@ -9,6 +9,9 @@ import { GroupDot } from "./GroupDot";
 // there's no separate "organizational" page for it the way an Area has
 // one. `groups` here only ever lists groups directly ungrouped-under-this-
 // Area (a Project's own groups show in its live-tabs view instead).
+// Doesn't own its own scroll container — the call site wraps this (and the
+// Area's bookmarks section rendered alongside it) in one scrollable div,
+// same as a Project's own page does.
 export function FolderPage(props: {
   folder: { id: string; name: string };
   breadcrumb: Array<{ id: string; name: string }>;
@@ -29,7 +32,7 @@ export function FolderPage(props: {
   const projectsList = () => props.projects?.() ?? [];
 
   return (
-    <div class="flex-1 overflow-y-auto p-6">
+    <div class="p-6">
       <div class="flex max-w-2xl flex-col gap-6">
         <div>
           <Show when={props.breadcrumb.length > 0}>

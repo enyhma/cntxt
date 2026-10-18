@@ -42,6 +42,7 @@ import {
   AppWindow,
   ArrowRight,
   ArrowRightLeft,
+  Bookmark as BookmarksIcon,
   ChevronDown,
   ChevronRight,
   FolderClosed as ProjectClosedIcon,
@@ -204,17 +205,24 @@ function closeOpenDropdowns() {
     .forEach((d) => d.removeAttribute("open"));
 }
 
+// "automations" and "bookmarks" are experimental — gated out of this list
+// at render time unless Settings' experimentalFeaturesEnabled is on (see
+// the NAV_ITEMS.filter call site).
 const NAV_ITEMS: Array<{
-  key: "groups" | "trash" | "history" | "automations" | "settings";
+  key:
+    "groups" | "trash" | "history" | "automations" | "bookmarks" | "settings";
   label: string;
   icon: (props: LucideProps) => JSX.Element;
 }> = [
   { key: "groups", label: "Tabs", icon: GroupsIcon },
   { key: "trash", label: "Trash", icon: Trash2 },
   { key: "history", label: "History", icon: HistoryIcon },
-  { key: "automations", label: "Automations", icon: AutomationsIcon },
+  { key: "automations", label: "Shortcuts", icon: AutomationsIcon },
+  { key: "bookmarks", label: "Bookmarks", icon: BookmarksIcon },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
+
+const EXPERIMENTAL_NAV_KEYS = new Set(["automations", "bookmarks"]);
 
 // Area (depth 0, parentId null) / Project (depth 1, parentId an Area) — see
 // supabase/migrations/20261005130000_folders.sql for why both tiers share
@@ -365,11 +373,13 @@ function Dashboard(props: {
   groupSwapSend: ReturnType<typeof useMachine<typeof groupSwapMachine>>[1];
   jumpTo: Accessor<JumpTarget | undefined>;
   onJumped: () => void;
+  experimentalFeaturesEnabled: Accessor<boolean>;
 }) {
   const {
     groups,
     folders,
     resources,
+    experimentalFeaturesEnabled,
     currentId,
     openIds,
     myWindowId,
@@ -789,9 +799,6 @@ function Dashboard(props: {
     ];
   }
 
-  const resourcesForViewed = () =>
-    resources().filter((r) => r.groupId === viewedId());
-
   const [addingResource, setAddingResource] = createSignal(false);
   const [resourceUrl, setResourceUrl] = createSignal("");
   const [resourceNote, setResourceNote] = createSignal("");
@@ -800,25 +807,6 @@ function Dashboard(props: {
     setResourceUrl("");
     setResourceNote("");
     setAddingResource(true);
-  }
-  async function handleAddResource(e: Event) {
-    e.preventDefault();
-    const id = viewedId();
-    const url = resourceUrl().trim();
-    const note = resourceNote().trim();
-    setAddingResource(false);
-    if (!id || (!url && !note)) return;
-    await addResource(
-      { groupId: id },
-      { url: url || undefined, note: note || undefined },
-    );
-    await refresh();
-  }
-  async function handleSaveTabAsResource(tab: { url: string; title: string }) {
-    const id = viewedId();
-    if (!id) return;
-    await addResource({ groupId: id }, { url: tab.url, note: tab.title });
-    await refresh();
   }
   async function handleDeleteResource(id: string) {
     await deleteResource(id);
@@ -842,7 +830,24 @@ function Dashboard(props: {
     await refresh();
   }
 
-  // Shared between a Group's resources panel and a Project's — same row
+  const resourcesForArea = () =>
+    resources().filter((r) => r.folderId === viewingFolderId());
+
+  async function handleAddResourceToArea(e: Event) {
+    e.preventDefault();
+    const id = viewingFolderId();
+    const url = resourceUrl().trim();
+    const note = resourceNote().trim();
+    setAddingResource(false);
+    if (!id || (!url && !note)) return;
+    await addResource(
+      { folderId: id },
+      { url: url || undefined, note: note || undefined },
+    );
+    await refresh();
+  }
+
+  // Shared between a Project's bookmarks panel and an Area's — same row
   // shape either way (a link/note, a "Save to project" copy picker, and a
   // delete button).
   function resourceRow(r: Resource) {
@@ -1582,19 +1587,90 @@ function Dashboard(props: {
           </div>
 
           <Show when={viewingFolderId()}>
-            <FolderPage
-              folder={viewingFolder()!}
-              breadcrumb={viewingFolderBreadcrumb()}
-              groups={() => groupsIn(viewingFolderId()!)}
-              projects={
-                viewingFolder()?.kind === "area"
-                  ? () => childFolders(viewingFolderId()!)
-                  : undefined
-              }
-              onOpenProject={showProjectTabs}
-              onOpenGroup={showGroup}
-              onAddGroup={() => handleAddGroupIn(viewingFolderId()!)}
-            />
+            <div class="min-h-0 flex-1 overflow-y-auto">
+              <FolderPage
+                folder={viewingFolder()!}
+                breadcrumb={viewingFolderBreadcrumb()}
+                groups={() => groupsIn(viewingFolderId()!)}
+                projects={
+                  viewingFolder()?.kind === "area"
+                    ? () => childFolders(viewingFolderId()!)
+                    : undefined
+                }
+                onOpenProject={showProjectTabs}
+                onOpenGroup={showGroup}
+                onAddGroup={() => handleAddGroupIn(viewingFolderId()!)}
+              />
+
+              <Show when={experimentalFeaturesEnabled()}>
+                <div class="mx-auto max-w-2xl px-6 pb-6">
+                  <div class="mb-1.5 flex items-center gap-2">
+                    <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
+                      BOOKMARKS
+                    </span>
+                    <button
+                      type="button"
+                      title="Add bookmark"
+                      onClick={openAddResource}
+                      class="btn btn-square btn-ghost btn-xs"
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
+
+                  <Show when={addingResource()}>
+                    <form
+                      onSubmit={handleAddResourceToArea}
+                      class="mb-2 flex flex-col gap-1.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5"
+                    >
+                      <input
+                        autofocus
+                        placeholder="https://…"
+                        class="input input-sm bg-surface-alt2"
+                        value={resourceUrl()}
+                        onInput={(e) => setResourceUrl(e.currentTarget.value)}
+                      />
+                      <input
+                        placeholder="Note (optional)"
+                        class="input input-sm bg-surface-alt2"
+                        value={resourceNote()}
+                        onInput={(e) => setResourceNote(e.currentTarget.value)}
+                      />
+                      <div class="flex justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setAddingResource(false)}
+                          class="btn btn-ghost btn-xs"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          class="btn btn-xs border-none bg-accent text-accent-txt hover:bg-accent-alt1"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </form>
+                  </Show>
+
+                  <Show
+                    when={resourcesForArea().length > 0}
+                    fallback={
+                      <p class="text-sm text-surface-txt-hint">
+                        No saved bookmarks.
+                      </p>
+                    }
+                  >
+                    <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                      <For each={resourcesForArea()}>
+                        {(r) => resourceRow(r)}
+                      </For>
+                    </section>
+                  </Show>
+                </div>
+              </Show>
+            </div>
           </Show>
 
           <Show when={!viewingFolderId() && viewedProject()}>
@@ -1660,111 +1736,15 @@ function Dashboard(props: {
                 </section>
               </Show>
 
-              <div class="mt-5">
-                <div class="mb-1.5 flex items-center gap-2">
-                  <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
-                    RESOURCES
-                  </span>
-                  <button
-                    type="button"
-                    title="Add resource"
-                    onClick={openAddResource}
-                    class="btn btn-square btn-ghost btn-xs"
-                  >
-                    <Plus size={12} />
-                  </button>
-                </div>
-
-                <Show when={addingResource()}>
-                  <form
-                    onSubmit={handleAddResourceToProject}
-                    class="mb-2 flex flex-col gap-1.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5"
-                  >
-                    <input
-                      autofocus
-                      placeholder="https://…"
-                      class="input input-sm bg-surface-alt2"
-                      value={resourceUrl()}
-                      onInput={(e) => setResourceUrl(e.currentTarget.value)}
-                    />
-                    <input
-                      placeholder="Note (optional)"
-                      class="input input-sm bg-surface-alt2"
-                      value={resourceNote()}
-                      onInput={(e) => setResourceNote(e.currentTarget.value)}
-                    />
-                    <div class="flex justify-end gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setAddingResource(false)}
-                        class="btn btn-ghost btn-xs"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        class="btn btn-xs border-none bg-accent text-accent-txt hover:bg-accent-alt1"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </form>
-                </Show>
-
-                <Show
-                  when={resourcesForProject().length > 0}
-                  fallback={
-                    <p class="text-sm text-surface-txt-hint">
-                      No saved resources.
-                    </p>
-                  }
-                >
-                  <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                    <For each={resourcesForProject()}>
-                      {(r) => resourceRow(r)}
-                    </For>
-                  </section>
-                </Show>
-              </div>
-            </div>
-          </Show>
-
-          <Show when={!viewingFolderId() && !viewedProject()}>
-            <div class="min-h-0 flex-1 overflow-y-auto p-3.5">
-              <Show
-                when={viewed() && viewed()!.tabs.length > 0}
-                fallback={
-                  <p class="text-sm text-surface-txt-hint">
-                    No tabs in this group.
-                  </p>
-                }
-              >
-                <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                  <For each={viewed()!.tabs}>
-                    {(tab, i) => (
-                      <TabRow
-                        tab={tab}
-                        index={i()}
-                        selected={selected().has(i())}
-                        selectable={!isViewingCurrent()}
-                        onToggle={() => toggleSelected(i())}
-                        onOpen={() => focusRealTab(tab.url)}
-                        onSaveAsResource={() => handleSaveTabAsResource(tab)}
-                      />
-                    )}
-                  </For>
-                </section>
-              </Show>
-
-              <Show when={viewed()}>
+              <Show when={experimentalFeaturesEnabled()}>
                 <div class="mt-5">
                   <div class="mb-1.5 flex items-center gap-2">
                     <span class="flex-1 font-mono text-[11px] tracking-wider text-surface-txt-faint">
-                      RESOURCES
+                      BOOKMARKS
                     </span>
                     <button
                       type="button"
-                      title="Add resource"
+                      title="Add bookmark"
                       onClick={openAddResource}
                       class="btn btn-square btn-ghost btn-xs"
                     >
@@ -1774,7 +1754,7 @@ function Dashboard(props: {
 
                   <Show when={addingResource()}>
                     <form
-                      onSubmit={handleAddResource}
+                      onSubmit={handleAddResourceToProject}
                       class="mb-2 flex flex-col gap-1.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5"
                     >
                       <input
@@ -1809,20 +1789,48 @@ function Dashboard(props: {
                   </Show>
 
                   <Show
-                    when={resourcesForViewed().length > 0}
+                    when={resourcesForProject().length > 0}
                     fallback={
                       <p class="text-sm text-surface-txt-hint">
-                        No saved resources.
+                        No saved bookmarks.
                       </p>
                     }
                   >
                     <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                      <For each={resourcesForViewed()}>
+                      <For each={resourcesForProject()}>
                         {(r) => resourceRow(r)}
                       </For>
                     </section>
                   </Show>
                 </div>
+              </Show>
+            </div>
+          </Show>
+
+          <Show when={!viewingFolderId() && !viewedProject()}>
+            <div class="min-h-0 flex-1 overflow-y-auto p-3.5">
+              <Show
+                when={viewed() && viewed()!.tabs.length > 0}
+                fallback={
+                  <p class="text-sm text-surface-txt-hint">
+                    No tabs in this group.
+                  </p>
+                }
+              >
+                <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                  <For each={viewed()!.tabs}>
+                    {(tab, i) => (
+                      <TabRow
+                        tab={tab}
+                        index={i()}
+                        selected={selected().has(i())}
+                        selectable={!isViewingCurrent()}
+                        onToggle={() => toggleSelected(i())}
+                        onOpen={() => focusRealTab(tab.url)}
+                      />
+                    )}
+                  </For>
+                </section>
               </Show>
             </div>
           </Show>
@@ -1977,9 +1985,11 @@ function App() {
     createSignal<StartupBehavior>("none");
   const [theme, setTheme] = createSignal<Theme>("baseline");
   const [manualPullEnabled, setManualPullEnabled] = createSignal(false);
+  const [experimentalFeaturesEnabled, setExperimentalFeaturesEnabled] =
+    createSignal(false);
   const [autoArchiveDays, setAutoArchiveDays] = createSignal(30);
   const [nav, setNav] = createSignal<
-    "groups" | "trash" | "history" | "automations" | "settings"
+    "groups" | "trash" | "history" | "automations" | "bookmarks" | "settings"
   >("groups");
   const [automations, setAutomations] = createSignal<Automation[]>([]);
   const [jumpToSessionId, setJumpToSessionId] = createSignal<string>();
@@ -2292,6 +2302,7 @@ function App() {
     setStartupBehavior(settings.startupBehavior);
     setTheme(settings.theme);
     setManualPullEnabled(settings.manualPullEnabled);
+    setExperimentalFeaturesEnabled(settings.experimentalFeaturesEnabled);
     setAutoArchiveDays(settings.autoArchiveDays);
 
     // A "workspaces" write also notifies syncMachine, so a local rename or
@@ -2402,6 +2413,25 @@ function App() {
   async function handleManualPullEnabledChange(value: boolean) {
     setManualPullEnabled(value);
     await updateSettings({ manualPullEnabled: value });
+  }
+
+  // Every Project- or Area-scoped bookmark, across the whole account — the
+  // global Bookmarks tab, as opposed to Dashboard's per-Project/-Area
+  // sections. Groups don't have bookmarks, so groupId-scoped resources
+  // (from before that restriction) are deliberately excluded here too.
+  const allBookmarks = () => resources().filter((r) => r.folderId);
+  const folderNameFor = (id?: string) =>
+    id ? folders().find((f) => f.id === id)?.name : undefined;
+
+  async function handleDeleteBookmark(id: string) {
+    await deleteResource(id);
+    await refresh();
+  }
+
+  async function handleExperimentalFeaturesEnabledChange(value: boolean) {
+    setExperimentalFeaturesEnabled(value);
+    await updateSettings({ experimentalFeaturesEnabled: value });
+    if (!value && EXPERIMENTAL_NAV_KEYS.has(nav())) setNav("groups");
   }
 
   async function handleAutoArchiveDaysChange(value: number) {
@@ -2589,7 +2619,13 @@ function App() {
                 />
               </svg>
               <div class="flex h-full items-stretch gap-0.5">
-                <For each={NAV_ITEMS}>
+                <For
+                  each={NAV_ITEMS.filter(
+                    (n) =>
+                      !EXPERIMENTAL_NAV_KEYS.has(n.key) ||
+                      experimentalFeaturesEnabled(),
+                  )}
+                >
                   {(n) => (
                     <button
                       type="button"
@@ -2774,6 +2810,62 @@ function App() {
                   />
                 </div>
               </Match>
+              <Match when={nav() === "bookmarks"}>
+                <div class="flex-1 overflow-y-auto p-6">
+                  <div class="flex max-w-md flex-col gap-3">
+                    <h2 class="text-base font-semibold">Bookmarks</h2>
+                    <Show
+                      when={allBookmarks().length > 0}
+                      fallback={
+                        <p class="text-sm text-surface-txt-hint">
+                          No bookmarks yet.
+                        </p>
+                      }
+                    >
+                      <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                        <For each={allBookmarks()}>
+                          {(r) => (
+                            <div class="group flex items-center gap-2.5 border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0">
+                              <LinkIcon
+                                size={13}
+                                class="shrink-0 text-surface-txt-faint"
+                              />
+                              <Show
+                                when={r.url}
+                                fallback={
+                                  <span class="min-w-0 flex-1 truncate text-sm">
+                                    {r.note}
+                                  </span>
+                                }
+                              >
+                                <a
+                                  href={r.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  class="min-w-0 flex-1 truncate text-sm hover:underline"
+                                >
+                                  {r.note || r.url}
+                                </a>
+                              </Show>
+                              <span class="max-w-[30%] shrink-0 truncate font-mono text-[11px] text-surface-txt-faint">
+                                {folderNameFor(r.folderId)}
+                              </span>
+                              <button
+                                type="button"
+                                title="Remove"
+                                onClick={() => handleDeleteBookmark(r.id)}
+                                class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+                              >
+                                <X size={11} />
+                              </button>
+                            </div>
+                          )}
+                        </For>
+                      </section>
+                    </Show>
+                  </div>
+                </div>
+              </Match>
               <Match when={nav() === "settings"}>
                 <div class="flex flex-1 items-stretch overflow-hidden">
                   <SettingsPanel
@@ -2783,6 +2875,10 @@ function App() {
                     onThemeChange={handleThemeChange}
                     manualPullEnabled={manualPullEnabled}
                     onManualPullEnabledChange={handleManualPullEnabledChange}
+                    experimentalFeaturesEnabled={experimentalFeaturesEnabled}
+                    onExperimentalFeaturesEnabledChange={
+                      handleExperimentalFeaturesEnabledChange
+                    }
                     autoArchiveDays={autoArchiveDays}
                     onAutoArchiveDaysChange={handleAutoArchiveDaysChange}
                     maxWorkspaces={() => entitlements()?.maxMissions}
@@ -2823,6 +2919,7 @@ function App() {
                   groupSwapSend={groupSwapSend}
                   jumpTo={jumpTo}
                   onJumped={() => setJumpTo(undefined)}
+                  experimentalFeaturesEnabled={experimentalFeaturesEnabled}
                 />
               </Match>
             </Switch>

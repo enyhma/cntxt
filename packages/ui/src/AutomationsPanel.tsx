@@ -341,7 +341,7 @@ export function AutomationsPanel(props: {
     >
       <div class="flex-1 overflow-y-auto p-6">
         <div class="flex max-w-md flex-col gap-3">
-          <h2 class="text-base font-semibold">Automations</h2>
+          <h2 class="text-base font-semibold">Shortcuts</h2>
           <For each={props.automations()}>
             {(a) => {
               const trigger = a.nodes.find((n) => n.kind === "trigger");
@@ -367,7 +367,7 @@ export function AutomationsPanel(props: {
                   </button>
                   <button
                     type="button"
-                    title="Delete automation"
+                    title="Delete shortcut"
                     class="btn btn-square btn-sm border border-surface-alt3 bg-surface-alt2"
                     onClick={() => props.onDeleteAutomation(a.id)}
                   >

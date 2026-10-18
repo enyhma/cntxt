@@ -22,6 +22,10 @@ export type Settings = {
   // sessions.ts's own 7-day *local cache* bound — this is the one
   // user-facing, Settings-configurable "N days" in the app.
   autoArchiveDays: number;
+  // Master opt-in gate for features still under active development —
+  // currently just Shortcuts. Off by default so half-finished features
+  // don't surface to users who haven't asked for them.
+  experimentalFeaturesEnabled: boolean;
 };
 
 const STORAGE_KEY = "settings";
@@ -30,6 +34,7 @@ const DEFAULT_SETTINGS: Settings = {
   theme: "baseline",
   manualPullEnabled: false,
   autoArchiveDays: 30,
+  experimentalFeaturesEnabled: false,
 };
 
 export async function getSettings(): Promise<Settings> {
