@@ -157,10 +157,14 @@ function resolveDotColor(colorClass: string): string {
 // A group with a chosen icon draws that icon (in its own dot color);
 // otherwise falls back to the cntxt mark (open ring + caret) traced in that
 // same color, so every window's pinned dashboard tab stays identifiable at
-// a glance even without a custom icon set.
-function faviconHrefFor(group: Group | undefined): string {
-  const color = resolveDotColor(groupDotClass(group));
-  const icon = group?.icon as IconName | undefined;
+// a glance even without a custom icon set. Accepts a Group OR a Project
+// (Folder has no `icon` field, so it always falls back to the mark) — see
+// currentEntity() in App(), which this is fed from.
+function faviconHrefFor(
+  entity: { id: string; color?: string; icon?: string } | undefined,
+): string {
+  const color = resolveDotColor(groupDotClass(entity));
+  const icon = entity?.icon as IconName | undefined;
   const svg = icon
     ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconNodeToSvgString(ICONS[icon], color)}</svg>`
     : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32"><path d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/><rect x="74" y="40" width="8" height="20" rx="4" fill="${color}"/></svg>`;
@@ -287,7 +291,7 @@ function FolderHeader(props: {
         when={props.folder.kind === "area"}
         fallback={
           <Show
-            when={props.active}
+            when={props.isCurrent}
             fallback={
               <ProjectClosedIcon
                 size={12}
@@ -295,10 +299,9 @@ function FolderHeader(props: {
               />
             }
           >
-            <ProjectOpenIcon
-              size={12}
-              class="shrink-0 text-surface-txt-faint"
-            />
+            <span title="Active" class="shrink-0">
+              <ProjectOpenIcon size={12} class="text-accent" />
+            </span>
           </Show>
         }
       >
@@ -468,6 +471,31 @@ function Dashboard(props: {
   createEffect(() => {
     const id = currentId();
     if (id && untrack(viewedId) === undefined) setViewedId(id);
+  });
+
+  // Whatever's active in this window must actually be visible in the
+  // sidebar — a collapsed Area (or, for a Group nested under a Project, a
+  // collapsed Project) would otherwise hide the one row that matters.
+  // Only triggers off currentId() changing (switching/connecting), not
+  // every folders()/groups() refresh, so a manual collapse afterwards
+  // isn't immediately re-opened — same untrack pattern as above.
+  createEffect(() => {
+    const id = currentId();
+    if (!id) return;
+    untrack(() => {
+      const group = groups().find((g) => g.id === id);
+      const containerId = group
+        ? group.folderId
+        : folders().find((f) => f.id === id)?.parentId;
+      if (!containerId) return;
+      const next = new Set(expandedFolders());
+      let cur: string | null | undefined = containerId;
+      while (cur && !next.has(cur)) {
+        next.add(cur);
+        cur = folders().find((f) => f.id === cur)?.parentId;
+      }
+      setExpandedFolders(next);
+    });
   });
 
   // Any storage tab data shown for a *saved* (non-open) group goes
@@ -2036,6 +2064,15 @@ function App() {
     setJumpToSessionId(id);
     closePalette();
   }
+  // The header's connection chip jumps to whatever's actually open in this
+  // window — Folder has no field distinguishing it from a Group by shape
+  // alone, so this checks which store actually holds the id.
+  function goToCurrent() {
+    const id = currentId();
+    if (!id) return;
+    if (groups().some((g) => g.id === id)) goToGroup(id);
+    else goToProject(id);
+  }
 
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -2202,9 +2239,13 @@ function App() {
     const binding = windowId !== undefined ? windowMap()[windowId] : undefined;
     return binding ? bindingId(binding) : undefined;
   };
-  // Group-only: used for the document title/favicon, which stays keyed off
-  // a live Group specifically, same as before Project became window-bound.
-  const current = () => groups().find((w) => w.id === currentId());
+  // Whichever Group or Project is actually bound to this window right now
+  // — used for the document title/favicon, so a window connected to a
+  // Project (not just a Group) also gets an identifiable tab instead of
+  // falling back to the generic "cntxt" title.
+  const currentEntity = () =>
+    groups().find((w) => w.id === currentId()) ??
+    folders().find((f) => f.id === currentId());
 
   // A trashed group is still in storage.local (and still has whatever
   // syncStatus it had before deletion) but shouldn't appear in the normal
@@ -2498,17 +2539,19 @@ function App() {
   });
 
   // The pinned dashboard tab is this window's only always-visible surface,
-  // so it's where "which group is this window" needs to be obvious
-  // without opening the dashboard: tab title + a favicon colored to match
-  // the group's own dot color (same palette as the sidebar).
+  // so it's where "what's open in this window" needs to be obvious without
+  // opening the dashboard: tab title + a favicon colored to match the
+  // entity's own dot color (same palette as the sidebar). Falls back to
+  // the plain "cntxt" title/mark when nothing is connected (e.g. right
+  // after Disconnect) — a quiet, correct default rather than a stale name.
   createEffect(() => {
-    const group = current();
+    const entity = currentEntity();
     theme(); // recompute the resolved color when the palette changes
-    document.title = group ? `${group.name} — cntxt` : "cntxt";
+    document.title = entity ? `${entity.name} — cntxt` : "cntxt";
     const favicon = document.getElementById(
       "favicon",
     ) as HTMLLinkElement | null;
-    if (favicon) favicon.href = faviconHrefFor(group);
+    if (favicon) favicon.href = faviconHrefFor(entity);
   });
 
   return (
@@ -2644,6 +2687,37 @@ function App() {
                 </For>
               </div>
               <span class="flex-1" />
+              <button
+                type="button"
+                disabled={!currentEntity()}
+                onClick={goToCurrent}
+                title={
+                  currentEntity()
+                    ? "Jump to what's open in this window"
+                    : "Nothing is open in this window — pick a project or group to connect"
+                }
+                class={
+                  "btn btn-sm h-8 shrink-0 gap-1.75 border font-normal shadow-[var(--shadow-card)] disabled:cursor-default " +
+                  (currentEntity()
+                    ? "border-surface-alt3 bg-surface-alt1"
+                    : "border-surface-alt3 bg-transparent text-surface-txt-faint")
+                }
+              >
+                <Show
+                  when={currentEntity()}
+                  fallback={
+                    <>
+                      <Unplug size={13} />
+                      Not connected
+                    </>
+                  }
+                >
+                  <GroupDot group={currentEntity()} ring title="Active" />
+                  <span class="max-w-32 truncate text-sm">
+                    {currentEntity()!.name}
+                  </span>
+                </Show>
+              </button>
               <button
                 type="button"
                 title="Search everything"
