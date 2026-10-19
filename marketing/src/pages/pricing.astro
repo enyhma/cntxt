@@ -1,0 +1,507 @@
+---
+import SEO from "../components/SEO.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <SEO
+      title="Pricing — cntxt"
+      description="cntxt pricing: free, a one-time Basic purchase, or a Pro subscription with sync across devices. Compare plans side by side."
+      path="/pricing"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <SiteHeader />
+
+    <main>
+      <section class="pricing-hero">
+        <p class="eyebrow">Pricing</p>
+        <h1>Simple pricing</h1>
+        <p class="lede">
+          Start free. Buy Basic once, or subscribe to Pro for sync across
+          devices.
+        </p>
+      </section>
+
+      <section class="pricing">
+        <div class="price-toggle">
+          <input type="radio" name="billing" id="billing-monthly" checked />
+          <label for="billing-monthly">Monthly</label>
+          <input type="radio" name="billing" id="billing-yearly" />
+          <label for="billing-yearly">
+            Yearly <span class="save-badge">save 25%</span>
+          </label>
+        </div>
+
+        <div class="plans">
+          <div class="plan-card">
+            <h3>Free</h3>
+            <p class="plan-price">
+              <span class="price-amount">€0</span>
+              <span class="price-period">/forever</span>
+            </p>
+            <ul class="plan-features">
+              <li>Up to 3 workspaces</li>
+              <li>Up to 25 tabs per workspace</li>
+              <li>Save, close, and restore windows</li>
+            </ul>
+            <span class="btn btn-ghost" aria-disabled="true">
+              Included with the extension
+            </span>
+          </div>
+
+          <div class="plan-card">
+            <h3>Basic</h3>
+            <p class="plan-price">
+              <span class="price-amount">€39</span>
+              <span class="price-period">/once</span>
+            </p>
+            <p class="price-note">pay once, use forever</p>
+            <ul class="plan-features">
+              <li>Unlimited workspaces</li>
+              <li>Unlimited tabs per workspace</li>
+              <li>1 year of updates</li>
+              <li>Everything in Free</li>
+            </ul>
+            <p class="price-note">
+              optional renewal at €19/year to keep getting updates after
+            </p>
+            <span class="btn btn-ghost" aria-disabled="true">
+              Coming soon — pending review
+            </span>
+          </div>
+
+          <div class="plan-card is-pro">
+            <span class="plan-badge">Pro</span>
+            <h3>Pro</h3>
+            <p class="plan-price">
+              <span class="price-amount price-monthly">€8</span>
+              <span class="price-amount price-yearly">€6</span>
+              <span class="price-period">/month</span>
+            </p>
+            <p class="price-note price-yearly">billed €72 per year</p>
+            <ul class="plan-features">
+              <li>Always up to date</li>
+              <li>Sync across all your devices</li>
+              <li>Everything in Basic</li>
+            </ul>
+            <span class="btn btn-ghost price-monthly" aria-disabled="true">
+              Coming soon — pending review
+            </span>
+            <span class="btn btn-ghost price-yearly" aria-disabled="true">
+              Coming soon — pending review
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section class="compare">
+        <h2>Compare plans</h2>
+        <div class="compare-table-wrap">
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th scope="col" class="compare-feature-col">Feature</th>
+                <th scope="col">Free</th>
+                <th scope="col">Basic</th>
+                <th scope="col" class="is-pro-col">Pro</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Workspaces</th>
+                <td>Up to 3</td>
+                <td>Unlimited</td>
+                <td class="is-pro-col">Unlimited</td>
+              </tr>
+              <tr>
+                <th scope="row">Tabs per workspace</th>
+                <td>Up to 25</td>
+                <td>Unlimited</td>
+                <td class="is-pro-col">Unlimited</td>
+              </tr>
+              <tr>
+                <th scope="row">Save, close &amp; restore windows</th>
+                <td><span class="check" aria-label="Included">✓</span></td>
+                <td><span class="check" aria-label="Included">✓</span></td>
+                <td class="is-pro-col">
+                  <span class="check" aria-label="Included">✓</span>
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Bookmarks (links &amp; notes)</th>
+                <td><span class="check" aria-label="Included">✓</span></td>
+                <td><span class="check" aria-label="Included">✓</span></td>
+                <td class="is-pro-col">
+                  <span class="check" aria-label="Included">✓</span>
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Timeline (auto-captured sessions)</th>
+                <td><span class="dash" aria-label="Not included">—</span></td>
+                <td><span class="dash" aria-label="Not included">—</span></td>
+                <td class="is-pro-col">
+                  <span class="check" aria-label="Included">✓</span>
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Shortcuts (automation workflows)</th>
+                <td><span class="dash" aria-label="Not included">—</span></td>
+                <td><span class="dash" aria-label="Not included">—</span></td>
+                <td class="is-pro-col">
+                  <span class="check" aria-label="Included">✓</span>
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Sync across devices</th>
+                <td><span class="dash" aria-label="Not included">—</span></td>
+                <td><span class="dash" aria-label="Not included">—</span></td>
+                <td class="is-pro-col">
+                  <span class="check" aria-label="Included">✓</span>
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Backup to your own storage</th>
+                <td><span class="dash" aria-label="Not included">—</span></td>
+                <td><span class="soon">Coming soon</span></td>
+                <td class="is-pro-col"><span class="soon">Coming soon</span></td>
+              </tr>
+              <tr>
+                <th scope="row">Export &amp; import</th>
+                <td><span class="soon">Coming soon</span></td>
+                <td><span class="soon">Coming soon</span></td>
+                <td class="is-pro-col"><span class="soon">Coming soon</span></td>
+              </tr>
+              <tr>
+                <th scope="row">Updates</th>
+                <td>Always</td>
+                <td>1 year, then €19/year to renew</td>
+                <td class="is-pro-col">Always up to date</td>
+              </tr>
+              <tr>
+                <th scope="row">Price</th>
+                <td>€0</td>
+                <td>€39 once</td>
+                <td class="is-pro-col">€8/mo (€6/mo billed yearly)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <SiteFooter />
+  </body>
+</html>
+
+<style>
+  :root {
+    --surface: #12151c;
+    --surface-alt1: #171a21;
+    --surface-alt2: #21242c;
+    --surface-alt3: #2c2f38;
+    --surface-txt: #ebebeb;
+    --surface-txt-hint: rgb(235 235 235 / 65%);
+    --accent: #1055c9;
+    --accent-alt1: #2c6bd6;
+    --success: #3f7860;
+    --radius: 10px;
+    --shadow-card:
+      0px 1px 3px rgba(0, 0, 0, 0.35), 0px 1px 1px rgba(0, 0, 0, 0.2);
+    --shadow-raised:
+      0px 3px 8px rgba(0, 0, 0, 0.45), 0px 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--surface);
+    color: var(--surface-txt);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    line-height: 1.5;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.1rem;
+    border-radius: var(--radius);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+  .btn-ghost {
+    border: 1px solid var(--surface-alt3);
+  }
+
+  main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  section {
+    padding: 2.5rem 0;
+  }
+
+  .pricing-hero,
+  .pricing {
+    text-align: center;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--surface-txt-hint);
+    margin: 0 0 1rem;
+  }
+  .pricing-hero {
+    padding-top: 4rem;
+  }
+  .pricing-hero h1 {
+    font-size: clamp(2rem, 4.5vw, 2.8rem);
+  }
+  .lede {
+    max-width: 50ch;
+    margin: 0.75rem auto 0;
+    color: var(--surface-txt-hint);
+  }
+
+  .price-toggle {
+    margin: 0 auto;
+    display: inline-flex;
+    padding: 0.25rem;
+    border: 1px solid var(--surface-alt3);
+    border-radius: var(--radius);
+    background: var(--surface-alt1);
+  }
+  .price-toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .price-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border-radius: calc(var(--radius) - 4px);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--surface-txt-hint);
+    cursor: pointer;
+  }
+  .price-toggle input:checked + label {
+    background: var(--surface-alt3);
+    color: var(--surface-txt);
+  }
+  .save-badge {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.65rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--success), transparent 70%);
+    color: var(--surface-txt);
+  }
+
+  .plans {
+    margin-top: 2.5rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 300px));
+    justify-content: center;
+    gap: 1.25rem;
+    text-align: left;
+  }
+  .plan-card {
+    position: relative;
+    background: var(--surface-alt1);
+    border: 1px solid var(--surface-alt2);
+    border-radius: var(--radius);
+    padding: 1.75rem;
+    box-shadow: var(--shadow-card);
+  }
+  .plan-card.is-pro {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-raised);
+  }
+  .plan-badge {
+    position: absolute;
+    top: -0.7rem;
+    right: 1.5rem;
+    background: var(--accent);
+    color: #fff;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+  }
+  .plan-card h3 {
+    font-size: 1.1rem;
+  }
+  .plan-price {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin: 0.75rem 0 0;
+  }
+  .price-amount {
+    font-size: 2.2rem;
+    font-weight: 600;
+  }
+  .price-period {
+    color: var(--surface-txt-hint);
+    font-size: 0.9rem;
+  }
+  .price-note {
+    margin: 0.15rem 0 0;
+    color: var(--surface-txt-hint);
+    font-size: 0.8rem;
+  }
+  .price-yearly {
+    display: none;
+  }
+  .pricing:has(#billing-yearly:checked) .price-monthly {
+    display: none;
+  }
+  .pricing:has(#billing-yearly:checked) .price-yearly {
+    display: inline-flex;
+  }
+  .pricing:has(#billing-yearly:checked) span.price-yearly,
+  .pricing:has(#billing-yearly:checked) p.price-yearly {
+    display: block;
+  }
+  .plan-features {
+    list-style: none;
+    margin: 1.5rem 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    font-size: 0.9rem;
+    color: var(--surface-txt-hint);
+  }
+  .plan-features li {
+    padding-left: 1.4rem;
+    position: relative;
+  }
+  .plan-features li::before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: var(--accent-alt1);
+    font-weight: 700;
+  }
+  .plan-card .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .plan-card .btn[aria-disabled="true"] {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .compare {
+    text-align: center;
+  }
+  .compare h2 {
+    font-size: 1.6rem;
+  }
+  .compare-table-wrap {
+    margin-top: 2rem;
+    overflow-x: auto;
+    border: 1px solid var(--surface-alt2);
+    border-radius: var(--radius);
+  }
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 0.9rem;
+  }
+  .compare-table th,
+  .compare-table td {
+    padding: 0.85rem 1.25rem;
+    white-space: nowrap;
+  }
+  .compare-table thead th {
+    background: var(--surface-alt1);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--surface-txt-hint);
+    border-bottom: 1px solid var(--surface-alt2);
+  }
+  .compare-table tbody th {
+    font-weight: 500;
+    color: var(--surface-txt);
+  }
+  .compare-table tbody td {
+    color: var(--surface-txt-hint);
+  }
+  .compare-table tbody tr:not(:last-child) th,
+  .compare-table tbody tr:not(:last-child) td {
+    border-bottom: 1px solid var(--surface-alt2);
+  }
+  .compare-table tbody tr:nth-child(even) {
+    background: color-mix(in srgb, var(--surface-alt1), transparent 50%);
+  }
+  .compare-table .is-pro-col {
+    background: color-mix(in srgb, var(--accent), transparent 92%);
+  }
+  .compare-table thead .is-pro-col {
+    color: var(--accent-alt1);
+  }
+  .compare-table .check {
+    color: var(--accent-alt1);
+    font-weight: 700;
+  }
+  .compare-table .dash {
+    color: var(--surface-txt-hint);
+  }
+  .compare-table .soon {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.75rem;
+    color: var(--surface-txt-hint);
+    font-style: italic;
+  }
+
+  @media (max-width: 720px) {
+    .plans {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

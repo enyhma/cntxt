@@ -7,14 +7,6 @@ import { requestWithMetadata } from "@tinacms/astro";
 import { client } from "../../tina/__generated__/client";
 import HomeContent from "../components/HomeContent.astro";
 
-// Live Creem products (public checkout links, safe to embed client-side —
-// no API key involved). Created via `creem products create`; see
-// `creem products get <id>` to inspect or `creem products list` for both.
-const CREEM_MONTHLY_URL =
-  "https://www.creem.io/product/prod_1vEVfh4WUKbCPlPaoFLpS5";
-const CREEM_YEARLY_URL =
-  "https://www.creem.io/product/prod_7i6mdEk2fz7x5pdo3ZwHC3";
-
 // Fetched through Tina's client (not a plain JSON import) so this page's
 // render is wired into the same query the admin's live-preview bridge
 // refreshes via /tina-island/home — see src/tina/islands.ts.
@@ -81,71 +73,9 @@ const home = result.data.home;
         <HomeContent data={home} />
       </TinaIsland>
 
-      <section id="pricing" class="pricing">
-        <h2>Simple pricing</h2>
-        <p class="section-lede">
-          Start free. Upgrade whenever a handful of workspaces stops being
-          enough.
-        </p>
-
-        <div class="price-toggle">
-          <input
-            type="radio"
-            name="billing"
-            id="billing-monthly"
-            checked
-          />
-          <label for="billing-monthly">Monthly</label>
-          <input type="radio" name="billing" id="billing-yearly" />
-          <label for="billing-yearly">
-            Yearly <span class="save-badge">save 25%</span>
-          </label>
-        </div>
-
-        <div class="plans">
-          <div class="plan-card">
-            <h3>Free</h3>
-            <p class="plan-price">
-              <span class="price-amount">€0</span>
-              <span class="price-period">/forever</span>
-            </p>
-            <ul class="plan-features">
-              <li>Up to 3 workspaces</li>
-              <li>Up to 25 tabs per workspace</li>
-              <li>Save, close, and restore windows</li>
-            </ul>
-            <span class="btn btn-ghost" aria-disabled="true">
-              Included with the extension
-            </span>
-          </div>
-
-          <div class="plan-card is-pro">
-            <span class="plan-badge">Pro</span>
-            <h3>Pro</h3>
-            <p class="plan-price">
-              <span class="price-amount price-monthly">€4</span>
-              <span class="price-amount price-yearly">€3</span>
-              <span class="price-period">/month</span>
-            </p>
-            <p class="price-note price-yearly">billed €36 per year</p>
-            <ul class="plan-features">
-              <li>Unlimited workspaces</li>
-              <li>Unlimited tabs per workspace</li>
-              <li>Everything in Free</li>
-            </ul>
-            <span class="btn btn-ghost price-monthly" aria-disabled="true">
-              Coming soon — pending review
-            </span>
-            <span class="btn btn-ghost price-yearly" aria-disabled="true">
-              Coming soon — pending review
-            </span>
-          </div>
-        </div>
-      </section>
-
       <section class="cta">
         <h2>Stop losing tabs to closed windows.</h2>
-        <a href="#pricing" class="btn btn-primary">See pricing</a>
+        <a href="/pricing" class="btn btn-primary">See pricing</a>
       </section>
     </main>
 
@@ -465,152 +395,9 @@ const home = result.data.home;
     margin-top: 1.5rem;
   }
 
-  .pricing {
-    text-align: center;
-  }
-
-  .price-toggle {
-    margin: 2rem auto 0;
-    display: inline-flex;
-    padding: 0.25rem;
-    border: 1px solid var(--surface-alt3);
-    border-radius: var(--radius);
-    background: var(--surface-alt1);
-  }
-  .price-toggle input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-  }
-  .price-toggle label {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.5rem 1rem;
-    border-radius: calc(var(--radius) - 4px);
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--surface-txt-hint);
-    cursor: pointer;
-  }
-  .price-toggle input:checked + label {
-    background: var(--surface-alt3);
-    color: var(--surface-txt);
-  }
-  .save-badge {
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 0.65rem;
-    padding: 0.1rem 0.4rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--success), transparent 70%);
-    color: var(--surface-txt);
-  }
-
-  .plans {
-    margin-top: 2.5rem;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 320px));
-    justify-content: center;
-    gap: 1.25rem;
-    text-align: left;
-  }
-  .plan-card {
-    position: relative;
-    background: var(--surface-alt1);
-    border: 1px solid var(--surface-alt2);
-    border-radius: var(--radius);
-    padding: 1.75rem;
-    box-shadow: var(--shadow-card);
-  }
-  .plan-card.is-pro {
-    border-color: var(--accent);
-    box-shadow: var(--shadow-raised);
-  }
-  .plan-badge {
-    position: absolute;
-    top: -0.7rem;
-    right: 1.5rem;
-    background: var(--accent);
-    color: #fff;
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 0.65rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.2rem 0.5rem;
-    border-radius: 999px;
-  }
-  .plan-card h3 {
-    font-size: 1.1rem;
-  }
-  .plan-price {
-    display: flex;
-    align-items: baseline;
-    gap: 0.35rem;
-    margin: 0.75rem 0 0;
-  }
-  .price-amount {
-    font-size: 2.2rem;
-    font-weight: 600;
-  }
-  .price-period {
-    color: var(--surface-txt-hint);
-    font-size: 0.9rem;
-  }
-  .price-note {
-    margin: 0.15rem 0 0;
-    color: var(--surface-txt-hint);
-    font-size: 0.8rem;
-  }
-  .price-yearly {
-    display: none;
-  }
-  .pricing:has(#billing-yearly:checked) .price-monthly {
-    display: none;
-  }
-  .pricing:has(#billing-yearly:checked) .price-yearly {
-    display: inline-flex;
-  }
-  .pricing:has(#billing-yearly:checked) span.price-yearly,
-  .pricing:has(#billing-yearly:checked) p.price-yearly {
-    display: block;
-  }
-  .plan-features {
-    list-style: none;
-    margin: 1.5rem 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    font-size: 0.9rem;
-    color: var(--surface-txt-hint);
-  }
-  .plan-features li {
-    padding-left: 1.1rem;
-    position: relative;
-  }
-  .plan-features li::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0.5em;
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background: var(--accent);
-  }
-  .plan-card .btn {
-    width: 100%;
-    justify-content: center;
-  }
-  .plan-card .btn[aria-disabled="true"] {
-    opacity: 0.6;
-    cursor: default;
-  }
-
   @media (max-width: 720px) {
     .feature-grid,
-    .steps,
-    .plans {
+    .steps {
       grid-template-columns: 1fr;
     }
     .mock {
