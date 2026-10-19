@@ -15,9 +15,14 @@ import {
   changedSessionCaptureInterval,
   handleTabGroupRemoved,
   handleTabGroupUpdated,
+  shouldAdoptWindowsOnInstall,
   shouldResyncOnStorageChange,
 } from "@/utils/backgroundEvents";
-import { captureSession, pruneOldLocalSessions } from "@/utils/sessions";
+import {
+  captureSession,
+  isRestoringSession,
+  pruneOldLocalSessions,
+} from "@/utils/sessions";
 import { runAutoArchiveCheck } from "@/utils/autoArchive";
 
 const SESSION_ALARM_NAME = "cntxt-session-capture";
@@ -104,6 +109,26 @@ export default defineBackground(() => {
     }
   })();
 
+  // Shared by every place a window needs onboarding: bind it to something (a
+  // fresh "Untitled Project" if it has no binding yet — see
+  // ensureBindingForWindow), open its dashboard tab, and start tracking it.
+  // Idempotent — calling this for a window that's already bound just
+  // confirms the existing binding rather than creating a duplicate — so
+  // it's always safe to call unconditionally rather than checking first.
+  async function adoptWindow(windowId: number) {
+    await ensureBindingForWindow(windowId);
+    await ensureDashboardTab(windowId);
+    trackWindow(windowId);
+  }
+
+  async function adoptAllOpenWindows() {
+    const windows = await browser.windows.getAll({ windowTypes: ["normal"] });
+    for (const win of windows) {
+      if (win.id === undefined) continue;
+      await adoptWindow(win.id);
+    }
+  }
+
   browser.runtime.onStartup.addListener(async () => {
     // A genuine browser restart, unlike the reload above, DOES invalidate
     // every window id — Chrome can (and does) reuse small ids after a
@@ -116,13 +141,21 @@ export default defineBackground(() => {
     // rare, self-correcting race (the next tab event re-syncs the right
     // target anyway) rather than adding real cross-task coordination for it.
     await clearWindowBindingMap();
-    const windows = await browser.windows.getAll({ windowTypes: ["normal"] });
-    for (const win of windows) {
-      if (win.id === undefined) continue;
-      await ensureBindingForWindow(win.id);
-      await ensureDashboardTab(win.id);
-      trackWindow(win.id);
-    }
+    await adoptAllOpenWindows();
+  });
+
+  // A live install (the common case — adding the extension to an
+  // already-running browser from the Web Store) fires onInstalled, not
+  // onStartup; onStartup only fires on a genuine browser relaunch. Without
+  // this, every window open at install time sat completely untracked until
+  // the user clicked the toolbar icon in it specifically. No wipe needed
+  // here (unlike onStartup): a fresh install's binding map is guaranteed
+  // empty — the browser clears extension storage on uninstall, so even a
+  // reinstall starts from nothing. Scoped to reason === "install" only —
+  // an update (reason === "update"/"chrome_update") already has correct
+  // bindings for every window; re-running this would be redundant at best.
+  browser.runtime.onInstalled.addListener(async ({ reason }) => {
+    if (shouldAdoptWindowsOnInstall(reason)) await adoptAllOpenWindows();
   });
 
   browser.windows.onRemoved.addListener((windowId) => {
@@ -130,14 +163,34 @@ export default defineBackground(() => {
     removeWindowBinding(windowId);
   });
 
-  // Session restore (utils/sessions.ts) is the first code path that creates
-  // brand-new windows programmatically — restoreMachine/groupSwapMachine
-  // only ever reuse the CURRENT, already-tracked window, so this gap never
-  // mattered before. windowSyncMachine.syncTabs already no-ops safely with
-  // no binding, so tracking an as-yet-unbound window (e.g. a plain Cmd+N) is
-  // harmless — incidentally also fixes that pre-existing gap.
-  browser.windows.onCreated.addListener((win) => {
-    if (win.id !== undefined) trackWindow(win.id);
+  // Every new normal window is onboarded immediately — no click-to-adopt:
+  // bound to a fresh "Untitled Project" from whatever tabs it opened with
+  // (or reattached per settings.lastActiveBinding, same as
+  // ensureBindingForWindow always decided for action.onClicked), with its
+  // dashboard tab pinned in automatically. "Every window is a workspace"
+  // applies the moment the window exists, not only once the user asks.
+  //
+  // Two exclusions:
+  // - win.type !== "normal": onCreated fires for popups, devtools, panels,
+  //   and picture-in-picture too (all technically "windows") — adopting
+  //   those would force a Project + a pinned dashboard tab into a window
+  //   that was never meant to hold either. Every other window listing in
+  //   this codebase already filters to windowTypes: ["normal"]; onCreated
+  //   just never had the chance to until now.
+  // - isRestoringSession(): restoreSession (utils/sessions.ts) creates
+  //   windows itself and sets each one's binding explicitly right after —
+  //   adopting here too would race that and could create a throwaway
+  //   Untitled Project in the gap, burning a real quota slot. trackWindow
+  //   still runs so tab-sync is primed the instant restoreSession's own
+  //   binding lands, matching what this listener already did before this
+  //   change.
+  browser.windows.onCreated.addListener(async (win) => {
+    if (win.id === undefined || win.type !== "normal") return;
+    if (isRestoringSession()) {
+      trackWindow(win.id);
+      return;
+    }
+    await adoptWindow(win.id);
   });
 
   browser.windows.onFocusChanged.addListener(async (windowId) => {

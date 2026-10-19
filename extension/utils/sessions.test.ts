@@ -14,8 +14,13 @@ const from = vi.fn(() => ({ select, insert }));
 const rpc = vi.fn().mockResolvedValue({ error: null });
 vi.mock("./supabase", () => ({ supabase: { from, rpc } }));
 
-const { captureSession, getSessions, pruneOldLocalSessions, restoreSession } =
-  await import("./sessions");
+const {
+  captureSession,
+  getSessions,
+  isRestoringSession,
+  pruneOldLocalSessions,
+  restoreSession,
+} = await import("./sessions");
 const { createGroup, getGroups, updateGroup } = await import("./groups");
 const { createFolder, updateFolder } = await import("./folders");
 const { getWindowBindingMap } = await import("./session");
@@ -264,5 +269,26 @@ describe("restoreSession", () => {
     const bindings = Object.values(bindingMap);
     expect(bindings).toContainEqual({ kind: "group", groupId: "q1" });
     expect(bindings).toContainEqual({ kind: "project", projectId: "f1" });
+  });
+
+  it("flags isRestoringSession while the restore loop runs, clearing it after (even on error)", async () => {
+    expect(isRestoringSession()).toBe(false);
+
+    const session = {
+      id: "s1",
+      capturedAt: Date.now(),
+      windows: [
+        {
+          entityTable: "groups" as const,
+          entityId: "q1",
+          entityName: "Q",
+          tabs: [],
+        },
+      ],
+    };
+    const pending = restoreSession(session);
+    expect(isRestoringSession()).toBe(true);
+    await pending;
+    expect(isRestoringSession()).toBe(false);
   });
 });

@@ -129,6 +129,16 @@ export function shouldResyncOnStorageChange(
   );
 }
 
+// A live install (adding the extension to an already-running browser) is
+// the only onInstalled reason that should adopt every open window as a
+// Project — an update (reason === "update"/"chrome_update") already has
+// correct bindings for every window from before the update, so re-running
+// adoption would be redundant at best. See background.ts's onInstalled
+// listener.
+export function shouldAdoptWindowsOnInstall(reason: string): boolean {
+  return reason === "install";
+}
+
 // Settings' own write (updateSettings) always rewrites the whole object, so
 // any edit fires this listener — most of which (theme, startupBehavior,
 // ...) the alarm doesn't care about. Returns the new interval only when it

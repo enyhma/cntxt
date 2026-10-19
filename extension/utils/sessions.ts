@@ -225,6 +225,16 @@ export async function pullRemoteSessions(): Promise<number> {
   return missing.length;
 }
 
+// Set while restoreSession's loop is creating windows — background.ts's
+// windows.onCreated listener checks this to skip its own auto-adopt
+// (ensureBindingForWindow would otherwise race the explicit setWindowBinding
+// below and could create a throwaway "Untitled Project", burning a real
+// quota slot, in the gap before this function's own binding lands).
+let restoringSession = false;
+export function isRestoringSession(): boolean {
+  return restoringSession;
+}
+
 // Opens one new window per leg, bound + populated the same way
 // restoreMachine's openBindingTabs does for a single target — but this is a
 // plain loop, not a state machine: restoreMachine is hardwired to replace
@@ -234,17 +244,22 @@ export async function pullRemoteSessions(): Promise<number> {
 // background.ts's windows.onCreated listener to keep each new window
 // syncing afterward.
 export async function restoreSession(session: Session): Promise<void> {
-  for (const leg of session.windows) {
-    const win = await browser.windows.create(
-      leg.tabs[0] ? { url: leg.tabs[0].url } : {},
-    );
-    if (win?.id === undefined) continue;
-    await setWindowBinding(
-      win.id,
-      leg.entityTable === "groups"
-        ? { kind: "group", groupId: leg.entityId }
-        : { kind: "project", projectId: leg.entityId },
-    );
-    await openMissingTabs(win.id, leg.tabs);
+  restoringSession = true;
+  try {
+    for (const leg of session.windows) {
+      const win = await browser.windows.create(
+        leg.tabs[0] ? { url: leg.tabs[0].url } : {},
+      );
+      if (win?.id === undefined) continue;
+      await setWindowBinding(
+        win.id,
+        leg.entityTable === "groups"
+          ? { kind: "group", groupId: leg.entityId }
+          : { kind: "project", projectId: leg.entityId },
+      );
+      await openMissingTabs(win.id, leg.tabs);
+    }
+  } finally {
+    restoringSession = false;
   }
 }

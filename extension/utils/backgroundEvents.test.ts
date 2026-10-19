@@ -4,6 +4,7 @@ import {
   handleTabGroupRemoved,
   handleTabGroupUpdated,
   nameOrColorChanged,
+  shouldAdoptWindowsOnInstall,
   shouldResyncOnStorageChange,
 } from "./backgroundEvents";
 import { createFolder, getFolders } from "./folders";
@@ -246,5 +247,17 @@ describe("shouldResyncOnStorageChange", () => {
         "local" as never,
       ),
     ).toBe(true);
+  });
+});
+
+describe("shouldAdoptWindowsOnInstall", () => {
+  it("adopts open windows on a fresh install", () => {
+    expect(shouldAdoptWindowsOnInstall("install")).toBe(true);
+  });
+
+  it("does not re-adopt on an update — bindings already exist", () => {
+    expect(shouldAdoptWindowsOnInstall("update")).toBe(false);
+    expect(shouldAdoptWindowsOnInstall("chrome_update")).toBe(false);
+    expect(shouldAdoptWindowsOnInstall("shared_module_update")).toBe(false);
   });
 });
