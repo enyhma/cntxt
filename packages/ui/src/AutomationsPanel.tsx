@@ -17,7 +17,7 @@ import "@dschz/solid-flow/styles";
 import { Plus, Trash2 } from "lucide-solid";
 
 // Inline shapes, not imported from extension/utils/automations.ts — same
-// package-decoupling precedent as HistoryPanel's SessionLeg: this package
+// package-decoupling precedent as TimelinePanel's SessionLeg: this package
 // stays ignorant of the extension's storage schema, only the structural
 // shape it actually renders.
 export type AutomationBlockType =
@@ -319,7 +319,13 @@ export function AutomationsPanel(props: {
     patch: Pick<Automation, "nodes" | "edges">,
   ) => void;
   onDeleteAutomation: (id: string) => void;
+  // Customizing/toggling/deleting a Shortcut is Pro-only — the two seeded
+  // defaults (auto-archive, auto-complete) keep running for every tier
+  // regardless (see automationEngine.ts's getEnabledAutomationsFor), this
+  // only locks the editing UI itself.
+  proActive?: Accessor<boolean>;
 }) {
+  const locked = () => props.proActive?.() === false;
   const [editingId, setEditingId] = createSignal<string | undefined>();
   const editing = createMemo(() =>
     props.automations().find((a) => a.id === editingId()),
@@ -342,6 +348,12 @@ export function AutomationsPanel(props: {
       <div class="flex-1 overflow-y-auto p-6">
         <div class="flex max-w-md flex-col gap-3">
           <h2 class="text-base font-semibold">Shortcuts</h2>
+          <Show when={locked()}>
+            <p class="text-sm text-surface-txt-hint">
+              Shortcuts is a Pro feature — upgrade in Settings to customize,
+              toggle, or delete these.
+            </p>
+          </Show>
           <For each={props.automations()}>
             {(a) => {
               const trigger = a.nodes.find((n) => n.kind === "trigger");
@@ -351,13 +363,15 @@ export function AutomationsPanel(props: {
                     type="checkbox"
                     class="toggle toggle-sm"
                     checked={a.enabled}
+                    disabled={locked()}
                     onChange={(e) =>
                       props.onToggleEnabled(a.id, e.currentTarget.checked)
                     }
                   />
                   <button
                     type="button"
-                    class="min-w-0 flex-1 text-left"
+                    class="min-w-0 flex-1 text-left disabled:cursor-default"
+                    disabled={locked()}
                     onClick={() => setEditingId(a.id)}
                   >
                     <div class="truncate text-sm font-medium">{a.name}</div>
@@ -369,6 +383,7 @@ export function AutomationsPanel(props: {
                     type="button"
                     title="Delete shortcut"
                     class="btn btn-square btn-sm border border-surface-alt3 bg-surface-alt2"
+                    disabled={locked()}
                     onClick={() => props.onDeleteAutomation(a.id)}
                   >
                     <Trash2 size={13} />

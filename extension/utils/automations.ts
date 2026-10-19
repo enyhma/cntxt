@@ -27,6 +27,11 @@ export interface Automation {
   edges: AutomationEdge[];
   createdAt: number;
   updatedAt: number;
+  // True only for the two defaultAutomations() below. Shortcuts (custom,
+  // user-authored automations) are Pro-only, but these two reproduce
+  // pre-existing core behavior (auto-archive, auto-complete-on-empty) that
+  // every tier keeps — see getEnabledAutomationsFor's plan check.
+  seeded?: boolean;
 }
 
 const STORAGE_KEY = "automations";
@@ -42,6 +47,7 @@ function defaultAutomations(autoArchiveDays: number): Automation[] {
       id: crypto.randomUUID(),
       name: "Archive stale done groups",
       enabled: true,
+      seeded: true,
       nodes: [
         {
           id: "trigger",
@@ -66,6 +72,7 @@ function defaultAutomations(autoArchiveDays: number): Automation[] {
       id: crypto.randomUUID(),
       name: "Complete group when tabs close",
       enabled: true,
+      seeded: true,
       nodes: [
         {
           id: "trigger",
@@ -125,6 +132,7 @@ export async function createAutomation(
     edges: input.edges,
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    seeded: false,
   };
   const automations = await getAutomations();
   await setAutomations([...automations, automation]);

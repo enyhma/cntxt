@@ -16,9 +16,8 @@ const pullRemoteResources = vi.fn();
 vi.mock("./resources", () => ({ pullRemoteResources }));
 const pullRemoteSessions = vi.fn();
 vi.mock("./sessions", () => ({ pullRemoteSessions }));
-vi.mock("./entitlements", () => ({
-  getCachedEntitlements: vi.fn().mockResolvedValue(undefined),
-}));
+const getCachedEntitlements = vi.fn();
+vi.mock("./entitlements", () => ({ getCachedEntitlements }));
 
 const { syncMachine } = await import("./sync");
 
@@ -31,6 +30,15 @@ beforeEach(() => {
   pushDirtyFolders.mockReset().mockImplementation((input) => input);
   pullRemoteResources.mockReset().mockResolvedValue(0);
   pullRemoteSessions.mockReset().mockResolvedValue(0);
+  // Sync (Groups/Folders/Sessions push+pull) is Pro-only — seed a
+  // Pro-active cache so these tests exercise the sync machine itself, not
+  // the plan gate (that gate gets its own test below).
+  getCachedEntitlements.mockReset().mockResolvedValue({
+    maxMissions: 100_000,
+    accessExpiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+    hasBasicLicense: false,
+    proActive: true,
+  });
 });
 
 afterEach(() => {
@@ -122,6 +130,30 @@ describe("syncMachine", () => {
     vi.advanceTimersByTime(5 * 60 * 1000);
     await flush();
     expect(pullRemoteGroups).toHaveBeenCalledTimes(2);
+    expect(actor.getSnapshot().value).toBe("idle");
+  });
+
+  it("skips Groups/Folders/Sessions push+pull when Pro isn't active, but keeps pulling Resources", async () => {
+    getCachedEntitlements.mockResolvedValue({
+      maxMissions: 3,
+      accessExpiresAt: null,
+      hasBasicLicense: true,
+      proActive: false,
+    });
+
+    const actor = createActor(syncMachine).start();
+    await flush();
+    expect(pullRemoteGroups).not.toHaveBeenCalled();
+    expect(pullRemoteFolders).not.toHaveBeenCalled();
+    expect(pullRemoteSessions).not.toHaveBeenCalled();
+    expect(pullRemoteResources).toHaveBeenCalledTimes(1);
+    expect(purgeExpiredLocalTrash).toHaveBeenCalledTimes(1);
+
+    actor.send({ type: "LOCAL_CHANGE" });
+    vi.advanceTimersByTime(2000);
+    await flush();
+    expect(pushDirtyGroups).not.toHaveBeenCalled();
+    expect(pushDirtyFolders).not.toHaveBeenCalled();
     expect(actor.getSnapshot().value).toBe("idle");
   });
 });

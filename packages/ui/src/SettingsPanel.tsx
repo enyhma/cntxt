@@ -28,8 +28,10 @@ export function SettingsPanel(props: {
   accessExpiresAt?: Accessor<string | null | undefined>;
   trashedCount?: Accessor<number>;
   trashRetentionDays?: Accessor<number>;
+  hasBasicLicense?: Accessor<boolean>;
   monthlyCheckoutUrl?: string;
   yearlyCheckoutUrl?: string;
+  basicCheckoutUrl?: string;
 }) {
   return (
     <div class="flex-1 overflow-y-auto p-6">
@@ -86,10 +88,12 @@ export function SettingsPanel(props: {
             </Show>
             <span class="text-xs text-surface-txt-hint">
               {props.accessExpiresAt?.()
-                ? `Plan active until ${new Date(
+                ? `Pro, active until ${new Date(
                     props.accessExpiresAt()!,
                   ).toLocaleDateString()}`
-                : "Free plan"}
+                : props.hasBasicLicense?.()
+                  ? "Basic plan"
+                  : "Free plan"}
             </span>
             <Show when={(props.trashedCount?.() ?? 0) > 0}>
               <span class="text-xs text-surface-txt-hint">
@@ -98,7 +102,7 @@ export function SettingsPanel(props: {
               </span>
             </Show>
             <Show when={props.monthlyCheckoutUrl && props.yearlyCheckoutUrl}>
-              <div class="mt-1 flex gap-2">
+              <div class="mt-1 flex flex-wrap gap-2">
                 <a
                   href={props.monthlyCheckoutUrl}
                   target="_blank"
@@ -115,6 +119,18 @@ export function SettingsPanel(props: {
                 >
                   Upgrade — Yearly
                 </a>
+                <Show
+                  when={props.basicCheckoutUrl && !props.hasBasicLicense?.()}
+                >
+                  <a
+                    href={props.basicCheckoutUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="btn btn-xs border border-surface-alt3"
+                  >
+                    Buy Basic — one-time
+                  </a>
+                </Show>
               </div>
             </Show>
           </div>

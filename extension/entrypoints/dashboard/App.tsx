@@ -33,10 +33,13 @@ import {
   getSettings,
   updateSettings,
 } from "@/utils/settings";
-import { parseTokensFromRedirectUrl } from "@/utils/oauthRedirect";
 import { supabase, supabaseConfigured } from "@/utils/supabase";
 import { useSupabaseSession } from "@cntxt/supabase";
-import { creemMonthlyCheckoutUrl, creemYearlyCheckoutUrl } from "@/utils/creem";
+import {
+  creemBasicCheckoutUrl,
+  creemMonthlyCheckoutUrl,
+  creemYearlyCheckoutUrl,
+} from "@/utils/creem";
 import { type Entitlements, refreshEntitlements } from "@/utils/entitlements";
 import {
   AppWindow,
@@ -48,7 +51,7 @@ import {
   FolderClosed as ProjectClosedIcon,
   FolderOpen as ProjectOpenIcon,
   FolderPlus,
-  History as HistoryIcon,
+  History as TimelineIcon,
   Layers as AreaIcon,
   Link as LinkIcon,
   type LucideProps,
@@ -117,7 +120,7 @@ import {
   SettingsPanel,
   TabRow,
   TrashPanel,
-  HistoryPanel,
+  TimelinePanel,
   AutomationsPanel,
   type Automation as UiAutomation,
   FolderPage,
@@ -214,13 +217,13 @@ function closeOpenDropdowns() {
 // the NAV_ITEMS.filter call site).
 const NAV_ITEMS: Array<{
   key:
-    "groups" | "trash" | "history" | "automations" | "bookmarks" | "settings";
+    "groups" | "trash" | "timeline" | "automations" | "bookmarks" | "settings";
   label: string;
   icon: (props: LucideProps) => JSX.Element;
 }> = [
   { key: "groups", label: "Tabs", icon: GroupsIcon },
   { key: "trash", label: "Trash", icon: Trash2 },
-  { key: "history", label: "History", icon: HistoryIcon },
+  { key: "timeline", label: "Timeline", icon: TimelineIcon },
   { key: "automations", label: "Shortcuts", icon: AutomationsIcon },
   { key: "bookmarks", label: "Bookmarks", icon: BookmarksIcon },
   { key: "settings", label: "Settings", icon: SettingsIcon },
@@ -2019,7 +2022,7 @@ function App() {
   const [sessionCaptureIntervalMinutes, setSessionCaptureIntervalMinutes] =
     createSignal(15);
   const [nav, setNav] = createSignal<
-    "groups" | "trash" | "history" | "automations" | "bookmarks" | "settings"
+    "groups" | "trash" | "timeline" | "automations" | "bookmarks" | "settings"
   >("groups");
   const [automations, setAutomations] = createSignal<Automation[]>([]);
   const [jumpToSessionId, setJumpToSessionId] = createSignal<string>();
@@ -2062,7 +2065,7 @@ function App() {
     closePalette();
   }
   function goToSession(id: string) {
-    setNav("history");
+    setNav("timeline");
     setJumpToSessionId(id);
     closePalette();
   }
@@ -2395,51 +2398,6 @@ function App() {
     if (error) setAuthError(error.message);
   }
 
-  // browser.identity.launchWebAuthFlow is the extension-native way to do
-  // OAuth: its redirect target (getRedirectURL()) is a reserved URL the
-  // browser intercepts before ever loading a page, so the result comes
-  // back directly as a return value — chrome-extension://, moz-extension://
-  // and their per-browser id problems never enter the picture.
-  async function handleGoogleSignIn() {
-    setAuthError("");
-    const redirectTo = browser.identity.getRedirectURL();
-    const { data, error } = await supabase!.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo, skipBrowserRedirect: true },
-    });
-    if (error) {
-      setAuthError(error.message);
-      return;
-    }
-    if (!data.url) {
-      setAuthError("Supabase didn't return an OAuth URL.");
-      return;
-    }
-
-    let resultUrl: string | undefined;
-    try {
-      resultUrl = await browser.identity.launchWebAuthFlow({
-        url: data.url,
-        interactive: true,
-      });
-    } catch {
-      // User closed the auth window — not an error worth surfacing.
-      return;
-    }
-
-    const tokens = parseTokensFromRedirectUrl(resultUrl);
-    if (!tokens) {
-      setAuthError("Google sign-in didn't return a valid session.");
-      return;
-    }
-
-    const { error: setSessionError } = await supabase!.auth.setSession({
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-    });
-    if (setSessionError) setAuthError(setSessionError.message);
-  }
-
   async function handleSignOut() {
     await supabase!.auth.signOut();
   }
@@ -2627,15 +2585,6 @@ function App() {
                       Send sign-in code
                     </button>
                   </form>
-                  <div class="my-3 text-center text-xs text-surface-txt-hint">
-                    or
-                  </div>
-                  <button
-                    onClick={handleGoogleSignIn}
-                    class="btn w-full border border-surface-alt3"
-                  >
-                    Continue with Google
-                  </button>
                 </Show>
                 <Show when={authError()}>
                   <p class="mt-3 text-sm text-danger">{authError()}</p>
@@ -2804,6 +2753,17 @@ function App() {
                       Upgrade — Yearly
                     </a>
                   </li>
+                  <Show when={!entitlements()?.hasBasicLicense}>
+                    <li>
+                      <a
+                        href={creemBasicCheckoutUrl(session()!.user.id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Buy Basic — one-time
+                      </a>
+                    </li>
+                  </Show>
                   <li>
                     <button type="button" onClick={handleSignOut}>
                       Sign out
@@ -2869,9 +2829,9 @@ function App() {
                   />
                 </div>
               </Match>
-              <Match when={nav() === "history"}>
+              <Match when={nav() === "timeline"}>
                 <div class="flex flex-1 items-stretch overflow-hidden">
-                  <HistoryPanel
+                  <TimelinePanel
                     archivedGroups={archivedGroups}
                     archivedFolders={archivedFolders}
                     onUnarchiveGroup={handleUnarchiveGroup}
@@ -2879,6 +2839,7 @@ function App() {
                     sessions={sessions}
                     onRestoreSession={handleRestoreSession}
                     jumpToSessionId={jumpToSessionId}
+                    proActive={() => entitlements()?.proActive ?? false}
                   />
                 </div>
               </Match>
@@ -2889,6 +2850,7 @@ function App() {
                     onToggleEnabled={handleToggleAutomationEnabled}
                     onSaveAutomation={handleSaveAutomation}
                     onDeleteAutomation={handleDeleteAutomation}
+                    proActive={() => entitlements()?.proActive ?? false}
                   />
                 </div>
               </Match>
@@ -2978,6 +2940,9 @@ function App() {
                     accessExpiresAt={() => entitlements()?.accessExpiresAt}
                     trashedCount={() => trashedGroups().length}
                     trashRetentionDays={trashRetention}
+                    hasBasicLicense={() =>
+                      entitlements()?.hasBasicLicense ?? false
+                    }
                     monthlyCheckoutUrl={
                       session()
                         ? creemMonthlyCheckoutUrl(session()!.user.id)
@@ -2986,6 +2951,11 @@ function App() {
                     yearlyCheckoutUrl={
                       session()
                         ? creemYearlyCheckoutUrl(session()!.user.id)
+                        : undefined
+                    }
+                    basicCheckoutUrl={
+                      session()
+                        ? creemBasicCheckoutUrl(session()!.user.id)
                         : undefined
                     }
                   />

@@ -1,10 +1,12 @@
 // Live Creem products (public hosted checkout links, safe to embed
 // client-side — no API key involved). Keep in sync with the same constants
-// in marketing/src/pages/index.astro.
+// in marketing/src/pages/pricing.astro.
 const CREEM_MONTHLY_URL =
   "https://www.creem.io/product/prod_1vEVfh4WUKbCPlPaoFLpS5";
 const CREEM_YEARLY_URL =
   "https://www.creem.io/product/prod_7i6mdEk2fz7x5pdo3ZwHC3";
+const CREEM_BASIC_URL =
+  "https://www.creem.io/product/prod_3etosXzssLTxYWgp7XKXiv";
 
 // Creem's hosted checkout link accepts metadata as a query param and
 // carries it through to the subscription.paid webhook untouched — no
@@ -22,4 +24,8 @@ export function creemMonthlyCheckoutUrl(userId: string): string {
 
 export function creemYearlyCheckoutUrl(userId: string): string {
   return checkoutUrl(CREEM_YEARLY_URL, userId);
+}
+
+export function creemBasicCheckoutUrl(userId: string): string {
+  return checkoutUrl(CREEM_BASIC_URL, userId);
 }

@@ -10,6 +10,14 @@ import {
 } from "./groups";
 
 async function pullAndPurgeTrash(): Promise<number> {
+  // Sync (cross-device continuity) is Pro-only — see
+  // docs/architecture-sync.md and the entitlements migration this was
+  // built against. Folders/Groups/Sessions are what "Sync"/"Timeline" mean
+  // in the pricing page, so skip pulling them entirely when Pro isn't
+  // active; nothing errors, there's just nothing new to apply. Resources
+  // (Bookmarks) are a deliberate exception — free for every tier, so
+  // always pulled regardless.
+  //
   // Folders first: a group's folder_id pull below is only meaningful
   // once the folder it points to already exists locally. Resources last —
   // they reference a group_id, so pulling them before groups exist
@@ -18,11 +26,13 @@ async function pullAndPurgeTrash(): Promise<number> {
   // live denormalized inside their own jsonb, not as real FKs) — pulled
   // last out of convenience, not necessity. No pushDirtySessions: a
   // session is immutable after creation, nothing to push.
-  const folders = await pullRemoteFolders();
-  const groups = await pullRemoteGroups();
-  const resources = await pullRemoteResources();
-  const sessions = await pullRemoteSessions();
   const entitlements = await getCachedEntitlements();
+  const proActive = entitlements?.proActive ?? false;
+
+  const folders = proActive ? await pullRemoteFolders() : 0;
+  const groups = proActive ? await pullRemoteGroups() : 0;
+  const resources = await pullRemoteResources();
+  const sessions = proActive ? await pullRemoteSessions() : 0;
   await purgeExpiredLocalTrash(entitlements?.accessExpiresAt);
   return folders + groups + resources + sessions;
 }
@@ -30,6 +40,9 @@ async function pullAndPurgeTrash(): Promise<number> {
 async function pushDirty(
   lastPushedAt: Record<string, number>,
 ): Promise<Record<string, number>> {
+  const entitlements = await getCachedEntitlements();
+  if (!entitlements?.proActive) return lastPushedAt;
+
   const afterFolders = await pushDirtyFolders(lastPushedAt);
   return pushDirtyGroups(afterFolders);
 }

@@ -30,13 +30,6 @@ export default defineConfig({
   },
   manifest: (env) => {
     const base = {
-      // "identity" is for browser.identity.launchWebAuthFlow /
-      // getRedirectURL (Google sign-in) — see App.tsx handleGoogleSignIn.
-      // Deliberately not using a plain page-redirect OAuth flow: that would
-      // reintroduce exactly the per-browser redirect-URL problem this
-      // permission avoids (chrome-extension:// pinning, Edge's
-      // can't-pin-ahead-of-time id, Firefox's randomized moz-extension://
-      // uuid — see docs/architecture-sync.md).
       // "tabGroups" is needed for chrome.tabGroups.get/query/update on
       // Chrome/Edge (grouping/ungrouping itself, tabs.group()/ungroup(), is
       // already covered by "tabs"). Firefox's tabs.group()/tabGroups API
@@ -49,7 +42,6 @@ export default defineConfig({
       permissions: [
         "tabs",
         "storage",
-        "identity",
         "alarms",
         ...(env.browser === "firefox" ? [] : (["tabGroups"] as const)),
       ],

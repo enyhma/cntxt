@@ -14,7 +14,11 @@ type SessionLeg = {
   entityName: string;
   tabs: Array<{ url: string; title: string }>;
 };
-type HistorySession = { id: string; capturedAt: number; windows: SessionLeg[] };
+type TimelineSession = {
+  id: string;
+  capturedAt: number;
+  windows: SessionLeg[];
+};
 
 function timeAgo(ms: number): string {
   const diff = Date.now() - ms;
@@ -26,7 +30,7 @@ function timeAgo(ms: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function HistoryPanel(props: {
+export function TimelinePanel(props: {
   archivedGroups: Accessor<
     Array<{ id: string; name: string; color?: string; icon?: string }>
   >;
@@ -35,9 +39,14 @@ export function HistoryPanel(props: {
   >;
   onUnarchiveGroup: (id: string) => void;
   onUnarchiveFolder: (id: string) => void;
-  sessions: Accessor<HistorySession[]>;
-  onRestoreSession: (session: HistorySession) => void;
+  sessions: Accessor<TimelineSession[]>;
+  onRestoreSession: (session: TimelineSession) => void;
   jumpToSessionId?: Accessor<string | undefined>;
+  // Sessions (Timeline) is Pro-only — sessions() is simply always empty for
+  // Free/Basic (capture is skipped at the source, see
+  // extension/utils/sessions.ts), this just makes the empty state explain
+  // why instead of reading like a bug.
+  proActive?: Accessor<boolean>;
 }) {
   const hasArchived = () =>
     props.archivedGroups().length > 0 || props.archivedFolders().length > 0;
@@ -101,7 +110,9 @@ export function HistoryPanel(props: {
             when={props.sessions().length > 0}
             fallback={
               <p class="text-sm text-surface-txt-hint">
-                No sessions captured yet.
+                {props.proActive?.() === false
+                  ? "Timeline is a Pro feature — upgrade in Settings to start capturing sessions."
+                  : "No sessions captured yet."}
               </p>
             }
           >

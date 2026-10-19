@@ -113,9 +113,9 @@ sequenceDiagram
 
     User->>Dashboard: opens the dashboard for the first time
     Dashboard-->>User: sign-in screen (nothing else is usable yet)
-    User->>Dashboard: "Sign in" (magic link or Google OAuth)
-    Dashboard->>SupaAuth: signInWithOtp / signInWithOAuth
-    SupaAuth-->>User: email link, or OAuth consent screen
+    User->>Dashboard: "Sign in" (email OTP)
+    Dashboard->>SupaAuth: signInWithOtp
+    SupaAuth-->>User: emailed one-time code
     User->>SupaAuth: completes the flow
     SupaAuth-->>Dashboard: session (JWT, refresh token)
     Dashboard->>Session: persist session

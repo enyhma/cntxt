@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getCachedEntitlements } from "./entitlements";
 import { getWindowBindingMap, setWindowBinding } from "./session";
 import { getGroups, updateGroup, type GroupTab } from "./groups";
 import { getFolders } from "./folders";
@@ -89,7 +90,17 @@ function legsEqual(a: SessionLeg[], b: SessionLeg[]): boolean {
 // Snapshots every currently-open, cntxt-bound window and stitches them into
 // one Session — skipping the write if nothing has changed since the most
 // recent capture, so idling doesn't spam a new row every tick.
+//
+// Timeline is Pro-only (see supabase/migrations's has_sync_access and
+// marketing/src/pages/pricing.astro) — this is a purely local feature, so
+// unlike Sync there's no RLS layer beneath it, only this check. Advisory,
+// same tradeoff as every other use of getCachedEntitlements(): good enough
+// to stop Free/Basic from accumulating history, not meant to resist a
+// deliberately modified client.
 export async function captureSession(): Promise<void> {
+  const entitlements = await getCachedEntitlements();
+  if (!entitlements?.proActive) return;
+
   const bindingMap = await getWindowBindingMap();
   const [groups, folders] = await Promise.all([getGroups(), getFolders()]);
   const legs: SessionLeg[] = [];

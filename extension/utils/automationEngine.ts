@@ -4,6 +4,7 @@ import { getAutomations } from "./automations";
 import type { Automation } from "./automations";
 import { BLOCK_REGISTRY } from "./automationBlocks";
 import type { TriggerFiresOn, AutomationRunContext } from "./automationBlocks";
+import { getCachedEntitlements } from "./entitlements";
 
 function triggerNodeOf(automation: Pick<Automation, "nodes">) {
   return automation.nodes.find((n) => n.kind === "trigger");
@@ -44,10 +45,22 @@ export async function runAutomationChain(
 // Shared lookup for both runners below — each finds the automations it
 // owns by which runner the trigger block declares (`firesOn`), not by
 // string-matching a blockType name.
+//
+// Shortcuts (custom, user-authored automations) are Pro-only — but the two
+// `seeded: true` defaults (utils/automations.ts) reproduce pre-existing
+// core behavior every tier keeps (auto-archive, auto-complete-on-empty),
+// so only non-seeded automations are filtered out here when Pro isn't
+// active. One check, since every runner (runScheduledAutomations,
+// windowSyncMachine's groupTabsSettled handler) calls through this.
 export async function getEnabledAutomationsFor(
   firesOn: TriggerFiresOn,
 ): Promise<Automation[]> {
-  const automations = (await getAutomations()).filter((a) => a.enabled);
+  const entitlements = await getCachedEntitlements();
+  const proActive = entitlements?.proActive ?? false;
+
+  const automations = (await getAutomations()).filter(
+    (a) => a.enabled && (proActive || a.seeded),
+  );
   return automations.filter((a) => {
     const triggerNode = triggerNodeOf(a);
     if (!triggerNode) return false;

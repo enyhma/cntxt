@@ -9,5 +9,5 @@ export * from "./GroupBoardPanel";
 export * from "./TabRow";
 export * from "./SettingsPanel";
 export * from "./TrashPanel";
-export * from "./HistoryPanel";
+export * from "./TimelinePanel";
 export * from "./AutomationsPanel";

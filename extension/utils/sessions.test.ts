@@ -20,18 +20,48 @@ const { createGroup, getGroups, updateGroup } = await import("./groups");
 const { createFolder, updateFolder } = await import("./folders");
 const { getWindowBindingMap } = await import("./session");
 
-beforeEach(() => {
+beforeEach(async () => {
   fakeBrowser.reset();
   insert.mockReset().mockResolvedValue({ error: null });
   gte.mockReset().mockReturnValue({ order });
   order.mockReset().mockResolvedValue({ data: [], error: null });
   select.mockClear();
   from.mockClear();
+  // captureSession is Timeline, which is Pro-only (see entitlements.ts) —
+  // seed a Pro-active cache so these tests exercise capture itself, not
+  // the plan gate (that gate gets its own test below).
+  await fakeBrowser.storage.local.set({
+    entitlementsCache: {
+      maxMissions: 100_000,
+      accessExpiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+      hasBasicLicense: false,
+      proActive: true,
+    },
+  });
 });
 
 describe("captureSession", () => {
   it("does nothing when no window is bound", async () => {
     await captureSession();
+    expect(await getSessions()).toEqual([]);
+  });
+
+  it("captures nothing when Pro isn't active (Timeline is Pro-only)", async () => {
+    await fakeBrowser.storage.local.set({
+      entitlementsCache: {
+        maxMissions: 3,
+        accessExpiresAt: null,
+        hasBasicLicense: true,
+        proActive: false,
+      },
+    });
+    const win = (await browser.windows.create({ focused: true }))!;
+    await browser.tabs.create({ windowId: win.id, url: DASHBOARD_URL });
+    const group = await createGroup("Tracked", []);
+    await setWindowBinding(win.id!, { kind: "group", groupId: group.id });
+
+    await captureSession();
+
     expect(await getSessions()).toEqual([]);
   });
 

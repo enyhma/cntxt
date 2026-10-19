@@ -10,8 +10,19 @@ import {
   validateAutomation,
 } from "./automationEngine";
 
-beforeEach(() => {
+beforeEach(async () => {
   fakeBrowser.reset();
+  // Shortcuts (custom automations) are Pro-only — seed a Pro-active cache
+  // so these tests exercise the engine itself, not the plan gate (that
+  // gate gets its own test below).
+  await fakeBrowser.storage.local.set({
+    entitlementsCache: {
+      maxMissions: 100_000,
+      accessExpiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+      hasBasicLicense: false,
+      proActive: true,
+    },
+  });
 });
 
 function chain(nodes: AutomationNode[]): AutomationEdge[] {
@@ -144,6 +155,45 @@ describe("matchesTrigger / getEnabledAutomationsFor", () => {
     expect(scheduled.map((a) => a.id)).toEqual(["w1"]);
     const event = await getEnabledAutomationsFor("groupTabsSettled");
     expect(event.map((a) => a.id)).toEqual(["w2"]);
+  });
+
+  it("excludes non-seeded automations when Pro isn't active, keeps seeded ones (Shortcuts is Pro-only)", async () => {
+    await fakeBrowser.storage.local.set({
+      entitlementsCache: {
+        maxMissions: 3,
+        accessExpiresAt: null,
+        hasBasicLicense: true,
+        proActive: false,
+      },
+    });
+    const custom: Automation = {
+      id: "custom",
+      name: "custom",
+      enabled: true,
+      seeded: false,
+      nodes: [
+        {
+          id: "t",
+          kind: "trigger",
+          blockType: "groupDoneAndStale",
+          config: { days: 1 },
+          position: { x: 0, y: 0 },
+        },
+      ],
+      edges: [],
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const builtin: Automation = {
+      ...custom,
+      id: "builtin",
+      name: "builtin",
+      seeded: true,
+    };
+    await browser.storage.local.set({ automations: [custom, builtin] });
+
+    const scheduled = await getEnabledAutomationsFor("scheduleTick");
+    expect(scheduled.map((a) => a.id)).toEqual(["builtin"]);
   });
 
   it("matchesTrigger returns false when there's no trigger node", () => {
