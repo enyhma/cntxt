@@ -1,6 +1,6 @@
 // Live Creem products (public hosted checkout links, safe to embed
 // client-side — no API key involved). Keep in sync with the same constants
-// in marketing/src/pages/pricing.astro.
+// in web/src/lib/creem.ts and supabase/functions/creem-webhook/resolvePatch.ts.
 const CREEM_MONTHLY_URL =
   "https://www.creem.io/product/prod_1vEVfh4WUKbCPlPaoFLpS5";
 const CREEM_YEARLY_URL =

@@ -1,5 +1,5 @@
-import { Show } from "solid-js";
 import type { Accessor } from "solid-js";
+import { PlanPanel } from "./PlanPanel";
 
 export type StartupBehavior = "none" | "lastUsed";
 export type Theme = "baseline" | "indigo" | "brass";
@@ -38,103 +38,21 @@ export function SettingsPanel(props: {
       <div class="flex max-w-md flex-col gap-5">
         <h2 class="text-base font-semibold">Settings</h2>
 
-        <Show when={props.maxWorkspaces}>
-          <div class="flex flex-col gap-2 rounded border border-surface-alt3 bg-surface-alt1 p-3.5 text-sm shadow-[var(--shadow-card)]">
-            <span class="font-mono text-[11px] tracking-wider text-surface-txt-faint">
-              USAGE &amp; LIMITS
-            </span>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-lg font-semibold">
-                {props.syncedCount?.() ?? 0}
-              </span>
-              <span class="text-surface-txt-hint">
-                of {props.maxWorkspaces!()} used
-              </span>
-            </div>
-            <div class="h-1.5 overflow-hidden rounded-full bg-surface-alt3">
-              <div
-                class={
-                  "h-full rounded-full " +
-                  ((props.overLimitCount?.() ?? 0) > 0 ||
-                  (props.blockedCount?.() ?? 0) > 0
-                    ? "bg-warning"
-                    : "bg-accent")
-                }
-                style={{
-                  width: `${Math.min(
-                    100,
-                    ((props.syncedCount?.() ?? 0) /
-                      Math.max(1, props.maxWorkspaces!() ?? 1)) *
-                      100,
-                  )}%`,
-                }}
-              />
-            </div>
-            <span class="text-xs text-surface-txt-hint">
-              {props.groupCount?.() ?? 0} group
-              {props.groupCount?.() === 1 ? "" : "s"},{" "}
-              {props.projectCount?.() ?? 0} project
-              {props.projectCount?.() === 1 ? "" : "s"}
-            </span>
-            <Show when={(props.blockedCount?.() ?? 0) > 0}>
-              <span class="text-xs text-warning">
-                {props.blockedCount!()} not syncing — plan limit reached
-              </span>
-            </Show>
-            <Show when={(props.overLimitCount?.() ?? 0) > 0}>
-              <span class="text-xs text-warning">
-                {props.overLimitCount!()} over your plan's limit
-              </span>
-            </Show>
-            <span class="text-xs text-surface-txt-hint">
-              {props.accessExpiresAt?.()
-                ? `Pro, active until ${new Date(
-                    props.accessExpiresAt()!,
-                  ).toLocaleDateString()}`
-                : props.hasBasicLicense?.()
-                  ? "Basic plan"
-                  : "Free plan"}
-            </span>
-            <Show when={(props.trashedCount?.() ?? 0) > 0}>
-              <span class="text-xs text-surface-txt-hint">
-                {props.trashedCount!()} in trash, kept{" "}
-                {props.trashRetentionDays?.() ?? 7} days
-              </span>
-            </Show>
-            <Show when={props.monthlyCheckoutUrl && props.yearlyCheckoutUrl}>
-              <div class="mt-1 flex flex-wrap gap-2">
-                <a
-                  href={props.monthlyCheckoutUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn btn-xs border-none bg-accent text-accent-txt hover:bg-accent-alt1"
-                >
-                  Upgrade — Monthly
-                </a>
-                <a
-                  href={props.yearlyCheckoutUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn btn-xs border border-surface-alt3"
-                >
-                  Upgrade — Yearly
-                </a>
-                <Show
-                  when={props.basicCheckoutUrl && !props.hasBasicLicense?.()}
-                >
-                  <a
-                    href={props.basicCheckoutUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="btn btn-xs border border-surface-alt3"
-                  >
-                    Buy Basic — one-time
-                  </a>
-                </Show>
-              </div>
-            </Show>
-          </div>
-        </Show>
+        <PlanPanel
+          maxWorkspaces={props.maxWorkspaces}
+          groupCount={props.groupCount}
+          projectCount={props.projectCount}
+          syncedCount={props.syncedCount}
+          blockedCount={props.blockedCount}
+          overLimitCount={props.overLimitCount}
+          accessExpiresAt={props.accessExpiresAt}
+          trashedCount={props.trashedCount}
+          trashRetentionDays={props.trashRetentionDays}
+          hasBasicLicense={props.hasBasicLicense}
+          monthlyCheckoutUrl={props.monthlyCheckoutUrl}
+          yearlyCheckoutUrl={props.yearlyCheckoutUrl}
+          basicCheckoutUrl={props.basicCheckoutUrl}
+        />
 
         <label class="flex flex-col gap-1.5 text-sm">
           <span class="text-surface-txt-hint">On browser start</span>

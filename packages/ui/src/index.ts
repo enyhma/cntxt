@@ -8,6 +8,8 @@ export * from "./GroupRow";
 export * from "./GroupBoardPanel";
 export * from "./TabRow";
 export * from "./SettingsPanel";
+export * from "./PlanPanel";
+export * from "./BookmarksPanel";
 export * from "./TrashPanel";
 export * from "./TimelinePanel";
 export * from "./AutomationsPanel";

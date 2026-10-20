@@ -2,6 +2,19 @@
 import SEO from "../components/SEO.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
+
+// This page has no signed-in user, so it can't attach the metadata[userId]
+// a real Creem checkout link needs (see extension/utils/creem.ts's
+// checkoutUrl) — the webhook would receive a payment with no account to
+// credit it to. Instead these deep-link straight into the extension's own
+// dashboard, which already has a signed-in user id to attach; App.tsx
+// reads the ?buy= param once signed in and opens the real checkout link
+// itself. Chrome-only id (pinned via wxt.config.ts's CHROME_KEY) — Firefox
+// randomizes its moz-extension:// uuid per profile specifically to prevent
+// fingerprinting, so there's no stable URL to hardcode there, and neither
+// Firefox nor Edge are published yet anyway (see the hero's "coming soon").
+const DASHBOARD_URL =
+  "chrome-extension://ehnhkcnmbkboaljolbndgdgfmjkgipih/dashboard.html";
 ---
 
 <html lang="en">
@@ -78,9 +91,9 @@ import SiteFooter from "../components/SiteFooter.astro";
             <p class="price-note">
               optional renewal at €19/year to keep getting updates after
             </p>
-            <span class="btn btn-ghost" aria-disabled="true">
-              Coming soon — pending review
-            </span>
+            <a href={`${DASHBOARD_URL}?buy=basic`} class="btn btn-ghost">
+              Buy Basic
+            </a>
           </div>
 
           <div class="plan-card is-pro">
@@ -97,12 +110,18 @@ import SiteFooter from "../components/SiteFooter.astro";
               <li>Sync across all your devices</li>
               <li>Everything in Basic</li>
             </ul>
-            <span class="btn btn-ghost price-monthly" aria-disabled="true">
-              Coming soon — pending review
-            </span>
-            <span class="btn btn-ghost price-yearly" aria-disabled="true">
-              Coming soon — pending review
-            </span>
+            <a
+              href={`${DASHBOARD_URL}?buy=monthly`}
+              class="btn btn-ghost price-monthly"
+            >
+              Upgrade — Monthly
+            </a>
+            <a
+              href={`${DASHBOARD_URL}?buy=yearly`}
+              class="btn btn-ghost price-yearly"
+            >
+              Upgrade — Yearly
+            </a>
           </div>
         </div>
       </section>

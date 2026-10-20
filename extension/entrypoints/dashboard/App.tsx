@@ -124,6 +124,7 @@ import {
   TrashPanel,
   TimelinePanel,
   AutomationsPanel,
+  BookmarksPanel,
   type Automation as UiAutomation,
   FolderPage,
   GroupDot,
@@ -2275,20 +2276,54 @@ function App() {
       : "Already up to date";
   }
 
-  function onSignedIn() {
+  // marketing/src/pages/pricing.astro's buy buttons deep-link here
+  // (chrome-extension://<id>/dashboard.html?buy=basic|monthly|yearly)
+  // instead of checking out directly — the marketing site has no signed-in
+  // user id to attach to a Creem checkout link (see checkoutUrl in
+  // utils/creem.ts), so it hands off to wherever one actually exists.
+  // Captured once at module-body eval time (this component only mounts
+  // once per tab), consumed exactly once by maybeOpenPendingBuy below —
+  // read directly off the signal rather than re-parsing location.search on
+  // every signed-in check.
+  const [pendingBuy, setPendingBuy] = createSignal(
+    new URLSearchParams(window.location.search).get("buy"),
+  );
+  function maybeOpenPendingBuy(userId: string) {
+    const buy = pendingBuy();
+    if (!buy) return;
+    setPendingBuy(null); // consume once — onSignedIn also fires on every token refresh
+    history.replaceState(null, "", window.location.pathname);
+    const url =
+      buy === "basic"
+        ? creemBasicCheckoutUrl(userId)
+        : buy === "yearly"
+          ? creemYearlyCheckoutUrl(userId)
+          : buy === "monthly"
+            ? creemMonthlyCheckoutUrl(userId)
+            : undefined;
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function onSignedIn(userId: string) {
     refreshEntitlements().then(setEntitlements);
     syncSend({ type: "PULL" });
     reconcileGroupSyncStatus().then(refresh);
     reconcileFolderSyncStatus().then(refresh);
     reconcileResourceSyncStatus().then(refresh);
+    maybeOpenPendingBuy(userId);
   }
   // Piggyback on the token refresh supabase-js already does on a timer — no
   // separate polling loop, per docs/architecture-sync.md. syncMachine has
   // its own periodic pull tick independent of this.
   const { session, authLoading } = useSupabaseSession(supabase, {
-    onInitialSession: onSignedIn,
-    onAuthEvent: (event) => {
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") onSignedIn();
+    onInitialSession: (s) => onSignedIn(s.user.id),
+    onAuthEvent: (event, newSession) => {
+      if (
+        (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") &&
+        newSession
+      ) {
+        onSignedIn(newSession.user.id);
+      }
     },
   });
   const [entitlements, setEntitlements] = createSignal<Entitlements>();
@@ -2933,60 +2968,11 @@ function App() {
                 </div>
               </Match>
               <Match when={nav() === "bookmarks"}>
-                <div class="flex-1 overflow-y-auto p-6">
-                  <div class="flex max-w-md flex-col gap-3">
-                    <h2 class="text-base font-semibold">Bookmarks</h2>
-                    <Show
-                      when={allBookmarks().length > 0}
-                      fallback={
-                        <p class="text-sm text-surface-txt-hint">
-                          No bookmarks yet.
-                        </p>
-                      }
-                    >
-                      <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                        <For each={allBookmarks()}>
-                          {(r) => (
-                            <div class="group flex items-center gap-2.5 border-b border-surface-alt2 px-3.5 py-2.5 last:border-b-0">
-                              <LinkIcon
-                                size={13}
-                                class="shrink-0 text-surface-txt-faint"
-                              />
-                              <Show
-                                when={r.url}
-                                fallback={
-                                  <span class="min-w-0 flex-1 truncate text-sm">
-                                    {r.note}
-                                  </span>
-                                }
-                              >
-                                <a
-                                  href={r.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  class="min-w-0 flex-1 truncate text-sm hover:underline"
-                                >
-                                  {r.note || r.url}
-                                </a>
-                              </Show>
-                              <span class="max-w-[30%] shrink-0 truncate font-mono text-[11px] text-surface-txt-faint">
-                                {folderNameFor(r.folderId)}
-                              </span>
-                              <button
-                                type="button"
-                                title="Remove"
-                                onClick={() => handleDeleteBookmark(r.id)}
-                                class="btn btn-square btn-ghost btn-xs shrink-0 text-surface-txt-hint opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
-                              >
-                                <X size={11} />
-                              </button>
-                            </div>
-                          )}
-                        </For>
-                      </section>
-                    </Show>
-                  </div>
-                </div>
+                <BookmarksPanel
+                  bookmarks={allBookmarks}
+                  folderNameFor={folderNameFor}
+                  onDelete={handleDeleteBookmark}
+                />
               </Match>
               <Match when={nav() === "settings"}>
                 <div class="flex flex-1 items-stretch overflow-hidden">
