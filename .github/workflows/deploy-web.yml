@@ -1,0 +1,47 @@
+# Deploys web/ to Fly.io whenever web/** or a shared packages/** dependency
+# changes land on main. Mirrors `just deploy-web production` (see
+# justfile) — same fly.toml/Dockerfile, just automated. Needs one repo
+# secret that only a maintainer can set (Settings > Secrets and variables
+# > Actions):
+#   FLY_API_TOKEN   - `fly tokens create deploy -x 999999h` (or similar)
+# No other secrets needed: web/Dockerfile's build args
+# (VITE_SUPABASE_URL/VITE_SUPABASE_PUBLISHABLE_KEY) are public project
+# identifiers already committed in .env.production, not sensitive — RLS
+# protects data, not key secrecy (see web/.env.example).
+#
+# Build context must be the repo root, not web/ itself — web/ depends on
+# workspace:* packages (@cntxt/ui, @cntxt/tokens) that only resolve from
+# the root lockfile/workspace graph (see web/Dockerfile's own comment).
+name: Deploy web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "packages/**"
+      - ".github/workflows/deploy-web.yml"
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: |
+          set -a
+          source .env.production
+          set +a
+          flyctl deploy --config web/fly.toml --dockerfile web/Dockerfile \
+            --build-arg VITE_SUPABASE_URL="$SUPABASE_URL" \
+            --build-arg VITE_SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY" \
+            .
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
