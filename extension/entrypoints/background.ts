@@ -5,6 +5,7 @@ import {
   getWindowBindingBackup,
   getWindowBindingMap,
   removeWindowBinding,
+  requestSearchOpen,
   setWindowBinding,
 } from "@/utils/session";
 import { getSettings, updateSettings } from "@/utils/settings";
@@ -258,5 +259,33 @@ export default defineBackground(() => {
     await ensureBindingForWindow(tab.windowId);
     await ensureDashboardTab(tab.windowId);
     trackWindow(tab.windowId);
+  });
+
+  // The global "open search" hotkey (wxt.config.ts's commands.suggested_key)
+  // — fires no matter which tab/site has focus, unlike the in-page ⌘K
+  // shortcut App.tsx registers (which only works once its own dashboard
+  // tab is already the focused one). `tab` is the one active when the
+  // shortcut fired; Firefox doesn't pass it, hence the fallback.
+  browser.commands.onCommand.addListener(async (command, tab) => {
+    if (command !== "open-search") return;
+    const windowId =
+      tab?.windowId ?? (await browser.windows.getLastFocused()).id;
+    if (windowId === undefined) return;
+
+    await adoptWindow(windowId);
+    const [dashboardTab] = await browser.tabs.query({
+      url: DASHBOARD_URL,
+      windowId,
+    });
+    // ensureDashboardTab (inside adoptWindow) only creates/pins — it never
+    // activates an already-existing tab the user wasn't currently on, so
+    // that's done explicitly here. openPalette() itself is requested via
+    // storage (requestSearchOpen) rather than called directly: this is the
+    // background script, which has no access to the dashboard page's own
+    // Solid state.
+    if (dashboardTab?.id !== undefined) {
+      await browser.tabs.update(dashboardTab.id, { active: true });
+    }
+    await requestSearchOpen(windowId);
   });
 });

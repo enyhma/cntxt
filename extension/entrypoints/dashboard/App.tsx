@@ -13,10 +13,12 @@ import {
   untrack,
 } from "solid-js";
 import { ensureBindingForWindow } from "@/utils/attach";
+import { matchScore, TAB_URL_MATCH_SCORE } from "@/utils/search";
 import { restoreMachine } from "@/utils/restoreMachine";
 import { groupSwapMachine } from "@/utils/groupSwapMachine";
 import { syncMachine } from "@/utils/sync";
 import {
+  consumeSearchOpenRequest,
   getWindowBindingMap,
   removeWindowBinding,
   type WindowBinding,
@@ -2033,6 +2035,11 @@ function App() {
   // The search palette lives here, not inside Dashboard, so it works from
   // the Trash/Settings tabs too — Dashboard only mounts for nav()==="groups".
   const [paletteQuery, setPaletteQuery] = createSignal("");
+  // Which result arrow-key navigation currently highlights — reset to 0 on
+  // every query change (createEffect below) rather than only at open, so
+  // the top (highest-ranked) result is always what Enter picks right after
+  // typing, not whatever stale index a previous search left selected.
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
   let paletteRef: HTMLDialogElement | undefined;
   // A selected result hands off to Dashboard's own view state via this prop
   // instead of reaching into it directly — see Dashboard's jumpTo prop.
@@ -2044,6 +2051,7 @@ function App() {
     // before showing the modal.
     closeOpenDropdowns();
     setPaletteQuery("");
+    setSelectedIndex(0);
     paletteRef?.showModal();
   }
   function closePalette() {
@@ -2067,6 +2075,14 @@ function App() {
   function goToSession(id: string) {
     setNav("timeline");
     setJumpToSessionId(id);
+    closePalette();
+  }
+  // Resources have no page of their own scoped to one Project/Area (unlike
+  // every other result kind) — the flat Bookmarks tab is the only place
+  // one is actually visible/actionable, so that's the honest "go" target
+  // rather than pretending to deep-link somewhere more specific.
+  function goToBookmarks() {
+    setNav("bookmarks");
     closePalette();
   }
   // The header's connection chip jumps to whatever's actually open in this
@@ -2103,99 +2119,144 @@ function App() {
   });
 
   type PaletteResult = {
-    kind: "QT" | "PR" | "AR" | "TAB" | "SN";
+    kind: "QT" | "PR" | "AR" | "TAB" | "SN" | "BM";
     title: string;
     meta: string;
     go: () => void;
+    score: number;
   };
   // Global across the whole hierarchy — Groups, Projects (including their
-  // own live tabs), and Areas — not scoped to whichever one is currently
-  // being viewed, and reachable from any nav tab (Groups/Trash/Settings).
-  // Uses visibleGroups()/visibleFolders() (archive-excluded), not the raw
-  // signals, so an archived item disappears from search the same way it
-  // disappears from the sidebar. Sessions are matched against the local
-  // cache only (see utils/sessions.ts) — no live Supabase query here, same
-  // synchronous-scan shape as every other branch.
+  // own live tabs), Areas, and Bookmarks — not scoped to whichever one is
+  // currently being viewed, and reachable from any nav tab (Groups/Trash/
+  // Settings). Uses visibleGroups()/visibleFolders() (archive-excluded),
+  // not the raw signals, so an archived item disappears from search the
+  // same way it disappears from the sidebar. Sessions are matched against
+  // the local cache only (see utils/sessions.ts) — no live Supabase query
+  // here, same synchronous-scan shape as every other branch.
+  //
+  // Ranked by match quality (matchScore) rather than kept in push order: a
+  // name match always outranks a mere tab/url match within it, and an
+  // exact Area match, say, now actually beats a weak substring Group match
+  // instead of losing to it just because Groups are scanned first below.
+  // Array.sort is stable, so true ties still fall back to push order.
   function paletteResults(): PaletteResult[] {
     const q = paletteQuery().trim().toLowerCase();
     if (!q) return [];
     const out: PaletteResult[] = [];
     for (const w of visibleGroups()) {
-      if (w.name.toLowerCase().includes(q)) {
+      const nameScore = matchScore(w.name, q);
+      if (nameScore > 0) {
         out.push({
           kind: "QT",
           title: w.name,
           meta: `${w.tabs.length} tabs`,
           go: () => goToGroup(w.id),
+          score: nameScore,
         });
       }
       for (const t of w.tabs) {
-        if (
-          t.title.toLowerCase().includes(q) ||
-          t.url.toLowerCase().includes(q)
-        ) {
+        const titleScore = matchScore(t.title, q);
+        const score =
+          titleScore > 0
+            ? titleScore
+            : t.url.toLowerCase().includes(q)
+              ? TAB_URL_MATCH_SCORE
+              : 0;
+        if (score > 0) {
           out.push({
             kind: "TAB",
             title: t.title || t.url,
             meta: w.name,
             go: () => goToGroup(w.id),
+            score,
           });
         }
       }
     }
     for (const f of visibleFolders()) {
       if (f.kind !== "project") {
-        if (f.name.toLowerCase().includes(q)) {
+        const nameScore = matchScore(f.name, q);
+        if (nameScore > 0) {
           out.push({
             kind: "AR",
             title: f.name,
             meta: "Area",
             go: () => goToArea(f.id),
+            score: nameScore,
           });
         }
         continue;
       }
-      if (f.name.toLowerCase().includes(q)) {
+      const nameScore = matchScore(f.name, q);
+      if (nameScore > 0) {
         out.push({
           kind: "PR",
           title: f.name,
           meta: `${projectLiveTabCount(f, groups())} tabs`,
           go: () => goToProject(f.id),
+          score: nameScore,
         });
       }
       for (const t of projectLiveTabs(f, groups())) {
-        if (
-          t.title.toLowerCase().includes(q) ||
-          t.url.toLowerCase().includes(q)
-        ) {
+        const titleScore = matchScore(t.title, q);
+        const score =
+          titleScore > 0
+            ? titleScore
+            : t.url.toLowerCase().includes(q)
+              ? TAB_URL_MATCH_SCORE
+              : 0;
+        if (score > 0) {
           out.push({
             kind: "TAB",
             title: t.title || t.url,
             meta: f.name,
             go: () => goToProject(f.id),
+            score,
           });
         }
       }
     }
     for (const s of sessions()) {
       for (const w of s.windows) {
-        const tabMatch = w.tabs.some(
+        const nameScore = matchScore(w.entityName, q);
+        const tabScore = w.tabs.some(
           (t) =>
             t.title.toLowerCase().includes(q) ||
             t.url.toLowerCase().includes(q),
-        );
-        if (w.entityName.toLowerCase().includes(q) || tabMatch) {
+        )
+          ? TAB_URL_MATCH_SCORE
+          : 0;
+        const score = Math.max(nameScore, tabScore);
+        if (score > 0) {
           out.push({
             kind: "SN",
             title: w.entityName,
             meta: new Date(s.capturedAt).toLocaleString(),
             go: () => goToSession(s.id),
+            score,
           });
           break; // one result per session leg match, not per matching tab
         }
       }
     }
-    return out.slice(0, 20);
+    for (const r of resources()) {
+      if (!r.folderId) continue; // group-scoped resources have no Bookmarks-tab home to jump to
+      const label = r.note || r.url || "";
+      const labelScore = matchScore(label, q);
+      const urlScore =
+        r.url && r.url.toLowerCase().includes(q) ? TAB_URL_MATCH_SCORE : 0;
+      const score = Math.max(labelScore, urlScore);
+      if (score > 0) {
+        out.push({
+          kind: "BM",
+          title: label,
+          meta: folderNameFor(r.folderId) ?? "Bookmark",
+          go: goToBookmarks,
+          score,
+        });
+      }
+    }
+    return out.sort((a, b) => b.score - a.score).slice(0, 20);
   }
 
   // See docs/implementation-plan-sync.md M6: syncMachine owns pull/push
@@ -2341,6 +2402,12 @@ function App() {
     if (win.id !== undefined) {
       setMyWindowId(win.id);
       await ensureBindingForWindow(win.id);
+      // Covers the hotkey creating this very tab (background.ts's
+      // commands.onCommand sets this before the tab finishes loading, so
+      // the live storage.onChanged write below never reaches a listener
+      // that didn't exist yet) — the already-open-tab case is covered by
+      // that same listener instead.
+      if (await consumeSearchOpenRequest(win.id)) openPalette();
     }
     await refresh();
 
@@ -2359,6 +2426,17 @@ function App() {
       refresh();
       if ("workspaces" in changes || "folders" in changes)
         syncSend({ type: "LOCAL_CHANGE" });
+      // The hotkey firing while this tab is already open and mounted — the
+      // just-created-tab case is covered by the onMount check above
+      // instead, since this listener wouldn't exist yet for that one.
+      const searchRequest = changes.searchRequestedWindowId as
+        { newValue?: number } | undefined;
+      if (
+        searchRequest?.newValue !== undefined &&
+        searchRequest.newValue === myWindowId()
+      ) {
+        openPalette();
+      }
     };
     browser.storage.onChanged.addListener(handleStorageChange);
     onCleanup(() =>
@@ -2993,8 +3071,26 @@ function App() {
               <input
                 autofocus
                 value={paletteQuery()}
-                onInput={(e) => setPaletteQuery(e.currentTarget.value)}
-                placeholder="Jump to a group, project, area, or tab…"
+                onInput={(e) => {
+                  setPaletteQuery(e.currentTarget.value);
+                  setSelectedIndex(0);
+                }}
+                onKeyDown={(e) => {
+                  const results = paletteResults();
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setSelectedIndex((i) =>
+                      Math.min(i + 1, results.length - 1),
+                    );
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSelectedIndex((i) => Math.max(i - 1, 0));
+                  } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    results[selectedIndex()]?.go();
+                  }
+                }}
+                placeholder="Jump to a group, project, area, tab, or bookmark…"
                 class="min-w-0 flex-1 bg-transparent text-[15px] outline-none"
               />
               <span class="rounded border border-surface-alt4 px-1.25 font-mono text-[11px] text-surface-txt-hint">
@@ -3003,10 +3099,16 @@ function App() {
             </div>
             <div class="max-h-[50vh] overflow-y-auto p-1.5">
               <For each={paletteResults()}>
-                {(r) => (
+                {(r, i) => (
                   <div
                     onClick={r.go}
-                    class="flex cursor-pointer items-center gap-2.5 rounded px-2.5 py-2 hover:bg-surface-alt3"
+                    onMouseEnter={() => setSelectedIndex(i())}
+                    class={
+                      "flex cursor-pointer items-center gap-2.5 rounded px-2.5 py-2 " +
+                      (i() === selectedIndex()
+                        ? "bg-surface-alt3"
+                        : "hover:bg-surface-alt3")
+                    }
                   >
                     <span class="badge badge-sm shrink-0 font-mono">
                       {r.kind}

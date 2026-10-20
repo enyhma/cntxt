@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { fakeBrowser } from "wxt/testing/fake-browser";
 import {
   clearWindowBindingMap,
+  consumeSearchOpenRequest,
   getWindowBindingBackup,
   getWindowBindingMap,
   removeWindowBinding,
+  requestSearchOpen,
   setWindowBinding,
 } from "./session";
 
@@ -45,5 +47,30 @@ describe("clearWindowBindingMap", () => {
     expect(await getWindowBindingBackup()).toEqual({
       1: { kind: "project", projectId: "p1" },
     });
+  });
+});
+
+describe("requestSearchOpen / consumeSearchOpenRequest", () => {
+  it("consumes a matching request exactly once", async () => {
+    await requestSearchOpen(1);
+
+    expect(await consumeSearchOpenRequest(1)).toBe(true);
+    expect(await consumeSearchOpenRequest(1)).toBe(false);
+  });
+
+  it("doesn't consume a request meant for a different window", async () => {
+    await requestSearchOpen(1);
+
+    expect(await consumeSearchOpenRequest(2)).toBe(false);
+    // Still pending for the window it was actually requested for.
+    expect(await consumeSearchOpenRequest(1)).toBe(true);
+  });
+
+  it("a later request overwrites an unconsumed earlier one", async () => {
+    await requestSearchOpen(1);
+    await requestSearchOpen(2);
+
+    expect(await consumeSearchOpenRequest(1)).toBe(false);
+    expect(await consumeSearchOpenRequest(2)).toBe(true);
   });
 });

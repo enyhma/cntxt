@@ -46,6 +46,20 @@ export default defineConfig({
         ...(env.browser === "firefox" ? [] : (["tabGroups"] as const)),
       ],
       action: {},
+      // Fires regardless of which tab/site currently has focus (as long as
+      // the browser window itself does) — see background.ts's
+      // commands.onCommand listener. Not an OS-wide/"global" command (that
+      // Chrome-only `"global": true` flag is reserved for a narrow
+      // allowlist like media keys); this only reaches across tabs within
+      // the browser, which is what "no matter the tab" actually needs.
+      // Purely a suggestion — every user can remap or clear it at
+      // chrome://extensions/shortcuts (about:addons on Firefox).
+      commands: {
+        "open-search": {
+          suggested_key: { default: "Ctrl+Shift+F", mac: "Command+Shift+F" },
+          description: "Jump to cntxt search, from any tab",
+        },
+      },
     };
 
     if (env.browser === "chrome") {

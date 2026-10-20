@@ -12,12 +12,20 @@ import LearnLayout from "../../components/LearnLayout.astro";
   <p>
     Press ⌘K to search across every Area, Project, and Group, and the tabs
     inside them — faster than scrolling a sidebar once you have more than a
-    handful. The same palette also matches tabs from recent <a
-      href="/learn/sessions">Sessions</a
-    >.
+    handful. The same palette also matches your saved <a
+      href="/learn/resources">Bookmarks</a
+    > and tabs from recent <a href="/learn/sessions">Sessions</a>. Results
+    are ranked by match quality — an exact or starts-with match always beats
+    a result that only happens to contain your query somewhere in a url —
+    and arrow keys plus Enter work alongside clicking.
   </p>
   <p>
-    Today that session search only reaches the last 7 days, held in a local
+    A separate hotkey (configurable at <code>chrome://extensions/shortcuts</code>,
+    <code>about:addons</code> on Firefox) opens the palette from any tab or
+    site, not just while the dashboard tab itself is focused.
+  </p>
+  <p>
+    Today session search only reaches the last 7 days, held in a local
     cache. A session older than that already exists in full further back,
     but doesn't surface in search yet.
   </p>
@@ -30,6 +38,22 @@ import LearnLayout from "../../components/LearnLayout.astro";
     <tbody>
       <tr>
         <td>Command palette across Projects/Groups/Areas and their tabs</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Bookmarks included in search results</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Results ranked by match quality, not just scan order</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Keyboard navigation (arrow keys + Enter) in results</td>
+        <td>🟢 Shipped</td>
+      </tr>
+      <tr>
+        <td>Global hotkey opens search from any tab or site</td>
         <td>🟢 Shipped</td>
       </tr>
       <tr>

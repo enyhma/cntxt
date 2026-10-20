@@ -80,3 +80,26 @@ export async function removeWindowBinding(windowId: number) {
 export async function clearWindowBindingMap() {
   await browser.storage.session.set({ [STORAGE_KEY]: {} });
 }
+
+// Set by background.ts's commands.onCommand handler (the global "open
+// search" hotkey) — the targeted window's dashboard tab (App.tsx) reads
+// this once on mount, in case its own tab was only just created in
+// response to the hotkey (before any storage.onChanged listener existed to
+// catch a live write), and again via storage.onChanged for the common case
+// where the tab was already open. A plain per-window value, not a queue —
+// only the most recent request matters, and there's at most one dashboard
+// tab per window to receive it.
+const SEARCH_REQUEST_KEY = "searchRequestedWindowId";
+
+export async function requestSearchOpen(windowId: number): Promise<void> {
+  await browser.storage.session.set({ [SEARCH_REQUEST_KEY]: windowId });
+}
+
+export async function consumeSearchOpenRequest(
+  windowId: number,
+): Promise<boolean> {
+  const result = await browser.storage.session.get(SEARCH_REQUEST_KEY);
+  if (result[SEARCH_REQUEST_KEY] !== windowId) return false;
+  await browser.storage.session.remove(SEARCH_REQUEST_KEY);
+  return true;
+}
