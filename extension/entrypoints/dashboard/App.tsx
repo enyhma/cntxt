@@ -2276,54 +2276,20 @@ function App() {
       : "Already up to date";
   }
 
-  // marketing/src/pages/pricing.astro's buy buttons deep-link here
-  // (chrome-extension://<id>/dashboard.html?buy=basic|monthly|yearly)
-  // instead of checking out directly — the marketing site has no signed-in
-  // user id to attach to a Creem checkout link (see checkoutUrl in
-  // utils/creem.ts), so it hands off to wherever one actually exists.
-  // Captured once at module-body eval time (this component only mounts
-  // once per tab), consumed exactly once by maybeOpenPendingBuy below —
-  // read directly off the signal rather than re-parsing location.search on
-  // every signed-in check.
-  const [pendingBuy, setPendingBuy] = createSignal(
-    new URLSearchParams(window.location.search).get("buy"),
-  );
-  function maybeOpenPendingBuy(userId: string) {
-    const buy = pendingBuy();
-    if (!buy) return;
-    setPendingBuy(null); // consume once — onSignedIn also fires on every token refresh
-    history.replaceState(null, "", window.location.pathname);
-    const url =
-      buy === "basic"
-        ? creemBasicCheckoutUrl(userId)
-        : buy === "yearly"
-          ? creemYearlyCheckoutUrl(userId)
-          : buy === "monthly"
-            ? creemMonthlyCheckoutUrl(userId)
-            : undefined;
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
-  }
-
-  function onSignedIn(userId: string) {
+  function onSignedIn() {
     refreshEntitlements().then(setEntitlements);
     syncSend({ type: "PULL" });
     reconcileGroupSyncStatus().then(refresh);
     reconcileFolderSyncStatus().then(refresh);
     reconcileResourceSyncStatus().then(refresh);
-    maybeOpenPendingBuy(userId);
   }
   // Piggyback on the token refresh supabase-js already does on a timer — no
   // separate polling loop, per docs/architecture-sync.md. syncMachine has
   // its own periodic pull tick independent of this.
   const { session, authLoading } = useSupabaseSession(supabase, {
-    onInitialSession: (s) => onSignedIn(s.user.id),
-    onAuthEvent: (event, newSession) => {
-      if (
-        (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") &&
-        newSession
-      ) {
-        onSignedIn(newSession.user.id);
-      }
+    onInitialSession: onSignedIn,
+    onAuthEvent: (event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") onSignedIn();
     },
   });
   const [entitlements, setEntitlements] = createSignal<Entitlements>();
