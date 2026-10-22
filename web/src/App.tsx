@@ -13,6 +13,8 @@ import { useSupabaseSession } from "@cntxt/supabase";
 import {
   BookmarksPanel,
   ConfigWarning,
+  DetailHeader,
+  DetailPageShell,
   FolderPage,
   GroupBoardPanel,
   GroupDot,
@@ -410,30 +412,28 @@ function App() {
                     >
                       {(area) => (
                         <div>
-                          <div class="m-3 flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setSelection({ kind: "root" })}
-                              class="btn btn-sm border border-surface-alt3"
-                            >
-                              ← Back
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (
-                                  !window.confirm(
-                                    `Delete "${area().name}" forever?`,
-                                  )
-                                )
-                                  return;
-                                await handleDeleteFolderForever(area().id);
-                                setSelection({ kind: "root" });
-                              }}
-                              class="btn btn-sm border border-surface-alt3 text-danger"
-                            >
-                              Delete forever
-                            </button>
+                          <div class="m-3">
+                            <DetailHeader
+                              onBack={() => setSelection({ kind: "root" })}
+                              actions={
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (
+                                      !window.confirm(
+                                        `Delete "${area().name}" forever?`,
+                                      )
+                                    )
+                                      return;
+                                    await handleDeleteFolderForever(area().id);
+                                    setSelection({ kind: "root" });
+                                  }}
+                                  class="btn btn-sm border border-surface-alt3 text-danger"
+                                >
+                                  Delete forever
+                                </button>
+                              }
+                            />
                           </div>
                           <div class="mx-3 mb-3 max-w-2xl">
                             <AddBookmarkForm
@@ -483,15 +483,9 @@ function App() {
                       )}
                     >
                       {(project) => (
-                        <div class="p-6">
-                          <div class="mb-4 flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setSelection({ kind: "root" })}
-                              class="btn btn-sm border border-surface-alt3"
-                            >
-                              ← Back
-                            </button>
+                        <DetailPageShell
+                          onBack={() => setSelection({ kind: "root" })}
+                          headerActions={
                             <button
                               type="button"
                               onClick={async () => {
@@ -508,51 +502,50 @@ function App() {
                             >
                               Delete forever
                             </button>
-                          </div>
-                          <div class="flex max-w-2xl flex-col gap-5">
-                            <h1 class="text-lg font-semibold">
-                              {project().name}
-                            </h1>
-                            <AddBookmarkForm
-                              folderId={project().id}
-                              onAdded={refreshBookmarks}
-                            />
-                            <Show when={(project().tabs?.length ?? 0) > 0}>
-                              <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                                <For each={project().tabs ?? []}>
-                                  {(tab, i) => (
-                                    <TabRow
-                                      tab={tab}
-                                      index={i()}
-                                      selected={false}
-                                      selectable={false}
-                                      onToggle={() => {}}
-                                      onOpen={() =>
-                                        window.open(tab.url, "_blank")
-                                      }
-                                    />
-                                  )}
-                                </For>
-                              </section>
-                            </Show>
-                            <GroupBoardPanel
-                              groups={() =>
-                                groupsIn(project().id).map((g) => ({
-                                  id: g.id,
-                                  name: g.name,
-                                  status: g.status,
-                                  tabCount: g.tabs.length,
-                                }))
-                              }
-                              busy={false}
-                              onActivate={handleActivateGroup}
-                              onComplete={handleCompleteGroup}
-                              onAddGroup={(name) =>
-                                handleAddGroup(name, project().id)
-                              }
-                            />
-                          </div>
-                        </div>
+                          }
+                        >
+                          <h1 class="text-lg font-semibold">
+                            {project().name}
+                          </h1>
+                          <AddBookmarkForm
+                            folderId={project().id}
+                            onAdded={refreshBookmarks}
+                          />
+                          <Show when={(project().tabs?.length ?? 0) > 0}>
+                            <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                              <For each={project().tabs ?? []}>
+                                {(tab, i) => (
+                                  <TabRow
+                                    tab={tab}
+                                    index={i()}
+                                    selected={false}
+                                    selectable={false}
+                                    onToggle={() => {}}
+                                    onOpen={() =>
+                                      window.open(tab.url, "_blank")
+                                    }
+                                  />
+                                )}
+                              </For>
+                            </section>
+                          </Show>
+                          <GroupBoardPanel
+                            groups={() =>
+                              groupsIn(project().id).map((g) => ({
+                                id: g.id,
+                                name: g.name,
+                                status: g.status,
+                                tabCount: g.tabs.length,
+                              }))
+                            }
+                            busy={false}
+                            onActivate={handleActivateGroup}
+                            onComplete={handleCompleteGroup}
+                            onAddGroup={(name) =>
+                              handleAddGroup(name, project().id)
+                            }
+                          />
+                        </DetailPageShell>
                       )}
                     </Match>
 
@@ -564,61 +557,56 @@ function App() {
                       )}
                     >
                       {(group) => (
-                        <div class="p-6">
-                          <button
-                            type="button"
-                            onClick={() => setSelection({ kind: "root" })}
-                            class="btn btn-sm mb-4 border border-surface-alt3"
-                          >
-                            ← Back
-                          </button>
-                          <div class="flex max-w-2xl flex-col gap-5">
-                            <div class="flex items-center gap-2.5">
-                              <GroupDot
-                                group={{
-                                  id: group().id,
-                                  color: group().color ?? undefined,
-                                  icon: group().icon ?? undefined,
-                                }}
-                              />
-                              <h1 class="flex-1 text-lg font-semibold">
-                                {group().name}
-                              </h1>
-                              <button
-                                type="button"
-                                onClick={() => handleTrashGroup(group().id)}
-                                class="btn btn-xs border border-surface-alt3"
-                              >
-                                Move to trash
-                              </button>
-                            </div>
-                            <Show
-                              when={group().tabs.length > 0}
-                              fallback={
-                                <p class="text-sm text-surface-txt-hint">
-                                  No tabs in this group.
-                                </p>
-                              }
+                        <DetailPageShell
+                          onBack={() => setSelection({ kind: "root" })}
+                          headerActions={
+                            <button
+                              type="button"
+                              onClick={() => handleTrashGroup(group().id)}
+                              class="btn btn-sm border border-surface-alt3"
                             >
-                              <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                                <For each={group().tabs}>
-                                  {(tab, i) => (
-                                    <TabRow
-                                      tab={tab}
-                                      index={i()}
-                                      selected={false}
-                                      selectable={false}
-                                      onToggle={() => {}}
-                                      onOpen={() =>
-                                        window.open(tab.url, "_blank")
-                                      }
-                                    />
-                                  )}
-                                </For>
-                              </section>
-                            </Show>
+                              Move to trash
+                            </button>
+                          }
+                        >
+                          <div class="flex items-center gap-2.5">
+                            <GroupDot
+                              group={{
+                                id: group().id,
+                                color: group().color ?? undefined,
+                                icon: group().icon ?? undefined,
+                              }}
+                            />
+                            <h1 class="flex-1 text-lg font-semibold">
+                              {group().name}
+                            </h1>
                           </div>
-                        </div>
+                          <Show
+                            when={group().tabs.length > 0}
+                            fallback={
+                              <p class="text-sm text-surface-txt-hint">
+                                No tabs in this group.
+                              </p>
+                            }
+                          >
+                            <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                              <For each={group().tabs}>
+                                {(tab, i) => (
+                                  <TabRow
+                                    tab={tab}
+                                    index={i()}
+                                    selected={false}
+                                    selectable={false}
+                                    onToggle={() => {}}
+                                    onOpen={() =>
+                                      window.open(tab.url, "_blank")
+                                    }
+                                  />
+                                )}
+                              </For>
+                            </section>
+                          </Show>
+                        </DetailPageShell>
                       )}
                     </Match>
                   </Switch>
