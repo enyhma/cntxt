@@ -20,8 +20,15 @@ export function GroupRow(props: {
   onView: () => void;
   onOpenAll: () => void;
   onContextMenu: (e: MouseEvent) => void;
+  // Double-click-to-switch is a live-browser-window concept (restoreMachine
+  // closes/opens real tabs) that a thin client like web has nothing behind
+  // — there, onOpenAll is wired as a no-op, so the "Double-click to switch"
+  // hint would be actively misleading. Defaults to true so every existing
+  // (extension) call site is unaffected.
+  dblClickSwitch?: boolean;
 }) {
-  const canSwitch = () => !props.isCurrent && !props.openElsewhere;
+  const canSwitch = () =>
+    props.dblClickSwitch !== false && !props.isCurrent && !props.openElsewhere;
   return (
     <div
       onClick={props.onView}

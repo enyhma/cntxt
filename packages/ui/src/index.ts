@@ -18,6 +18,8 @@ export * from "./AutomationsPanel";
 // templates) instead of landing flat alongside the above — not a
 // retroactive migration of the existing files, just the convention going
 // forward.
-export * from "./atoms/BackButton";
-export * from "./molecules/DetailHeader";
+export * from "./atoms/ExpandCaret";
+export * from "./molecules/FolderRow";
+export * from "./organisms/Sidebar";
 export * from "./templates/DetailPageShell";
+export * from "./templates/SidebarPaneShell";

@@ -7,18 +7,27 @@ import {
   onMount,
   Show,
   Switch,
+  type JSX,
 } from "solid-js";
 import type { Session as AuthSession } from "@supabase/supabase-js";
 import { useSupabaseSession } from "@cntxt/supabase";
 import {
+  LayoutGrid,
+  Bookmark as BookmarkIcon,
+  History,
+  Trash2,
+  CreditCard,
+} from "lucide-solid";
+import {
   BookmarksPanel,
   ConfigWarning,
-  DetailHeader,
   DetailPageShell,
   FolderPage,
   GroupBoardPanel,
   GroupDot,
   PlanPanel,
+  Sidebar,
+  SidebarPaneShell,
   TabRow,
   TimelinePanel,
   TrashPanel,
@@ -51,11 +60,23 @@ import {
 
 type Nav = "tree" | "bookmarks" | "timeline" | "plan" | "trash";
 const NAV_VALUES: Nav[] = ["tree", "bookmarks", "timeline", "plan", "trash"];
+const NAV_META: Record<
+  Nav,
+  { label: string; icon: (props: { size: number }) => JSX.Element }
+> = {
+  tree: { label: "Tabs", icon: LayoutGrid },
+  bookmarks: { label: "Bookmarks", icon: BookmarkIcon },
+  timeline: { label: "Timeline", icon: History },
+  plan: { label: "Plan", icon: CreditCard },
+  trash: { label: "Trash", icon: Trash2 },
+};
 
-type Selection =
-  | { kind: "root" }
-  | { kind: "folder"; id: string }
-  | { kind: "group"; id: string };
+// Generalizes the extension's three mutually-exclusive view signals
+// (viewedId/viewingFolderId/viewedProjectId) into one pane-state union.
+// undefined = nothing selected (empty-state message in the main pane) —
+// there's no more "root" state, since the sidebar itself is always
+// visible now.
+type PaneView = { kind: "folder"; id: string } | { kind: "group"; id: string };
 
 // Edit-class actions (rename, recolor, nest, archive, trash-restore) hit
 // groups/folders UPDATE policies, which — as of
@@ -190,9 +211,31 @@ function App() {
     if (nav() === "timeline") refreshTimeline();
   });
 
-  const [selection, setSelection] = createSignal<Selection>({ kind: "root" });
+  const [pane, setPane] = createSignal<PaneView>();
+  const [expandedFolders, setExpandedFolders] = createSignal<Set<string>>(
+    new Set(),
+  );
+  const [railOpen, setRailOpen] = createSignal(
+    (() => {
+      try {
+        return localStorage.getItem("cntxt.railOpen") !== "0";
+      } catch {
+        return true;
+      }
+    })(),
+  );
+  createEffect(() => {
+    try {
+      localStorage.setItem("cntxt.railOpen", railOpen() ? "1" : "0");
+    } catch {
+      // storage unavailable (private mode, etc.) — rail just won't persist
+    }
+  });
 
-  const rootFolders = () => folders().filter((f) => f.parent_id === null);
+  const areas = () =>
+    folders().filter((f) => f.parent_id === null && f.kind === "area");
+  const standaloneProjects = () =>
+    folders().filter((f) => f.parent_id === null && f.kind === "project");
   const standaloneGroups = () => groups().filter((g) => g.folder_id === null);
   const childProjectsOf = (areaId: string) =>
     folders().filter((f) => f.parent_id === areaId && f.kind === "project");
@@ -200,6 +243,42 @@ function App() {
     groups().filter((g) => g.folder_id === folderId);
   const folderNameFor = (id: string | null) =>
     id ? folders().find((f) => f.id === id)?.name : undefined;
+
+  const activeFolderId = () =>
+    pane()?.kind === "folder" ? pane()!.id : undefined;
+  const activeGroupId = () =>
+    pane()?.kind === "group" ? pane()!.id : undefined;
+
+  function toggleExpanded(id: string) {
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Selecting something nested auto-reveals its ancestor chain, so e.g.
+  // picking a Group inside a collapsed Project doesn't leave the sidebar
+  // looking like nothing is selected.
+  function openPane(next: PaneView) {
+    setPane(next);
+    const toExpand: string[] = [];
+    if (next.kind === "folder") {
+      const f = folders().find((x) => x.id === next.id);
+      if (f?.parent_id) toExpand.push(f.parent_id);
+    } else {
+      const g = groups().find((x) => x.id === next.id);
+      if (g?.folder_id) {
+        toExpand.push(g.folder_id);
+        const f = folders().find((x) => x.id === g.folder_id);
+        if (f?.parent_id) toExpand.push(f.parent_id);
+      }
+    }
+    if (toExpand.length) {
+      setExpandedFolders((prev) => new Set([...prev, ...toExpand]));
+    }
+  }
 
   async function handleAddArea() {
     const name = window.prompt("Area name?")?.trim();
@@ -244,7 +323,7 @@ function App() {
   async function handleTrashGroup(groupId: string) {
     if (!proActive()) return window.alert(UPGRADE_MESSAGE);
     await updateGroup(groupId, { deleted_at: new Date().toISOString() });
-    setSelection({ kind: "root" });
+    setPane(undefined);
     await refreshTree();
   }
   async function handleRestoreGroup(groupId: string) {
@@ -279,30 +358,21 @@ function App() {
             <div class="min-h-screen bg-surface font-sans text-surface-txt">
               <header class="flex h-13 items-center justify-between gap-3 border-b border-surface-alt2 bg-surface-alt1 px-3.5">
                 <span class="font-semibold">cntxt</span>
-                <nav class="flex items-center gap-3 text-sm">
-                  <For
-                    each={
-                      [
-                        "tree",
-                        "bookmarks",
-                        "timeline",
-                        "plan",
-                        "trash",
-                      ] as Nav[]
-                    }
-                  >
+                <nav class="flex items-center gap-4 text-sm">
+                  <For each={NAV_VALUES}>
                     {(n) => (
                       <button
                         type="button"
                         onClick={() => setNav(n)}
                         class={
-                          "capitalize" +
+                          "flex items-center gap-1.5" +
                           (nav() === n
                             ? " font-medium text-surface-txt"
                             : " text-surface-txt-hint")
                         }
                       >
-                        {n}
+                        {NAV_META[n].icon({ size: 14 })}
+                        {NAV_META[n].label}
                       </button>
                     )}
                   </For>
@@ -318,298 +388,277 @@ function App() {
 
               <Switch>
                 <Match when={nav() === "tree"}>
-                  <Switch>
-                    <Match when={selection().kind === "root"}>
-                      <div class="p-6">
-                        <div class="flex max-w-2xl flex-col gap-6">
-                          <div class="flex items-center gap-2">
-                            <h1 class="flex-1 text-lg font-semibold">
-                              Your workspace
-                            </h1>
-                            <button
-                              type="button"
-                              onClick={handleAddArea}
-                              class="btn btn-xs border border-surface-alt3"
-                            >
-                              + Area
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleAddProject()}
-                              class="btn btn-xs border border-surface-alt3"
-                            >
-                              + Project
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
+                  <SidebarPaneShell
+                    railOpen={railOpen()}
+                    onOpenRail={() => setRailOpen(true)}
+                    sidebar={
+                      <Sidebar
+                        areas={() =>
+                          areas().map((f) => ({
+                            id: f.id,
+                            name: f.name,
+                            kind: "area" as const,
+                          }))
+                        }
+                        standaloneProjects={() =>
+                          standaloneProjects().map((f) => ({
+                            id: f.id,
+                            name: f.name,
+                            kind: "project" as const,
+                          }))
+                        }
+                        ungroupedGroups={() =>
+                          standaloneGroups().map((g) => ({
+                            id: g.id,
+                            name: g.name,
+                            color: g.color ?? undefined,
+                            icon: g.icon ?? undefined,
+                            tabCount: g.tabs.length,
+                          }))
+                        }
+                        childProjectsOf={(id) =>
+                          childProjectsOf(id).map((p) => ({
+                            id: p.id,
+                            name: p.name,
+                            kind: "project" as const,
+                          }))
+                        }
+                        groupsIn={(id) =>
+                          groupsIn(id).map((g) => ({
+                            id: g.id,
+                            name: g.name,
+                            color: g.color ?? undefined,
+                            icon: g.icon ?? undefined,
+                            tabCount: g.tabs.length,
+                          }))
+                        }
+                        expanded={expandedFolders}
+                        onToggle={toggleExpanded}
+                        activeFolderId={activeFolderId()}
+                        activeGroupId={activeGroupId()}
+                        onOpenFolder={(id) => openPane({ kind: "folder", id })}
+                        onOpenGroup={(id) => openPane({ kind: "group", id })}
+                        onAddArea={handleAddArea}
+                        onAddProject={() => handleAddProject()}
+                        onAddGroup={() => {
+                          const name = window.prompt("Group name?")?.trim();
+                          if (name) handleAddGroup(name);
+                        }}
+                        onCollapseRail={() => setRailOpen(false)}
+                      />
+                    }
+                  >
+                    <Switch>
+                      <Match when={!pane()}>
+                        <div class="p-6 text-sm text-surface-txt-hint">
+                          Select something in the sidebar, or add an Area,
+                          Project, or Group to get started.
+                        </div>
+                      </Match>
+
+                      <Match
+                        when={
+                          pane()?.kind === "folder" &&
+                          folders().find(
+                            (f) => f.id === pane()!.id && f.kind === "area",
+                          )
+                        }
+                      >
+                        {(area) => (
+                          <div>
+                            <div class="m-3 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (
+                                    !window.confirm(
+                                      `Delete "${area().name}" forever?`,
+                                    )
+                                  )
+                                    return;
+                                  await handleDeleteFolderForever(area().id);
+                                  setPane(undefined);
+                                }}
+                                class="btn btn-sm border border-surface-alt3 text-danger"
+                              >
+                                Delete forever
+                              </button>
+                            </div>
+                            <div class="mx-3 mb-3 max-w-2xl">
+                              <AddBookmarkForm
+                                folderId={area().id}
+                                onAdded={refreshBookmarks}
+                              />
+                            </div>
+                            <FolderPage
+                              folder={area()}
+                              breadcrumb={[]}
+                              groups={() =>
+                                groupsIn(area().id).map((g) => ({
+                                  id: g.id,
+                                  name: g.name,
+                                  tabs: g.tabs,
+                                  color: g.color ?? undefined,
+                                  icon: g.icon ?? undefined,
+                                }))
+                              }
+                              projects={() =>
+                                childProjectsOf(area().id).map((p) => ({
+                                  id: p.id,
+                                  name: p.name,
+                                }))
+                              }
+                              onOpenProject={(id) =>
+                                openPane({ kind: "folder", id })
+                              }
+                              onOpenGroup={(id) =>
+                                openPane({ kind: "group", id })
+                              }
+                              onAddGroup={() => {
                                 const name = window
                                   .prompt("Group name?")
                                   ?.trim();
-                                if (name) handleAddGroup(name);
+                                if (name) handleAddGroup(name, area().id);
                               }}
-                              class="btn btn-xs border border-surface-alt3"
-                            >
-                              + Group
-                            </button>
+                            />
                           </div>
-                          <div class="flex flex-col gap-1.5">
-                            <For each={rootFolders()}>
-                              {(f) => (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setSelection({ kind: "folder", id: f.id })
-                                  }
-                                  class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 text-left shadow-[var(--shadow-card)] hover:bg-surface-alt2"
-                                >
-                                  <span class="min-w-0 flex-1 truncate text-sm font-medium">
-                                    {f.name}
-                                  </span>
-                                  <span class="font-mono text-[11px] text-surface-txt-faint">
-                                    {f.kind === "area" ? "Area" : "Project"}
-                                  </span>
-                                </button>
-                              )}
-                            </For>
-                            <For each={standaloneGroups()}>
-                              {(g) => (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setSelection({ kind: "group", id: g.id })
-                                  }
-                                  class="flex items-center gap-2.5 rounded border border-surface-alt3 bg-surface-alt1 p-2.5 text-left shadow-[var(--shadow-card)] hover:bg-surface-alt2"
-                                >
-                                  <GroupDot
-                                    group={{
-                                      id: g.id,
-                                      color: g.color ?? undefined,
-                                      icon: g.icon ?? undefined,
-                                    }}
-                                  />
-                                  <span class="min-w-0 flex-1 truncate text-sm font-medium">
-                                    {g.name}
-                                  </span>
-                                  <span class="font-mono text-[11px] text-surface-txt-faint">
-                                    {g.tabs.length} tabs
-                                  </span>
-                                </button>
-                              )}
-                            </For>
-                          </div>
-                        </div>
-                      </div>
-                    </Match>
+                        )}
+                      </Match>
 
-                    <Match
-                      when={folders().find(
-                        (f) =>
-                          selection().kind === "folder" &&
-                          f.id === (selection() as { id: string }).id &&
-                          f.kind === "area",
-                      )}
-                    >
-                      {(area) => (
-                        <div>
-                          <div class="m-3">
-                            <DetailHeader
-                              onBack={() => setSelection({ kind: "root" })}
-                              actions={
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    if (
-                                      !window.confirm(
-                                        `Delete "${area().name}" forever?`,
-                                      )
+                      <Match
+                        when={
+                          pane()?.kind === "folder" &&
+                          folders().find(
+                            (f) => f.id === pane()!.id && f.kind === "project",
+                          )
+                        }
+                      >
+                        {(project) => (
+                          <DetailPageShell
+                            headerActions={
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (
+                                    !window.confirm(
+                                      `Delete "${project().name}" forever?`,
                                     )
-                                      return;
-                                    await handleDeleteFolderForever(area().id);
-                                    setSelection({ kind: "root" });
-                                  }}
-                                  class="btn btn-sm border border-surface-alt3 text-danger"
-                                >
-                                  Delete forever
-                                </button>
-                              }
-                            />
-                          </div>
-                          <div class="mx-3 mb-3 max-w-2xl">
-                            <AddBookmarkForm
-                              folderId={area().id}
-                              onAdded={refreshBookmarks}
-                            />
-                          </div>
-                          <FolderPage
-                            folder={area()}
-                            breadcrumb={[]}
-                            groups={() =>
-                              groupsIn(area().id).map((g) => ({
-                                id: g.id,
-                                name: g.name,
-                                tabs: g.tabs,
-                                color: g.color ?? undefined,
-                                icon: g.icon ?? undefined,
-                              }))
-                            }
-                            projects={() =>
-                              childProjectsOf(area().id).map((p) => ({
-                                id: p.id,
-                                name: p.name,
-                              }))
-                            }
-                            onOpenProject={(id) =>
-                              setSelection({ kind: "folder", id })
-                            }
-                            onOpenGroup={(id) =>
-                              setSelection({ kind: "group", id })
-                            }
-                            onAddGroup={() => {
-                              const name = window.prompt("Group name?")?.trim();
-                              if (name) handleAddGroup(name, area().id);
-                            }}
-                          />
-                        </div>
-                      )}
-                    </Match>
-
-                    <Match
-                      when={folders().find(
-                        (f) =>
-                          selection().kind === "folder" &&
-                          f.id === (selection() as { id: string }).id &&
-                          f.kind === "project",
-                      )}
-                    >
-                      {(project) => (
-                        <DetailPageShell
-                          onBack={() => setSelection({ kind: "root" })}
-                          headerActions={
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (
-                                  !window.confirm(
-                                    `Delete "${project().name}" forever?`,
                                   )
-                                )
-                                  return;
-                                await handleDeleteFolderForever(project().id);
-                                setSelection({ kind: "root" });
-                              }}
-                              class="btn btn-sm border border-surface-alt3 text-danger"
-                            >
-                              Delete forever
-                            </button>
-                          }
-                        >
-                          <h1 class="text-lg font-semibold">
-                            {project().name}
-                          </h1>
-                          <AddBookmarkForm
-                            folderId={project().id}
-                            onAdded={refreshBookmarks}
-                          />
-                          <Show when={(project().tabs?.length ?? 0) > 0}>
-                            <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                              <For each={project().tabs ?? []}>
-                                {(tab, i) => (
-                                  <TabRow
-                                    tab={tab}
-                                    index={i()}
-                                    selected={false}
-                                    selectable={false}
-                                    onToggle={() => {}}
-                                    onOpen={() =>
-                                      window.open(tab.url, "_blank")
-                                    }
-                                  />
-                                )}
-                              </For>
-                            </section>
-                          </Show>
-                          <GroupBoardPanel
-                            groups={() =>
-                              groupsIn(project().id).map((g) => ({
-                                id: g.id,
-                                name: g.name,
-                                status: g.status,
-                                tabCount: g.tabs.length,
-                              }))
-                            }
-                            busy={false}
-                            onActivate={handleActivateGroup}
-                            onComplete={handleCompleteGroup}
-                            onAddGroup={(name) =>
-                              handleAddGroup(name, project().id)
-                            }
-                          />
-                        </DetailPageShell>
-                      )}
-                    </Match>
-
-                    <Match
-                      when={groups().find(
-                        (g) =>
-                          selection().kind === "group" &&
-                          g.id === (selection() as { id: string }).id,
-                      )}
-                    >
-                      {(group) => (
-                        <DetailPageShell
-                          onBack={() => setSelection({ kind: "root" })}
-                          headerActions={
-                            <button
-                              type="button"
-                              onClick={() => handleTrashGroup(group().id)}
-                              class="btn btn-sm border border-surface-alt3"
-                            >
-                              Move to trash
-                            </button>
-                          }
-                        >
-                          <div class="flex items-center gap-2.5">
-                            <GroupDot
-                              group={{
-                                id: group().id,
-                                color: group().color ?? undefined,
-                                icon: group().icon ?? undefined,
-                              }}
-                            />
-                            <h1 class="flex-1 text-lg font-semibold">
-                              {group().name}
-                            </h1>
-                          </div>
-                          <Show
-                            when={group().tabs.length > 0}
-                            fallback={
-                              <p class="text-sm text-surface-txt-hint">
-                                No tabs in this group.
-                              </p>
+                                    return;
+                                  await handleDeleteFolderForever(project().id);
+                                  setPane(undefined);
+                                }}
+                                class="btn btn-sm border border-surface-alt3 text-danger"
+                              >
+                                Delete forever
+                              </button>
                             }
                           >
-                            <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                              <For each={group().tabs}>
-                                {(tab, i) => (
-                                  <TabRow
-                                    tab={tab}
-                                    index={i()}
-                                    selected={false}
-                                    selectable={false}
-                                    onToggle={() => {}}
-                                    onOpen={() =>
-                                      window.open(tab.url, "_blank")
-                                    }
-                                  />
-                                )}
-                              </For>
-                            </section>
-                          </Show>
-                        </DetailPageShell>
-                      )}
-                    </Match>
-                  </Switch>
+                            <h1 class="text-lg font-semibold">
+                              {project().name}
+                            </h1>
+                            <AddBookmarkForm
+                              folderId={project().id}
+                              onAdded={refreshBookmarks}
+                            />
+                            <Show when={(project().tabs?.length ?? 0) > 0}>
+                              <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                                <For each={project().tabs ?? []}>
+                                  {(tab, i) => (
+                                    <TabRow
+                                      tab={tab}
+                                      index={i()}
+                                      selected={false}
+                                      selectable={false}
+                                      onToggle={() => {}}
+                                      onOpen={() =>
+                                        window.open(tab.url, "_blank")
+                                      }
+                                    />
+                                  )}
+                                </For>
+                              </section>
+                            </Show>
+                            <GroupBoardPanel
+                              groups={() =>
+                                groupsIn(project().id).map((g) => ({
+                                  id: g.id,
+                                  name: g.name,
+                                  status: g.status,
+                                  tabCount: g.tabs.length,
+                                }))
+                              }
+                              busy={false}
+                              onActivate={handleActivateGroup}
+                              onComplete={handleCompleteGroup}
+                              onAddGroup={(name) =>
+                                handleAddGroup(name, project().id)
+                              }
+                            />
+                          </DetailPageShell>
+                        )}
+                      </Match>
+
+                      <Match
+                        when={
+                          pane()?.kind === "group" &&
+                          groups().find((g) => g.id === pane()!.id)
+                        }
+                      >
+                        {(group) => (
+                          <DetailPageShell
+                            headerActions={
+                              <button
+                                type="button"
+                                onClick={() => handleTrashGroup(group().id)}
+                                class="btn btn-sm border border-surface-alt3"
+                              >
+                                Move to trash
+                              </button>
+                            }
+                          >
+                            <div class="flex items-center gap-2.5">
+                              <GroupDot
+                                group={{
+                                  id: group().id,
+                                  color: group().color ?? undefined,
+                                  icon: group().icon ?? undefined,
+                                }}
+                              />
+                              <h1 class="flex-1 text-lg font-semibold">
+                                {group().name}
+                              </h1>
+                            </div>
+                            <Show
+                              when={group().tabs.length > 0}
+                              fallback={
+                                <p class="text-sm text-surface-txt-hint">
+                                  No tabs in this group.
+                                </p>
+                              }
+                            >
+                              <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                                <For each={group().tabs}>
+                                  {(tab, i) => (
+                                    <TabRow
+                                      tab={tab}
+                                      index={i()}
+                                      selected={false}
+                                      selectable={false}
+                                      onToggle={() => {}}
+                                      onOpen={() =>
+                                        window.open(tab.url, "_blank")
+                                      }
+                                    />
+                                  )}
+                                </For>
+                              </section>
+                            </Show>
+                          </DetailPageShell>
+                        )}
+                      </Match>
+                    </Switch>
+                  </SidebarPaneShell>
                 </Match>
 
                 <Match when={nav() === "bookmarks"}>
