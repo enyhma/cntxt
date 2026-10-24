@@ -1,5 +1,5 @@
 import { For, Show, type Accessor } from "solid-js";
-import { FolderPlus, FilePlus2, Plus, PanelLeftClose } from "lucide-solid";
+import { FolderPlus, Plus, PanelLeftClose } from "lucide-solid";
 import { FolderRow } from "../molecules/FolderRow";
 import { GroupRow } from "../GroupRow";
 
@@ -43,8 +43,12 @@ export function Sidebar(props: {
   onOpenFolder: (id: string) => void;
   onOpenGroup: (id: string) => void;
   onAddArea: () => void;
-  onAddProject: () => void;
   onAddGroup: () => void;
+  // Per-row hover actions (FolderRow), mirroring FolderHeader's
+  // group-hover reveal: add a child Project under this Area, or a child
+  // Group under this Area/Project.
+  onAddProjectTo: (areaId: string) => void;
+  onAddGroupTo: (folderId: string) => void;
   onCollapseRail: () => void;
 }) {
   function groupRow(group: SidebarGroup, depth: number) {
@@ -81,6 +85,12 @@ export function Sidebar(props: {
           active={props.activeFolderId === folder.id}
           onToggle={() => props.onToggle(folder.id)}
           onOpen={() => props.onOpenFolder(folder.id)}
+          onAddProject={
+            folder.kind === "area"
+              ? () => props.onAddProjectTo(folder.id)
+              : undefined
+          }
+          onAddGroup={() => props.onAddGroupTo(folder.id)}
         />
         <Show when={expanded()}>
           <For each={props.childProjectsOf(folder.id)}>
@@ -104,31 +114,23 @@ export function Sidebar(props: {
           type="button"
           title="New area"
           onClick={props.onAddArea}
-          class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
+          class="btn btn-square btn-ghost btn-xs"
         >
-          <FolderPlus size={13} />
-        </button>
-        <button
-          type="button"
-          title="New project"
-          onClick={props.onAddProject}
-          class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
-        >
-          <FilePlus2 size={13} />
+          <FolderPlus size={14} />
         </button>
         <button
           type="button"
           title="New group"
           onClick={props.onAddGroup}
-          class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
+          class="btn btn-square btn-ghost btn-xs"
         >
-          <Plus size={13} />
+          <Plus size={14} />
         </button>
         <button
           type="button"
-          title="Collapse sidebar"
+          title="Collapse"
           onClick={props.onCollapseRail}
-          class="btn btn-square btn-ghost btn-xs text-surface-txt-hint"
+          class="btn btn-square btn-ghost btn-xs border border-surface-alt3"
         >
           <PanelLeftClose size={13} />
         </button>
@@ -137,22 +139,28 @@ export function Sidebar(props: {
         <For each={props.areas()}>{(area) => folderBlock(area, 0)}</For>
 
         <Show when={props.standaloneProjects().length > 0}>
-          <span class="mt-1 px-2 py-1 font-mono text-[10px] tracking-wider text-surface-txt-faint">
+          <div class="mt-1 px-2 py-1 font-mono text-[10px] tracking-wider text-surface-txt-faint">
             PROJECTS
-          </span>
+          </div>
           <For each={props.standaloneProjects()}>
             {(project) => folderBlock(project, 0)}
           </For>
         </Show>
 
-        <Show when={props.ungroupedGroups().length > 0}>
-          <span class="mt-1 px-2 py-1 font-mono text-[10px] tracking-wider text-surface-txt-faint">
+        <Show
+          when={
+            (props.areas().length > 0 ||
+              props.standaloneProjects().length > 0) &&
+            props.ungroupedGroups().length > 0
+          }
+        >
+          <div class="mt-1 px-2 py-1 font-mono text-[10px] tracking-wider text-surface-txt-faint">
             UNGROUPED
-          </span>
-          <For each={props.ungroupedGroups()}>
-            {(group) => groupRow(group, 0)}
-          </For>
+          </div>
         </Show>
+        <For each={props.ungroupedGroups()}>
+          {(group) => groupRow(group, 0)}
+        </For>
       </div>
     </nav>
   );

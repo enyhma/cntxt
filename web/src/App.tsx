@@ -286,7 +286,7 @@ function App() {
     await createArea(name);
     await refreshTree();
   }
-  async function handleAddProject(parentId?: string) {
+  async function handleAddProject(parentId: string) {
     const name = window.prompt("Project name?")?.trim();
     if (!name) return;
     await createProject(name, parentId);
@@ -439,10 +439,14 @@ function App() {
                         onOpenFolder={(id) => openPane({ kind: "folder", id })}
                         onOpenGroup={(id) => openPane({ kind: "group", id })}
                         onAddArea={handleAddArea}
-                        onAddProject={() => handleAddProject()}
                         onAddGroup={() => {
                           const name = window.prompt("Group name?")?.trim();
                           if (name) handleAddGroup(name);
+                        }}
+                        onAddProjectTo={(areaId) => handleAddProject(areaId)}
+                        onAddGroupTo={(folderId) => {
+                          const name = window.prompt("Group name?")?.trim();
+                          if (name) handleAddGroup(name, folderId);
                         }}
                         onCollapseRail={() => setRailOpen(false)}
                       />
