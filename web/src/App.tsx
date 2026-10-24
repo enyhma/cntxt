@@ -16,7 +16,7 @@ import {
   Bookmark as BookmarkIcon,
   History,
   Trash2,
-  CreditCard,
+  Settings as SettingsIcon,
 } from "lucide-solid";
 import {
   BookmarksPanel,
@@ -58,17 +58,27 @@ import {
   creemYearlyCheckoutUrl,
 } from "./lib/creem";
 
-type Nav = "tree" | "bookmarks" | "timeline" | "plan" | "trash";
-const NAV_VALUES: Nav[] = ["tree", "bookmarks", "timeline", "plan", "trash"];
+// Order/labels mirror the extension's NAV_ITEMS
+// (extension/entrypoints/dashboard/App.tsx) minus "Shortcuts" (an
+// AI/automation feature web doesn't have at all, not just hidden) —
+// Tabs, Trash, Timeline, Bookmarks, Settings.
+type Nav = "tree" | "trash" | "timeline" | "bookmarks" | "settings";
+const NAV_VALUES: Nav[] = [
+  "tree",
+  "trash",
+  "timeline",
+  "bookmarks",
+  "settings",
+];
 const NAV_META: Record<
   Nav,
   { label: string; icon: (props: { size: number }) => JSX.Element }
 > = {
   tree: { label: "Tabs", icon: LayoutGrid },
-  bookmarks: { label: "Bookmarks", icon: BookmarkIcon },
-  timeline: { label: "Timeline", icon: History },
-  plan: { label: "Plan", icon: CreditCard },
   trash: { label: "Trash", icon: Trash2 },
+  timeline: { label: "Timeline", icon: History },
+  bookmarks: { label: "Bookmarks", icon: BookmarkIcon },
+  settings: { label: "Settings", icon: SettingsIcon },
 };
 
 // Generalizes the extension's three mutually-exclusive view signals
@@ -356,34 +366,55 @@ function App() {
         <Show when={session()} fallback={<Login />}>
           {(s) => (
             <div class="min-h-screen bg-surface font-sans text-surface-txt">
-              <header class="flex h-13 items-center justify-between gap-3 border-b border-surface-alt2 bg-surface-alt1 px-3.5">
-                <span class="font-semibold">cntxt</span>
-                <nav class="flex items-center gap-4 text-sm">
+              <header class="flex h-13 shrink-0 items-center gap-1 border-b border-surface-alt2 bg-surface-alt1 px-3.5">
+                <svg
+                  viewBox="0 0 100 100"
+                  width="20"
+                  height="20"
+                  aria-hidden="true"
+                  class="mr-2.5 shrink-0"
+                >
+                  <path
+                    d="M 77.58 73.15 A 36 36 0 1 1 77.58 26.85"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="14"
+                    stroke-linecap="round"
+                  />
+                  <rect
+                    x="74"
+                    y="40"
+                    width="8"
+                    height="20"
+                    rx="4"
+                    fill="currentColor"
+                  />
+                </svg>
+                <div class="flex h-full items-stretch gap-0.5">
                   <For each={NAV_VALUES}>
                     {(n) => (
                       <button
                         type="button"
                         onClick={() => setNav(n)}
                         class={
-                          "flex items-center gap-1.5" +
+                          "-mb-px flex items-center gap-1.75 border-b-2 px-2.5 text-sm " +
                           (nav() === n
-                            ? " font-medium text-surface-txt"
-                            : " text-surface-txt-hint")
+                            ? "border-accent font-semibold text-surface-txt"
+                            : "border-transparent font-medium text-surface-txt-hint hover:text-surface-txt")
                         }
                       >
                         {NAV_META[n].icon({ size: 14 })}
-                        {NAV_META[n].label}
+                        <span class="whitespace-nowrap">
+                          {NAV_META[n].label}
+                        </span>
                       </button>
                     )}
                   </For>
-                </nav>
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  class="btn btn-sm border border-surface-alt3"
-                >
-                  Sign out
-                </button>
+                </div>
+                <span class="flex-1" />
+                <span class="truncate text-sm text-surface-txt-faint">
+                  {s().user.email}
+                </span>
               </header>
 
               <Switch>
@@ -695,9 +726,10 @@ function App() {
                   />
                 </Match>
 
-                <Match when={nav() === "plan"}>
+                <Match when={nav() === "settings"}>
                   <div class="p-6">
-                    <div class="max-w-md">
+                    <div class="flex max-w-md flex-col gap-5">
+                      <h2 class="text-base font-semibold">Settings</h2>
                       <PlanPanel
                         maxWorkspaces={() => entitlements()?.maxWorkspaces}
                         groupCount={() => groups().length}
@@ -715,6 +747,13 @@ function App() {
                         yearlyCheckoutUrl={creemYearlyCheckoutUrl(s().user.id)}
                         basicCheckoutUrl={creemBasicCheckoutUrl(s().user.id)}
                       />
+                      <button
+                        type="button"
+                        onClick={handleSignOut}
+                        class="btn btn-sm self-start border border-surface-alt3"
+                      >
+                        Sign out
+                      </button>
                     </div>
                   </div>
                 </Match>
