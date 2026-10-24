@@ -365,7 +365,7 @@ function App() {
       <Show when={!authLoading()}>
         <Show when={session()} fallback={<Login />}>
           {(s) => (
-            <div class="min-h-screen bg-surface font-sans text-surface-txt">
+            <div class="flex h-screen flex-col bg-surface font-sans text-surface-txt">
               <header class="flex h-13 shrink-0 items-center gap-1 border-b border-surface-alt2 bg-surface-alt1 px-3.5">
                 <svg
                   viewBox="0 0 100 100"
@@ -417,366 +417,383 @@ function App() {
                 </span>
               </header>
 
-              <Switch>
-                <Match when={nav() === "tree"}>
-                  <SidebarPaneShell
-                    railOpen={railOpen()}
-                    onOpenRail={() => setRailOpen(true)}
-                    sidebar={
-                      <Sidebar
-                        areas={() =>
-                          areas().map((f) => ({
-                            id: f.id,
-                            name: f.name,
-                            kind: "area" as const,
-                          }))
-                        }
-                        standaloneProjects={() =>
-                          standaloneProjects().map((f) => ({
-                            id: f.id,
-                            name: f.name,
-                            kind: "project" as const,
-                          }))
-                        }
-                        ungroupedGroups={() =>
-                          standaloneGroups().map((g) => ({
-                            id: g.id,
-                            name: g.name,
-                            color: g.color ?? undefined,
-                            icon: g.icon ?? undefined,
-                            tabCount: g.tabs.length,
-                          }))
-                        }
-                        childProjectsOf={(id) =>
-                          childProjectsOf(id).map((p) => ({
-                            id: p.id,
-                            name: p.name,
-                            kind: "project" as const,
-                          }))
-                        }
-                        groupsIn={(id) =>
-                          groupsIn(id).map((g) => ({
-                            id: g.id,
-                            name: g.name,
-                            color: g.color ?? undefined,
-                            icon: g.icon ?? undefined,
-                            tabCount: g.tabs.length,
-                          }))
-                        }
-                        expanded={expandedFolders}
-                        onToggle={toggleExpanded}
-                        activeFolderId={activeFolderId()}
-                        activeGroupId={activeGroupId()}
-                        onOpenFolder={(id) => openPane({ kind: "folder", id })}
-                        onOpenGroup={(id) => openPane({ kind: "group", id })}
-                        onAddArea={handleAddArea}
-                        onAddGroup={() => {
-                          const name = window.prompt("Group name?")?.trim();
-                          if (name) handleAddGroup(name);
-                        }}
-                        onAddProjectTo={(areaId) => handleAddProject(areaId)}
-                        onAddGroupTo={(folderId) => {
-                          const name = window.prompt("Group name?")?.trim();
-                          if (name) handleAddGroup(name, folderId);
-                        }}
-                        onCollapseRail={() => setRailOpen(false)}
-                      />
-                    }
-                  >
-                    <Switch>
-                      <Match when={!pane()}>
-                        <div class="p-6 text-sm text-surface-txt-hint">
-                          Select something in the sidebar, or add an Area,
-                          Project, or Group to get started.
-                        </div>
-                      </Match>
-
-                      <Match
-                        when={
-                          pane()?.kind === "folder" &&
-                          folders().find(
-                            (f) => f.id === pane()!.id && f.kind === "area",
-                          )
-                        }
-                      >
-                        {(area) => (
-                          <div>
-                            <div class="m-3 flex justify-end">
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  if (
-                                    !window.confirm(
-                                      `Delete "${area().name}" forever?`,
-                                    )
-                                  )
-                                    return;
-                                  await handleDeleteFolderForever(area().id);
-                                  setPane(undefined);
-                                }}
-                                class="btn btn-sm border border-surface-alt3 text-danger"
-                              >
-                                Delete forever
-                              </button>
-                            </div>
-                            <div class="mx-3 mb-3 max-w-2xl">
-                              <AddBookmarkForm
-                                folderId={area().id}
-                                onAdded={refreshBookmarks}
-                              />
-                            </div>
-                            <FolderPage
-                              folder={area()}
-                              breadcrumb={[]}
-                              groups={() =>
-                                groupsIn(area().id).map((g) => ({
-                                  id: g.id,
-                                  name: g.name,
-                                  tabs: g.tabs,
-                                  color: g.color ?? undefined,
-                                  icon: g.icon ?? undefined,
-                                }))
-                              }
-                              projects={() =>
-                                childProjectsOf(area().id).map((p) => ({
-                                  id: p.id,
-                                  name: p.name,
-                                }))
-                              }
-                              onOpenProject={(id) =>
-                                openPane({ kind: "folder", id })
-                              }
-                              onOpenGroup={(id) =>
-                                openPane({ kind: "group", id })
-                              }
-                              onAddGroup={() => {
-                                const name = window
-                                  .prompt("Group name?")
-                                  ?.trim();
-                                if (name) handleAddGroup(name, area().id);
-                              }}
-                            />
+              <div class="flex min-h-0 flex-1 flex-col">
+                <Switch>
+                  <Match when={nav() === "tree"}>
+                    <SidebarPaneShell
+                      railOpen={railOpen()}
+                      onOpenRail={() => setRailOpen(true)}
+                      sidebar={
+                        <Sidebar
+                          areas={() =>
+                            areas().map((f) => ({
+                              id: f.id,
+                              name: f.name,
+                              kind: "area" as const,
+                            }))
+                          }
+                          standaloneProjects={() =>
+                            standaloneProjects().map((f) => ({
+                              id: f.id,
+                              name: f.name,
+                              kind: "project" as const,
+                            }))
+                          }
+                          ungroupedGroups={() =>
+                            standaloneGroups().map((g) => ({
+                              id: g.id,
+                              name: g.name,
+                              color: g.color ?? undefined,
+                              icon: g.icon ?? undefined,
+                              tabCount: g.tabs.length,
+                            }))
+                          }
+                          childProjectsOf={(id) =>
+                            childProjectsOf(id).map((p) => ({
+                              id: p.id,
+                              name: p.name,
+                              kind: "project" as const,
+                            }))
+                          }
+                          groupsIn={(id) =>
+                            groupsIn(id).map((g) => ({
+                              id: g.id,
+                              name: g.name,
+                              color: g.color ?? undefined,
+                              icon: g.icon ?? undefined,
+                              tabCount: g.tabs.length,
+                            }))
+                          }
+                          expanded={expandedFolders}
+                          onToggle={toggleExpanded}
+                          activeFolderId={activeFolderId()}
+                          activeGroupId={activeGroupId()}
+                          onOpenFolder={(id) =>
+                            openPane({ kind: "folder", id })
+                          }
+                          onOpenGroup={(id) => openPane({ kind: "group", id })}
+                          onAddArea={handleAddArea}
+                          onAddGroup={() => {
+                            const name = window.prompt("Group name?")?.trim();
+                            if (name) handleAddGroup(name);
+                          }}
+                          onAddProjectTo={(areaId) => handleAddProject(areaId)}
+                          onAddGroupTo={(folderId) => {
+                            const name = window.prompt("Group name?")?.trim();
+                            if (name) handleAddGroup(name, folderId);
+                          }}
+                          onCollapseRail={() => setRailOpen(false)}
+                        />
+                      }
+                    >
+                      <Switch>
+                        <Match when={!pane()}>
+                          <div class="p-6 text-sm text-surface-txt-hint">
+                            Select something in the sidebar, or add an Area,
+                            Project, or Group to get started.
                           </div>
-                        )}
-                      </Match>
+                        </Match>
 
-                      <Match
-                        when={
-                          pane()?.kind === "folder" &&
-                          folders().find(
-                            (f) => f.id === pane()!.id && f.kind === "project",
-                          )
-                        }
-                      >
-                        {(project) => (
-                          <DetailPageShell
-                            headerActions={
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  if (
-                                    !window.confirm(
-                                      `Delete "${project().name}" forever?`,
+                        <Match
+                          when={
+                            pane()?.kind === "folder" &&
+                            folders().find(
+                              (f) => f.id === pane()!.id && f.kind === "area",
+                            )
+                          }
+                        >
+                          {(area) => (
+                            <div>
+                              <div class="m-3 flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (
+                                      !window.confirm(
+                                        `Delete "${area().name}" forever?`,
+                                      )
                                     )
-                                  )
-                                    return;
-                                  await handleDeleteFolderForever(project().id);
-                                  setPane(undefined);
-                                }}
-                                class="btn btn-sm border border-surface-alt3 text-danger"
-                              >
-                                Delete forever
-                              </button>
-                            }
-                          >
-                            <h1 class="text-lg font-semibold">
-                              {project().name}
-                            </h1>
-                            <AddBookmarkForm
-                              folderId={project().id}
-                              onAdded={refreshBookmarks}
-                            />
-                            <Show when={(project().tabs?.length ?? 0) > 0}>
-                              <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                                <For each={project().tabs ?? []}>
-                                  {(tab, i) => (
-                                    <TabRow
-                                      tab={tab}
-                                      index={i()}
-                                      selected={false}
-                                      selectable={false}
-                                      onToggle={() => {}}
-                                      onOpen={() =>
-                                        window.open(tab.url, "_blank")
-                                      }
-                                    />
-                                  )}
-                                </For>
-                              </section>
-                            </Show>
-                            <GroupBoardPanel
-                              groups={() =>
-                                groupsIn(project().id).map((g) => ({
-                                  id: g.id,
-                                  name: g.name,
-                                  status: g.status,
-                                  tabCount: g.tabs.length,
-                                }))
-                              }
-                              busy={false}
-                              onActivate={handleActivateGroup}
-                              onComplete={handleCompleteGroup}
-                              onAddGroup={(name) =>
-                                handleAddGroup(name, project().id)
-                              }
-                            />
-                          </DetailPageShell>
-                        )}
-                      </Match>
-
-                      <Match
-                        when={
-                          pane()?.kind === "group" &&
-                          groups().find((g) => g.id === pane()!.id)
-                        }
-                      >
-                        {(group) => (
-                          <DetailPageShell
-                            headerActions={
-                              <button
-                                type="button"
-                                onClick={() => handleTrashGroup(group().id)}
-                                class="btn btn-sm border border-surface-alt3"
-                              >
-                                Move to trash
-                              </button>
-                            }
-                          >
-                            <div class="flex items-center gap-2.5">
-                              <GroupDot
-                                group={{
-                                  id: group().id,
-                                  color: group().color ?? undefined,
-                                  icon: group().icon ?? undefined,
+                                      return;
+                                    await handleDeleteFolderForever(area().id);
+                                    setPane(undefined);
+                                  }}
+                                  class="btn btn-sm border border-surface-alt3 text-danger"
+                                >
+                                  Delete forever
+                                </button>
+                              </div>
+                              <div class="mx-3 mb-3 max-w-2xl">
+                                <AddBookmarkForm
+                                  folderId={area().id}
+                                  onAdded={refreshBookmarks}
+                                />
+                              </div>
+                              <FolderPage
+                                folder={area()}
+                                breadcrumb={[]}
+                                groups={() =>
+                                  groupsIn(area().id).map((g) => ({
+                                    id: g.id,
+                                    name: g.name,
+                                    tabs: g.tabs,
+                                    color: g.color ?? undefined,
+                                    icon: g.icon ?? undefined,
+                                  }))
+                                }
+                                projects={() =>
+                                  childProjectsOf(area().id).map((p) => ({
+                                    id: p.id,
+                                    name: p.name,
+                                  }))
+                                }
+                                onOpenProject={(id) =>
+                                  openPane({ kind: "folder", id })
+                                }
+                                onOpenGroup={(id) =>
+                                  openPane({ kind: "group", id })
+                                }
+                                onAddGroup={() => {
+                                  const name = window
+                                    .prompt("Group name?")
+                                    ?.trim();
+                                  if (name) handleAddGroup(name, area().id);
                                 }}
                               />
-                              <h1 class="flex-1 text-lg font-semibold">
-                                {group().name}
-                              </h1>
                             </div>
-                            <Show
-                              when={group().tabs.length > 0}
-                              fallback={
-                                <p class="text-sm text-surface-txt-hint">
-                                  No tabs in this group.
-                                </p>
+                          )}
+                        </Match>
+
+                        <Match
+                          when={
+                            pane()?.kind === "folder" &&
+                            folders().find(
+                              (f) =>
+                                f.id === pane()!.id && f.kind === "project",
+                            )
+                          }
+                        >
+                          {(project) => (
+                            <DetailPageShell
+                              headerActions={
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (
+                                      !window.confirm(
+                                        `Delete "${project().name}" forever?`,
+                                      )
+                                    )
+                                      return;
+                                    await handleDeleteFolderForever(
+                                      project().id,
+                                    );
+                                    setPane(undefined);
+                                  }}
+                                  class="btn btn-sm border border-surface-alt3 text-danger"
+                                >
+                                  Delete forever
+                                </button>
                               }
                             >
-                              <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
-                                <For each={group().tabs}>
-                                  {(tab, i) => (
-                                    <TabRow
-                                      tab={tab}
-                                      index={i()}
-                                      selected={false}
-                                      selectable={false}
-                                      onToggle={() => {}}
-                                      onOpen={() =>
-                                        window.open(tab.url, "_blank")
-                                      }
-                                    />
-                                  )}
-                                </For>
-                              </section>
-                            </Show>
-                          </DetailPageShell>
-                        )}
-                      </Match>
-                    </Switch>
-                  </SidebarPaneShell>
-                </Match>
+                              <h1 class="text-lg font-semibold">
+                                {project().name}
+                              </h1>
+                              <AddBookmarkForm
+                                folderId={project().id}
+                                onAdded={refreshBookmarks}
+                              />
+                              <Show when={(project().tabs?.length ?? 0) > 0}>
+                                <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                                  <For each={project().tabs ?? []}>
+                                    {(tab, i) => (
+                                      <TabRow
+                                        tab={tab}
+                                        index={i()}
+                                        selected={false}
+                                        selectable={false}
+                                        onToggle={() => {}}
+                                        onOpen={() =>
+                                          window.open(tab.url, "_blank")
+                                        }
+                                      />
+                                    )}
+                                  </For>
+                                </section>
+                              </Show>
+                              <GroupBoardPanel
+                                groups={() =>
+                                  groupsIn(project().id).map((g) => ({
+                                    id: g.id,
+                                    name: g.name,
+                                    status: g.status,
+                                    tabCount: g.tabs.length,
+                                  }))
+                                }
+                                busy={false}
+                                onActivate={handleActivateGroup}
+                                onComplete={handleCompleteGroup}
+                                onAddGroup={(name) =>
+                                  handleAddGroup(name, project().id)
+                                }
+                              />
+                            </DetailPageShell>
+                          )}
+                        </Match>
 
-                <Match when={nav() === "bookmarks"}>
-                  <BookmarksPanel
-                    bookmarks={() =>
-                      resources()?.map((r) => ({
-                        id: r.id,
-                        url: r.url ?? undefined,
-                        note: r.note ?? undefined,
-                        folderId: r.folder_id ?? undefined,
-                      })) ?? []
-                    }
-                    folderNameFor={(id) => folderNameFor(id ?? null)}
-                    onDelete={async (id) => {
-                      await deleteResource(id);
-                      await refreshBookmarks();
-                    }}
-                  />
-                </Match>
+                        <Match
+                          when={
+                            pane()?.kind === "group" &&
+                            groups().find((g) => g.id === pane()!.id)
+                          }
+                        >
+                          {(group) => (
+                            <DetailPageShell
+                              headerActions={
+                                <button
+                                  type="button"
+                                  onClick={() => handleTrashGroup(group().id)}
+                                  class="btn btn-sm border border-surface-alt3"
+                                >
+                                  Move to trash
+                                </button>
+                              }
+                            >
+                              <div class="flex items-center gap-2.5">
+                                <GroupDot
+                                  group={{
+                                    id: group().id,
+                                    color: group().color ?? undefined,
+                                    icon: group().icon ?? undefined,
+                                  }}
+                                />
+                                <h1 class="flex-1 text-lg font-semibold">
+                                  {group().name}
+                                </h1>
+                              </div>
+                              <Show
+                                when={group().tabs.length > 0}
+                                fallback={
+                                  <p class="text-sm text-surface-txt-hint">
+                                    No tabs in this group.
+                                  </p>
+                                }
+                              >
+                                <section class="overflow-hidden rounded border border-surface-alt2 bg-surface-alt1 shadow-[var(--shadow-card)]">
+                                  <For each={group().tabs}>
+                                    {(tab, i) => (
+                                      <TabRow
+                                        tab={tab}
+                                        index={i()}
+                                        selected={false}
+                                        selectable={false}
+                                        onToggle={() => {}}
+                                        onOpen={() =>
+                                          window.open(tab.url, "_blank")
+                                        }
+                                      />
+                                    )}
+                                  </For>
+                                </section>
+                              </Show>
+                            </DetailPageShell>
+                          )}
+                        </Match>
+                      </Switch>
+                    </SidebarPaneShell>
+                  </Match>
 
-                <Match when={nav() === "timeline"}>
-                  <TimelinePanel
-                    archivedGroups={() => []}
-                    archivedFolders={() => []}
-                    onUnarchiveGroup={() => {}}
-                    onUnarchiveFolder={() => {}}
-                    sessions={sessions}
-                    onRestoreSession={restoreSession}
-                    proActive={proActive}
-                  />
-                </Match>
-
-                <Match when={nav() === "settings"}>
-                  <div class="p-6">
-                    <div class="flex max-w-md flex-col gap-5">
-                      <h2 class="text-base font-semibold">Settings</h2>
-                      <PlanPanel
-                        maxWorkspaces={() => entitlements()?.maxWorkspaces}
-                        groupCount={() => groups().length}
-                        projectCount={() =>
-                          folders().filter((f) => f.kind === "project").length
+                  <Match when={nav() === "bookmarks"}>
+                    <div class="flex-1 overflow-y-auto">
+                      <BookmarksPanel
+                        bookmarks={() =>
+                          resources()?.map((r) => ({
+                            id: r.id,
+                            url: r.url ?? undefined,
+                            note: r.note ?? undefined,
+                            folderId: r.folder_id ?? undefined,
+                          })) ?? []
                         }
-                        syncedCount={() => groups().length + folders().length}
-                        accessExpiresAt={() => entitlements()?.accessExpiresAt}
-                        hasBasicLicense={() =>
-                          entitlements()?.hasBasicLicense ?? false
-                        }
-                        monthlyCheckoutUrl={creemMonthlyCheckoutUrl(
-                          s().user.id,
-                        )}
-                        yearlyCheckoutUrl={creemYearlyCheckoutUrl(s().user.id)}
-                        basicCheckoutUrl={creemBasicCheckoutUrl(s().user.id)}
+                        folderNameFor={(id) => folderNameFor(id ?? null)}
+                        onDelete={async (id) => {
+                          await deleteResource(id);
+                          await refreshBookmarks();
+                        }}
                       />
-                      <button
-                        type="button"
-                        onClick={handleSignOut}
-                        class="btn btn-sm self-start border border-surface-alt3"
-                      >
-                        Sign out
-                      </button>
                     </div>
-                  </div>
-                </Match>
+                  </Match>
 
-                <Match when={nav() === "trash"}>
-                  <TrashPanel
-                    groups={() =>
-                      trashedGroups().map((g) => ({
-                        id: g.id,
-                        name: g.name,
-                        color: g.color ?? undefined,
-                        icon: g.icon ?? undefined,
-                        deletedAt: g.deleted_at
-                          ? new Date(g.deleted_at).getTime()
-                          : undefined,
-                      }))
-                    }
-                    retentionDays={() => 7}
-                    onRestore={handleRestoreGroup}
-                    onDeleteForever={handleDeleteGroupForever}
-                  />
-                </Match>
-              </Switch>
+                  <Match when={nav() === "timeline"}>
+                    <div class="flex-1 overflow-y-auto">
+                      <TimelinePanel
+                        archivedGroups={() => []}
+                        archivedFolders={() => []}
+                        onUnarchiveGroup={() => {}}
+                        onUnarchiveFolder={() => {}}
+                        sessions={sessions}
+                        onRestoreSession={restoreSession}
+                        proActive={proActive}
+                      />
+                    </div>
+                  </Match>
+
+                  <Match when={nav() === "settings"}>
+                    <div class="flex-1 overflow-y-auto p-6">
+                      <div class="flex max-w-md flex-col gap-5">
+                        <h2 class="text-base font-semibold">Settings</h2>
+                        <PlanPanel
+                          maxWorkspaces={() => entitlements()?.maxWorkspaces}
+                          groupCount={() => groups().length}
+                          projectCount={() =>
+                            folders().filter((f) => f.kind === "project").length
+                          }
+                          syncedCount={() => groups().length + folders().length}
+                          accessExpiresAt={() =>
+                            entitlements()?.accessExpiresAt
+                          }
+                          hasBasicLicense={() =>
+                            entitlements()?.hasBasicLicense ?? false
+                          }
+                          monthlyCheckoutUrl={creemMonthlyCheckoutUrl(
+                            s().user.id,
+                          )}
+                          yearlyCheckoutUrl={creemYearlyCheckoutUrl(
+                            s().user.id,
+                          )}
+                          basicCheckoutUrl={creemBasicCheckoutUrl(s().user.id)}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSignOut}
+                          class="btn btn-sm self-start border border-surface-alt3"
+                        >
+                          Sign out
+                        </button>
+                      </div>
+                    </div>
+                  </Match>
+
+                  <Match when={nav() === "trash"}>
+                    <div class="flex-1 overflow-y-auto">
+                      <TrashPanel
+                        groups={() =>
+                          trashedGroups().map((g) => ({
+                            id: g.id,
+                            name: g.name,
+                            color: g.color ?? undefined,
+                            icon: g.icon ?? undefined,
+                            deletedAt: g.deleted_at
+                              ? new Date(g.deleted_at).getTime()
+                              : undefined,
+                          }))
+                        }
+                        retentionDays={() => 7}
+                        onRestore={handleRestoreGroup}
+                        onDeleteForever={handleDeleteGroupForever}
+                      />
+                    </div>
+                  </Match>
+                </Switch>
+              </div>
             </div>
           )}
         </Show>
