@@ -1,0 +1,73 @@
+/* Shared design tokens for every marketing page. Light is the default;
+   dark applies by system preference unless the header toggle (see
+   SiteHeader.astro) has stamped an explicit data-theme on <html>. */
+:root {
+  --surface: #faf9f7;
+  --surface-alt1: #f1f0ec;
+  --surface-alt2: #e3e1db;
+  --surface-alt3: #cfccc4;
+  --surface-txt: #18181a;
+  --surface-txt-hint: rgb(24 24 26 / 62%);
+  --accent: #0f6b5c;
+  --accent-alt1: #13816d;
+  --accent-ink: #ffffff;
+  --success: #6fae85;
+  --warning: #d0a05c;
+  --info: #6f9bc7;
+  --danger: #c97888;
+  --radius: 14px;
+  --shadow-card:
+    0px 1px 3px rgba(20, 20, 20, 0.06), 0px 1px 1px rgba(20, 20, 20, 0.04);
+  --shadow-raised:
+    0px 10px 28px rgba(20, 20, 20, 0.1), 0px 2px 6px rgba(20, 20, 20, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface: #121212;
+    --surface-alt1: #191919;
+    --surface-alt2: #272727;
+    --surface-alt3: #3a3a3a;
+    --surface-txt: #ededec;
+    --surface-txt-hint: rgb(237 237 236 / 62%);
+    --accent: #4fb9a3;
+    --accent-alt1: #6cc9b5;
+    --accent-ink: #0b1b17;
+    --shadow-card:
+      0px 1px 3px rgba(0, 0, 0, 0.3), 0px 1px 1px rgba(0, 0, 0, 0.2);
+    --shadow-raised:
+      0px 10px 28px rgba(0, 0, 0, 0.4), 0px 2px 6px rgba(0, 0, 0, 0.25);
+  }
+}
+
+:root[data-theme="dark"] {
+  --surface: #121212;
+  --surface-alt1: #191919;
+  --surface-alt2: #272727;
+  --surface-alt3: #3a3a3a;
+  --surface-txt: #ededec;
+  --surface-txt-hint: rgb(237 237 236 / 62%);
+  --accent: #4fb9a3;
+  --accent-alt1: #6cc9b5;
+  --accent-ink: #0b1b17;
+  --shadow-card: 0px 1px 3px rgba(0, 0, 0, 0.3), 0px 1px 1px rgba(0, 0, 0, 0.2);
+  --shadow-raised:
+    0px 10px 28px rgba(0, 0, 0, 0.4), 0px 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--surface);
+  color: var(--surface-txt);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  line-height: 1.5;
+}

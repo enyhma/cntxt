@@ -23,8 +23,8 @@ const home = result.data.home;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <SEO
-      title="cntxt — a workspace for every window"
-      description="cntxt turns every browser window into a named workspace you can close and restore later — no more fifty pinned tabs across six windows."
+      title="cntxt — a Project for every window"
+      description="cntxt turns every browser window into a named Project you can close and restore later — no more fifty pinned tabs across six windows."
       path="/"
     />
     <script type="application/ld+json" set:html={JSON.stringify({
@@ -34,7 +34,7 @@ const home = result.data.home;
       applicationCategory: "BrowserApplication",
       operatingSystem: "Chrome",
       description:
-        "cntxt turns every browser window into a named workspace you can close and restore later.",
+        "cntxt turns every browser window into a named Project you can close and restore later.",
     })} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -84,43 +84,6 @@ const home = result.data.home;
 </html>
 
 <style is:global>
-  :root {
-    --surface: #12151c;
-    --surface-alt1: #171a21;
-    --surface-alt2: #21242c;
-    --surface-alt3: #2c2f38;
-    --surface-txt: #ebebeb;
-    --surface-txt-hint: rgb(235 235 235 / 65%);
-    --accent: #1055c9;
-    --accent-alt1: #2c6bd6;
-    --success: #3f7860;
-    --warning: #a8623c;
-    --info: #5b7396;
-    --danger: #9c4a52;
-    --radius: 10px;
-    --shadow-card:
-      0px 1px 3px rgba(0, 0, 0, 0.35), 0px 1px 1px rgba(0, 0, 0, 0.2);
-    --shadow-raised:
-      0px 3px 8px rgba(0, 0, 0, 0.45), 0px 1px 2px rgba(0, 0, 0, 0.3);
-  }
-
-  * {
-    box-sizing: border-box;
-  }
-
-  html,
-  body {
-    margin: 0;
-    padding: 0;
-  }
-
-  body {
-    background: var(--surface);
-    color: var(--surface-txt);
-    font-family: "IBM Plex Sans", system-ui, sans-serif;
-    line-height: 1.5;
-  }
-
   a {
     color: inherit;
   }
@@ -145,7 +108,7 @@ const home = result.data.home;
   }
   .btn-primary {
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-ink);
     box-shadow: var(--shadow-raised);
   }
   .btn-primary:hover {
@@ -163,15 +126,15 @@ const home = result.data.home;
 
   .hero {
     text-align: center;
-    padding: 5rem 0 3rem;
+    padding: 6.5rem 0 4rem;
   }
   .eyebrow {
     font-family: "IBM Plex Mono", ui-monospace, monospace;
     font-size: 0.75rem;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--surface-txt-hint);
-    margin: 0 0 1rem;
+    margin: 0 0 1.25rem;
   }
   .hero h1 {
     font-size: clamp(2.2rem, 5vw, 3.4rem);
@@ -202,6 +165,13 @@ const home = result.data.home;
   .hero-subaction a {
     color: var(--surface-txt-hint);
     text-decoration: underline;
+  }
+  .mock-caption {
+    margin: 0;
+    padding: 0.5rem 0.9rem;
+    border-top: 1px solid var(--surface-alt2);
+    font-size: 0.75rem;
+    color: var(--surface-txt-hint);
   }
 
   .mock {
@@ -318,14 +288,16 @@ const home = result.data.home;
   }
 
   section {
-    padding: 4.5rem 0;
+    padding: 5.5rem 0;
   }
-  .features,
-  .how {
+  .spotlights,
+  .how,
+  .faq {
     text-align: center;
   }
-  .features h2,
+  .spotlights h2,
   .how h2,
+  .faq h2,
   .cta h2 {
     font-size: 1.9rem;
   }
@@ -338,7 +310,7 @@ const home = result.data.home;
   .feature-grid {
     margin-top: 2.5rem;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
     text-align: left;
   }
@@ -349,19 +321,147 @@ const home = result.data.home;
     padding: 1.25rem;
     box-shadow: var(--shadow-card);
   }
-  .feature-dot {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    border-radius: 999px;
-    margin-bottom: 0.75rem;
-  }
   .feature-card h3 {
     font-size: 1rem;
     margin-bottom: 0.4rem;
   }
   .feature-card p {
     margin: 0;
+    color: var(--surface-txt-hint);
+    font-size: 0.9rem;
+  }
+
+  .btn-sm {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+  }
+
+  .spotlight-list {
+    margin: 2.5rem 0 3.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+  }
+  .spotlight {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+    align-items: center;
+    text-align: left;
+  }
+  .spotlight:nth-child(even) .spotlight-text {
+    order: 2;
+  }
+  .spotlight-text h3 {
+    font-size: 1.3rem;
+    margin: 0.5rem 0 0.5rem;
+  }
+  .spotlight-text p {
+    margin: 0;
+    color: var(--surface-txt-hint);
+  }
+  .spotlight-visual {
+    background: var(--surface-alt1);
+    border: 1px solid var(--surface-alt2);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    padding: 1.25rem;
+  }
+
+  .restore-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .restore-chip-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+  .restore-chip .hint {
+    font-size: 0.8rem;
+    color: var(--surface-txt-hint);
+  }
+
+  .native-group-chip {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #0b0d12;
+  }
+  .native-group-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin: 0.75rem 0 0 0.9rem;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--surface-alt3);
+  }
+  .mini-tab {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.8rem;
+    color: var(--surface-txt-hint);
+  }
+  .native-group .hint {
+    display: block;
+    margin: 1rem 0 0;
+    font-size: 0.8rem;
+    color: var(--surface-txt-hint);
+  }
+
+  .palette-input {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--surface-alt2);
+  }
+  .palette-placeholder {
+    color: var(--surface-txt-hint);
+    font-size: 0.85rem;
+  }
+  .palette-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.45rem 0.3rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--surface-txt-hint);
+  }
+  .palette-row.is-active {
+    background: var(--surface-alt3);
+    color: var(--surface-txt);
+  }
+
+  .faq-list {
+    max-width: 640px;
+    margin: 2rem auto 0;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .faq-item {
+    background: var(--surface-alt1);
+    border: 1px solid var(--surface-alt2);
+    border-radius: var(--radius);
+    padding: 0.9rem 1.1rem;
+  }
+  .faq-item summary {
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .faq-item summary::marker {
+    color: var(--surface-txt-hint);
+  }
+  .faq-item p {
+    margin: 0.75rem 0 0;
     color: var(--surface-txt-hint);
     font-size: 0.9rem;
   }
@@ -407,6 +507,12 @@ const home = result.data.home;
       width: auto;
       border-right: none;
       border-bottom: 1px solid var(--surface-alt2);
+    }
+    .spotlight {
+      grid-template-columns: 1fr;
+    }
+    .spotlight:nth-child(even) .spotlight-text {
+      order: initial;
     }
   }
 </style>

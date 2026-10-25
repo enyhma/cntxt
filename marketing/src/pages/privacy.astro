@@ -35,19 +35,20 @@ const LAST_UPDATED = "September 28, 2026";
 
         <p>
           cntxt is a browser extension that turns each browser window into a
-          named "workspace": a saved list of tabs you can close and restore
-          later. This policy explains what data the extension collects, why,
-          and how you can have it removed.
+          named "Project", and its tab groups into "Groups": saved lists of
+          tabs you can close and restore later. This policy explains what
+          data the extension collects, why, and how you can have it removed.
         </p>
 
         <h2>What we collect</h2>
         <ul>
           <li>
-            <strong>Workspace data.</strong> The name, color, icon, and tab list
-            (page title and URL — not page content) of each workspace you create.
-            This is stored on your device via the browser's built-in storage. Tab
-            titles and URLs are, by their nature, a record of the sites you've
-            visited while a tab belonged to a workspace.
+            <strong>Project and Group data.</strong> The name, color, icon, and
+            tab list (page title and URL — not page content) of each Project
+            and Group you create. This is stored on your device via the
+            browser's built-in storage. Tab titles and URLs are, by their
+            nature, a record of the sites you've visited while a tab belonged
+            to a Project or Group.
           </li>
           <li>
             <strong>Account email.</strong> If you choose to sign in (via an
@@ -61,14 +62,14 @@ const LAST_UPDATED = "September 28, 2026";
         </ul>
         <p>
           We do not read the content of the pages in your tabs, your browsing
-          history outside of saved workspaces, your keystrokes, clicks, or
+          history outside of saved Projects and Groups, your keystrokes, clicks, or
           mouse activity, and we do not collect health, financial, or location
           data.
         </p>
 
         <h2>Why we collect it</h2>
         <p>
-          Workspace data, your account email, and authentication tokens exist
+          Project and Group data, your account email, and authentication tokens exist
           for one purpose: to let you save, close, and restore a window's tabs
           — and, only if you sign in, to sync that same data across your
           devices. Nothing here is used for advertising, profiling, or any
@@ -79,7 +80,7 @@ const LAST_UPDATED = "September 28, 2026";
         <p>
           If you never sign in, everything stays local to your browser via
           chrome.storage and never leaves your device. If you sign in,
-          workspace data, your email, and session tokens are also stored on
+          Project and Group data, your email, and session tokens are also stored on
           <a href="https://supabase.com" target="_blank" rel="noopener noreferrer"
             >Supabase</a
           >, the backend we use for sync — under our account, not shared or
@@ -112,7 +113,7 @@ const LAST_UPDATED = "September 28, 2026";
 
         <h2>Your choices</h2>
         <p>
-          You can delete individual workspaces at any time from the
+          You can delete individual Projects and Groups at any time from the
           extension. To delete your account and all associated data, or to
           ask what data we hold about you, email <a
             href="mailto:privacy@cntxt.work">privacy@cntxt.work</a
@@ -139,34 +140,6 @@ const LAST_UPDATED = "September 28, 2026";
 </html>
 
 <style>
-  :root {
-    --surface: #12151c;
-    --surface-alt1: #171a21;
-    --surface-alt2: #21242c;
-    --surface-alt3: #2c2f38;
-    --surface-txt: #ebebeb;
-    --surface-txt-hint: rgb(235 235 235 / 65%);
-    --accent: #1055c9;
-    --accent-alt1: #2c6bd6;
-  }
-
-  * {
-    box-sizing: border-box;
-  }
-
-  html,
-  body {
-    margin: 0;
-    padding: 0;
-  }
-
-  body {
-    background: var(--surface);
-    color: var(--surface-txt);
-    font-family: "IBM Plex Sans", system-ui, sans-serif;
-    line-height: 1.6;
-  }
-
   a {
     color: var(--accent-alt1);
   }

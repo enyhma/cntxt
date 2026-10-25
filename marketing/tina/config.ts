@@ -64,12 +64,6 @@ export default defineConfig({
                 label: "Body",
                 ui: { component: "textarea" },
               },
-              {
-                type: "string",
-                name: "color",
-                label: "Accent color",
-                options: ["accent", "success", "info", "warning", "danger"],
-              },
             ],
           },
           {
@@ -87,6 +81,24 @@ export default defineConfig({
                 type: "string",
                 name: "body",
                 label: "Body",
+                ui: { component: "textarea" },
+              },
+            ],
+          },
+          {
+            type: "object",
+            name: "faq",
+            label: "FAQ",
+            list: true,
+            ui: {
+              itemProps: (item) => ({ label: item?.q }),
+            },
+            fields: [
+              { type: "string", name: "q", label: "Question" },
+              {
+                type: "string",
+                name: "a",
+                label: "Answer",
                 ui: { component: "textarea" },
               },
             ],

@@ -14,7 +14,6 @@ interface Props {
     features: Array<{
       title: string;
       body: string;
-      color: string;
       _content_source?: ContentSource;
     }>;
     steps: Array<{
@@ -23,13 +22,19 @@ interface Props {
       body: string;
       _content_source?: ContentSource;
     }>;
+    faq: Array<{
+      q: string;
+      a: string;
+      _content_source?: ContentSource;
+    }>;
   };
 }
 
 const CHROME_URL =
   "https://chromewebstore.google.com/detail/cntxt/ehnhkcnmbkboaljolbndgdgfmjkgipih";
 
-const { hero, features, steps } = Astro.props.data;
+const { hero, features, steps, faq } = Astro.props.data;
+const [spotlights, rest] = [features.slice(0, 3), features.slice(3)];
 ---
 
 <section class="hero">
@@ -39,7 +44,7 @@ const { hero, features, steps } = Astro.props.data;
   <h1 data-tina-field={tinaField(hero, "title")}>{hero.title}</h1>
   <p class="lede" data-tina-field={tinaField(hero, "lede")}>{hero.lede}</p>
   <div class="hero-actions">
-    <a href={CHROME_URL} class="btn btn-primary">Add to Chrome</a>
+    <a href={CHROME_URL} class="btn btn-primary">Add to Chrome — it's free</a>
     <span class="btn btn-ghost" aria-disabled="true">Firefox — coming soon</span>
     <span class="btn btn-ghost" aria-disabled="true">Edge — coming soon</span>
   </div>
@@ -49,7 +54,7 @@ const { hero, features, steps } = Astro.props.data;
 
   <div class="mock" aria-hidden="true">
     <div class="mock-rail">
-      <p class="mock-rail-label">WORKSPACES</p>
+      <p class="mock-rail-label">PROJECTS</p>
       <div class="mock-row is-active">
         <span class="dot" style="background:var(--accent)"></span>
         Design review
@@ -93,21 +98,78 @@ const { hero, features, steps } = Astro.props.data;
           ))
         }
       </div>
+      <p class="mock-caption">Closed 4 days ago · restored in one click</p>
     </div>
   </div>
 </section>
 
-<section id="features" class="features">
+<section id="features" class="spotlights">
   <h2>Built around one idea</h2>
   <p class="section-lede">
-    A window is already the unit of "a project" or "a train of thought."
-    cntxt just gives that unit a name and lets you put it away.
+    A window is already the unit of a project or a train of thought — cntxt
+    just gives it a name (a Project), lets its tab groups become Groups you
+    can save, and keeps related Projects together in an Area.
   </p>
+
+  <div class="spotlight-list">
+    {
+      spotlights.map((f, i) => (
+        <div class="spotlight">
+          <div class="spotlight-text">
+            <h3 data-tina-field={tinaField(f, "title")}>{f.title}</h3>
+            <p data-tina-field={tinaField(f, "body")}>{f.body}</p>
+          </div>
+          <div class="spotlight-visual" aria-hidden="true">
+            {i === 0 && (
+              <div class="restore-chip">
+                <span class="dot" style="background:var(--success)" />
+                <div class="restore-chip-main">
+                  <strong>Design review</strong>
+                  <span class="hint">Closed 4 days ago · 7 tabs saved</span>
+                </div>
+                <span class="btn btn-ghost btn-sm">Restore</span>
+              </div>
+            )}
+            {i === 1 && (
+              <div class="native-group">
+                <span class="native-group-chip" style="background:var(--info)">
+                  Research
+                </span>
+                <div class="native-group-tabs">
+                  <span class="mini-tab">arxiv.org</span>
+                  <span class="mini-tab">scholar.google.com</span>
+                </div>
+                <p class="hint">
+                  Grouped natively in Chrome → saved as a Group automatically
+                </p>
+              </div>
+            )}
+            {i === 2 && (
+              <div class="palette">
+                <div class="palette-input">
+                  <span class="mock-kbd">⌘K</span>
+                  <span class="palette-placeholder">design tokens…</span>
+                </div>
+                <div class="palette-row">
+                  <span>Design tokens PR #214</span>
+                  <span class="tab-domain">github.com</span>
+                </div>
+                <div class="palette-row is-active">
+                  <span>Design review</span>
+                  <span class="tab-domain">Project</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ))
+    }
+  </div>
+
   <div class="feature-grid">
     {
-      features.map((f) => (
+      rest.map((f) => (
         <div class="feature-card">
-          <span class="feature-dot" style={`background:var(--${f.color})`} />
           <h3 data-tina-field={tinaField(f, "title")}>{f.title}</h3>
           <p data-tina-field={tinaField(f, "body")}>{f.body}</p>
         </div>
@@ -126,6 +188,20 @@ const { hero, features, steps } = Astro.props.data;
           <h3 data-tina-field={tinaField(s, "title")}>{s.title}</h3>
           <p data-tina-field={tinaField(s, "body")}>{s.body}</p>
         </div>
+      ))
+    }
+  </div>
+</section>
+
+<section id="faq" class="faq">
+  <h2>Questions</h2>
+  <div class="faq-list">
+    {
+      faq.map((item) => (
+        <details class="faq-item">
+          <summary data-tina-field={tinaField(item, "q")}>{item.q}</summary>
+          <p data-tina-field={tinaField(item, "a")}>{item.a}</p>
+        </details>
       ))
     }
   </div>

@@ -39,35 +39,6 @@ const { title, description, path, eyebrow = "Learn" } = Astro.props;
 </html>
 
 <style is:global>
-  :root {
-    --surface: #12151c;
-    --surface-alt1: #171a21;
-    --surface-alt2: #21242c;
-    --surface-alt3: #2c2f38;
-    --surface-txt: #ebebeb;
-    --surface-txt-hint: rgb(235 235 235 / 65%);
-    --accent: #1055c9;
-    --accent-alt1: #2c6bd6;
-    --radius: 10px;
-  }
-
-  * {
-    box-sizing: border-box;
-  }
-
-  html,
-  body {
-    margin: 0;
-    padding: 0;
-  }
-
-  body {
-    background: var(--surface);
-    color: var(--surface-txt);
-    font-family: "IBM Plex Sans", system-ui, sans-serif;
-    line-height: 1.6;
-  }
-
   a {
     color: var(--accent-alt1);
   }

@@ -1,4 +1,6 @@
 ---
+import "../styles/theme.css";
+
 interface Props {
   title: string;
   description: string;
@@ -8,6 +10,20 @@ const { title, description, path } = Astro.props;
 const canonical = new URL(path, Astro.site);
 const ogImage = new URL("/og.jpg", Astro.site);
 ---
+
+{
+  /* Runs before paint so a stored theme choice never flashes the other
+     theme first. Lives here because SEO.astro is the one component every
+     page already puts in <head>. */
+}
+<script is:inline>
+  (function () {
+    var stored = localStorage.getItem("theme");
+    if (stored === "light" || stored === "dark") {
+      document.documentElement.dataset.theme = stored;
+    }
+  })();
+</script>
 
 <title>{title}</title>
 <meta name="description" content={description} />

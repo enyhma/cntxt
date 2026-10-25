@@ -27,8 +27,68 @@ const prefix = home ? "" : "/";
     <a href={`${prefix}#how-it-works`}>How it works</a>
     <a href="/pricing">Pricing</a>
     <a href={DASHBOARD_URL} class="btn btn-ghost">Dashboard</a>
+    <button type="button" class="theme-toggle" aria-label="Switch theme">
+      <svg
+        class="icon-sun"
+        viewBox="0 0 24 24"
+        width="18"
+        height="18"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="4"></circle>
+        <path
+          d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+        ></path>
+      </svg>
+      <svg
+        class="icon-moon"
+        viewBox="0 0 24 24"
+        width="18"
+        height="18"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        aria-hidden="true"
+      >
+        <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"></path>
+      </svg>
+    </button>
   </nav>
 </header>
+
+<script is:inline>
+  (function () {
+    function effectiveTheme() {
+      var stamped = document.documentElement.dataset.theme;
+      if (stamped === "light" || stamped === "dark") return stamped;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+    }
+    // JS-driven icon swap (not a :root CSS selector) because Astro scopes
+    // this component's <style> block to its own elements, and :root
+    // (the <html> element) falls outside that scope.
+    function syncIcons() {
+      var dark = effectiveTheme() === "dark";
+      document.querySelectorAll(".theme-toggle").forEach(function (btn) {
+        btn.querySelector(".icon-sun").style.display = dark ? "" : "none";
+        btn.querySelector(".icon-moon").style.display = dark ? "none" : "";
+      });
+    }
+    document.querySelectorAll(".theme-toggle").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var next = effectiveTheme() === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem("theme", next);
+        syncIcons();
+      });
+    });
+    syncIcons();
+  })();
+</script>
 
 <style>
   .site-header {
@@ -79,6 +139,22 @@ const prefix = home ? "" : "/";
   }
   .btn-ghost {
     border: 1px solid var(--surface-alt3);
+  }
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    padding: 0;
+    border: 1px solid var(--surface-alt3);
+    border-radius: var(--radius);
+    background: none;
+    color: var(--surface-txt-hint);
+    cursor: pointer;
+  }
+  .theme-toggle:hover {
+    color: var(--surface-txt);
   }
 
   @media (max-width: 720px) {

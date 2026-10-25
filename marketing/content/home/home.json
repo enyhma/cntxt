@@ -1,56 +1,80 @@
 {
   "hero": {
-    "eyebrow": "A browser extension",
-    "title": "Close your tabs without losing your place.",
-    "lede": "cntxt saves every tab in a window as you work. Close the window whenever you want — all its tabs come back exactly as you left them, with one click, whenever you're ready for them again."
+    "eyebrow": "cntxt for Chrome",
+    "title": "Relax. It's all still there.",
+    "lede": "Every browser window becomes a Project the moment you open it. Close it, forget about it, come back in a month — every tab is exactly where you left it."
   },
   "features": [
     {
-      "title": "Every window is a workspace",
-      "body": "Open a window, name it, and cntxt remembers it. No separate save step — it's just how a window works now.",
-      "color": "accent"
-    },
-    {
       "title": "Close it, restore it later",
-      "body": "Done with a project for now? Close the window. Restore brings every tab back exactly as you left it.",
-      "color": "success"
+      "body": "Done with a Project for now? Close the window. Restore brings every tab back exactly as you left it — titles, order, all of it."
     },
     {
-      "title": "Live sync, always",
-      "body": "Open a tab, close a tab, move one around — the workspace updates in the background. Nothing to remember to save.",
-      "color": "info"
+      "title": "Groups mirror your tab groups",
+      "body": "Group tabs the normal Chrome way and cntxt turns it into a saved Group automatically — name, color, and all. Stash it inside a Project, or let it stand on its own."
     },
     {
       "title": "Jump with ⌘K",
-      "body": "A command palette searches every workspace and every tab in it, so switching context never means hunting through windows.",
-      "color": "warning"
+      "body": "A command palette searches every Project, every Group, and every tab in them — switching context never means hunting through windows."
     },
     {
-      "title": "Color and icon per workspace",
-      "body": "Give each workspace a dot color and an icon. Glance at a window and know which one it is.",
-      "color": "danger"
+      "title": "Every window is a Project",
+      "body": "Open a window, name it, and cntxt remembers it. No separate save step — it's just how a window works now."
     },
     {
-      "title": "Move tabs between workspaces",
-      "body": "Select a batch of tabs in one workspace and send them to another — no drag, drop, and hope.",
-      "color": "accent"
+      "title": "Live sync, always",
+      "body": "Open a tab, close a tab, move one around — the Project updates in the background. Nothing to remember to save."
+    },
+    {
+      "title": "Areas keep Projects organized",
+      "body": "Group related Projects under an Area — by client, by quarter, however you think about your work — so your Project list doesn't turn into one long scroll."
+    },
+    {
+      "title": "Move tabs between Projects",
+      "body": "Select a batch of tabs in one Project and send them to another — no drag, drop, and hope."
     }
   ],
   "steps": [
     {
       "n": "01",
       "title": "Open a window",
-      "body": "cntxt names it an untitled workspace the moment it sees tabs in it."
+      "body": "cntxt names it an untitled Project the moment it sees tabs in it."
     },
     {
       "n": "02",
       "title": "Work like you normally do",
-      "body": "Every tab you open, close, or move is synced to that workspace automatically."
+      "body": "Every tab you open, close, or move is synced to that Project automatically."
     },
     {
       "n": "03",
       "title": "Close it. Restore it whenever.",
-      "body": "The window goes away; the workspace doesn't. Pick it up again in one click, in any window."
+      "body": "The window goes away; the Project doesn't. Pick it up again in one click, in any window."
+    }
+  ],
+  "faq": [
+    {
+      "q": "What happens to my tabs when I close a window?",
+      "a": "Nothing — cntxt already knows every tab in that window. Closing it just closes the window; the Project and its full tab list are still there, ready to restore in one click."
+    },
+    {
+      "q": "Does cntxt slow down my browsing?",
+      "a": "No. It only listens for tabs being opened, closed, or moved, and updates your Project in the background — it doesn't run anything on the pages you visit."
+    },
+    {
+      "q": "Is it free?",
+      "a": "Yes — free covers up to 3 Projects and Groups combined, 25 tabs each. Basic and Pro raise those limits and add sync across devices. See pricing for details."
+    },
+    {
+      "q": "Does it sync across my devices?",
+      "a": "On the Pro plan, yes. Free and Basic keep everything local to your browser; Pro adds sync so your Projects and Groups follow you to another computer."
+    },
+    {
+      "q": "Is my tab data private?",
+      "a": "On Free and Basic, your tabs never leave your browser. On Pro, they sync to your cntxt account and are never shared or sold."
+    },
+    {
+      "q": "Is it available for Firefox or Edge?",
+      "a": "Chrome today. Firefox and Edge support is in progress."
     }
   ]
 }

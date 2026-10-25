@@ -35,14 +35,15 @@ const LAST_UPDATED = "September 28, 2026";
 
         <p>
           These terms govern your use of cntxt, a browser extension that
-          saves a window's tabs as a named workspace you can close and
-          restore later. By installing or using cntxt, you agree to them.
+          saves a window's tabs as a named Project (and its tab groups as
+          Groups) you can close and restore later. By installing or using
+          cntxt, you agree to them.
         </p>
 
         <h2>The service</h2>
         <p>
-          cntxt runs locally in your browser. Workspace data — names, tabs,
-          colors, icons — is stored on your device. If you sign in, that same
+          cntxt runs locally in your browser. Project and Group data — names,
+          tabs, colors, icons — is stored on your device. If you sign in, that same
           data is also synced to our backend so it's available across your
           devices. See the <a href="/privacy">Privacy Policy</a> for details
           on what's collected and why.
@@ -57,8 +58,8 @@ const LAST_UPDATED = "September 28, 2026";
 
         <h2>Plans and billing</h2>
         <p>
-          The Free plan is limited to a fixed number of workspaces and tabs
-          per workspace, at no cost, for as long as you use the extension.
+          The Free plan is limited to a fixed number of Projects and Groups,
+          and tabs per each, at no cost, for as long as you use the extension.
           The Pro plan removes those limits for a recurring monthly or yearly
           fee, billed and processed by our payment provider, <a
             href="https://www.creem.io"
@@ -82,7 +83,7 @@ const LAST_UPDATED = "September 28, 2026";
           cntxt is provided "as is," without warranty of any kind. We aim to
           keep sync reliable, but we don't guarantee the service will be
           uninterrupted, error-free, or available at all times, and we're not
-          liable for lost tabs or workspace data — local browser storage and,
+          liable for lost tabs or Project/Group data — local browser storage and,
           if you sign in, our backend are the only copies kept.
         </p>
 
@@ -116,34 +117,6 @@ const LAST_UPDATED = "September 28, 2026";
 </html>
 
 <style>
-  :root {
-    --surface: #12151c;
-    --surface-alt1: #171a21;
-    --surface-alt2: #21242c;
-    --surface-alt3: #2c2f38;
-    --surface-txt: #ebebeb;
-    --surface-txt-hint: rgb(235 235 235 / 65%);
-    --accent: #1055c9;
-    --accent-alt1: #2c6bd6;
-  }
-
-  * {
-    box-sizing: border-box;
-  }
-
-  html,
-  body {
-    margin: 0;
-    padding: 0;
-  }
-
-  body {
-    background: var(--surface);
-    color: var(--surface-txt);
-    font-family: "IBM Plex Sans", system-ui, sans-serif;
-    line-height: 1.6;
-  }
-
   a {
     color: var(--accent-alt1);
   }

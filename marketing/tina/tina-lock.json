@@ -73,15 +73,6 @@
                 "namespace": ["home", "features", "body"],
                 "searchable": true,
                 "uid": false
-              },
-              {
-                "type": "string",
-                "name": "color",
-                "label": "Accent color",
-                "options": ["accent", "success", "info", "warning", "danger"],
-                "namespace": ["home", "features", "color"],
-                "searchable": true,
-                "uid": false
               }
             ],
             "namespace": ["home", "features"],
@@ -122,6 +113,35 @@
               }
             ],
             "namespace": ["home", "steps"],
+            "searchable": true,
+            "uid": false
+          },
+          {
+            "type": "object",
+            "name": "faq",
+            "label": "FAQ",
+            "list": true,
+            "ui": {},
+            "fields": [
+              {
+                "type": "string",
+                "name": "q",
+                "label": "Question",
+                "namespace": ["home", "faq", "q"],
+                "searchable": true,
+                "uid": false
+              },
+              {
+                "type": "string",
+                "name": "a",
+                "label": "Answer",
+                "ui": { "component": "textarea" },
+                "namespace": ["home", "faq", "a"],
+                "searchable": true,
+                "uid": false
+              }
+            ],
+            "namespace": ["home", "faq"],
             "searchable": true,
             "uid": false
           }
@@ -1033,15 +1053,6 @@
               "kind": "NamedType",
               "name": { "kind": "Name", "value": "String" }
             }
-          },
-          {
-            "kind": "FieldDefinition",
-            "name": { "kind": "Name", "value": "color" },
-            "arguments": [],
-            "type": {
-              "kind": "NamedType",
-              "name": { "kind": "Name", "value": "String" }
-            }
           }
         ]
       },
@@ -1072,6 +1083,32 @@
           {
             "kind": "FieldDefinition",
             "name": { "kind": "Name", "value": "body" },
+            "arguments": [],
+            "type": {
+              "kind": "NamedType",
+              "name": { "kind": "Name", "value": "String" }
+            }
+          }
+        ]
+      },
+      {
+        "kind": "ObjectTypeDefinition",
+        "interfaces": [],
+        "directives": [],
+        "name": { "kind": "Name", "value": "HomeFaq" },
+        "fields": [
+          {
+            "kind": "FieldDefinition",
+            "name": { "kind": "Name", "value": "q" },
+            "arguments": [],
+            "type": {
+              "kind": "NamedType",
+              "name": { "kind": "Name", "value": "String" }
+            }
+          },
+          {
+            "kind": "FieldDefinition",
+            "name": { "kind": "Name", "value": "a" },
             "arguments": [],
             "type": {
               "kind": "NamedType",
@@ -1122,6 +1159,18 @@
               "type": {
                 "kind": "NamedType",
                 "name": { "kind": "Name", "value": "HomeSteps" }
+              }
+            }
+          },
+          {
+            "kind": "FieldDefinition",
+            "name": { "kind": "Name", "value": "faq" },
+            "arguments": [],
+            "type": {
+              "kind": "ListType",
+              "type": {
+                "kind": "NamedType",
+                "name": { "kind": "Name", "value": "HomeFaq" }
               }
             }
           },
@@ -1253,14 +1302,6 @@
               "kind": "NamedType",
               "name": { "kind": "Name", "value": "StringFilter" }
             }
-          },
-          {
-            "kind": "InputValueDefinition",
-            "name": { "kind": "Name", "value": "color" },
-            "type": {
-              "kind": "NamedType",
-              "name": { "kind": "Name", "value": "StringFilter" }
-            }
           }
         ]
       },
@@ -1296,6 +1337,28 @@
       },
       {
         "kind": "InputObjectTypeDefinition",
+        "name": { "kind": "Name", "value": "HomeFaqFilter" },
+        "fields": [
+          {
+            "kind": "InputValueDefinition",
+            "name": { "kind": "Name", "value": "q" },
+            "type": {
+              "kind": "NamedType",
+              "name": { "kind": "Name", "value": "StringFilter" }
+            }
+          },
+          {
+            "kind": "InputValueDefinition",
+            "name": { "kind": "Name", "value": "a" },
+            "type": {
+              "kind": "NamedType",
+              "name": { "kind": "Name", "value": "StringFilter" }
+            }
+          }
+        ]
+      },
+      {
+        "kind": "InputObjectTypeDefinition",
         "name": { "kind": "Name", "value": "HomeFilter" },
         "fields": [
           {
@@ -1320,6 +1383,14 @@
             "type": {
               "kind": "NamedType",
               "name": { "kind": "Name", "value": "HomeStepsFilter" }
+            }
+          },
+          {
+            "kind": "InputValueDefinition",
+            "name": { "kind": "Name", "value": "faq" },
+            "type": {
+              "kind": "NamedType",
+              "name": { "kind": "Name", "value": "HomeFaqFilter" }
             }
           }
         ]
@@ -1761,14 +1832,6 @@
               "kind": "NamedType",
               "name": { "kind": "Name", "value": "String" }
             }
-          },
-          {
-            "kind": "InputValueDefinition",
-            "name": { "kind": "Name", "value": "color" },
-            "type": {
-              "kind": "NamedType",
-              "name": { "kind": "Name", "value": "String" }
-            }
           }
         ]
       },
@@ -1795,6 +1858,28 @@
           {
             "kind": "InputValueDefinition",
             "name": { "kind": "Name", "value": "body" },
+            "type": {
+              "kind": "NamedType",
+              "name": { "kind": "Name", "value": "String" }
+            }
+          }
+        ]
+      },
+      {
+        "kind": "InputObjectTypeDefinition",
+        "name": { "kind": "Name", "value": "HomeFaqMutation" },
+        "fields": [
+          {
+            "kind": "InputValueDefinition",
+            "name": { "kind": "Name", "value": "q" },
+            "type": {
+              "kind": "NamedType",
+              "name": { "kind": "Name", "value": "String" }
+            }
+          },
+          {
+            "kind": "InputValueDefinition",
+            "name": { "kind": "Name", "value": "a" },
             "type": {
               "kind": "NamedType",
               "name": { "kind": "Name", "value": "String" }
@@ -1833,6 +1918,17 @@
               "type": {
                 "kind": "NamedType",
                 "name": { "kind": "Name", "value": "HomeStepsMutation" }
+              }
+            }
+          },
+          {
+            "kind": "InputValueDefinition",
+            "name": { "kind": "Name", "value": "faq" },
+            "type": {
+              "kind": "ListType",
+              "type": {
+                "kind": "NamedType",
+                "name": { "kind": "Name", "value": "HomeFaqMutation" }
               }
             }
           }
