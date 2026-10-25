@@ -32,6 +32,7 @@ import {
   type Settings,
   type StartupBehavior,
   type Theme,
+  type ColorScheme,
   getSettings,
   updateSettings,
 } from "@/utils/settings";
@@ -2018,6 +2019,7 @@ function App() {
   const [startupBehavior, setStartupBehavior] =
     createSignal<StartupBehavior>("none");
   const [theme, setTheme] = createSignal<Theme>("baseline");
+  const [colorScheme, setColorScheme] = createSignal<ColorScheme>("system");
   const [manualPullEnabled, setManualPullEnabled] = createSignal(false);
   const [experimentalFeaturesEnabled, setExperimentalFeaturesEnabled] =
     createSignal(false);
@@ -2415,6 +2417,7 @@ function App() {
     const settings: Settings = await getSettings();
     setStartupBehavior(settings.startupBehavior);
     setTheme(settings.theme);
+    setColorScheme(settings.colorScheme);
     setManualPullEnabled(settings.manualPullEnabled);
     setExperimentalFeaturesEnabled(settings.experimentalFeaturesEnabled);
     setAutoArchiveDays(settings.autoArchiveDays);
@@ -2489,6 +2492,11 @@ function App() {
   async function handleThemeChange(value: Theme) {
     setTheme(value);
     await updateSettings({ theme: value });
+  }
+
+  async function handleColorSchemeChange(value: ColorScheme) {
+    setColorScheme(value);
+    await updateSettings({ colorScheme: value });
   }
 
   async function handleManualPullEnabledChange(value: boolean) {
@@ -2581,6 +2589,16 @@ function App() {
   // through to the plain :root defaults.
   createEffect(() => {
     document.documentElement.dataset.theme = theme();
+  });
+
+  // data-color-scheme is independent of data-theme above (see
+  // tokens.css) — "system" deliberately leaves the attribute unset so the
+  // @media (prefers-color-scheme) fallback in tokens.css decides instead.
+  createEffect(() => {
+    const scheme = colorScheme();
+    if (scheme === "system")
+      delete document.documentElement.dataset.colorScheme;
+    else document.documentElement.dataset.colorScheme = scheme;
   });
 
   // The pinned dashboard tab is this window's only always-visible surface,
@@ -2947,6 +2965,8 @@ function App() {
                     onStartupBehaviorChange={handleStartupBehaviorChange}
                     theme={theme}
                     onThemeChange={handleThemeChange}
+                    colorScheme={colorScheme}
+                    onColorSchemeChange={handleColorSchemeChange}
                     manualPullEnabled={manualPullEnabled}
                     onManualPullEnabledChange={handleManualPullEnabledChange}
                     experimentalFeaturesEnabled={experimentalFeaturesEnabled}

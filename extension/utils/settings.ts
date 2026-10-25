@@ -2,6 +2,10 @@ import type { WindowBinding } from "./session";
 
 export type StartupBehavior = "none" | "lastUsed";
 export type Theme = "baseline" | "indigo" | "brass";
+// Independent of Theme above (Theme only ever picks the accent hue) — see
+// packages/tokens/tokens.css's data-color-scheme block. "system" means no
+// explicit choice yet: follow prefers-color-scheme.
+export type ColorScheme = "system" | "light" | "dark";
 
 export type Settings = {
   startupBehavior: StartupBehavior;
@@ -10,6 +14,7 @@ export type Settings = {
   // "lastUsed") can reattach to whichever kind it was.
   lastActiveBinding?: WindowBinding;
   theme: Theme;
+  colorScheme: ColorScheme;
   // Gates the "Pull groups now" control in the account menu (see
   // App.tsx) behind an opt-in toggle in Settings — pullRemoteGroups
   // only runs automatically on sign-in/token refresh today (see
@@ -36,6 +41,7 @@ const STORAGE_KEY = "settings";
 const DEFAULT_SETTINGS: Settings = {
   startupBehavior: "none",
   theme: "baseline",
+  colorScheme: "system",
   manualPullEnabled: false,
   autoArchiveDays: 30,
   experimentalFeaturesEnabled: false,

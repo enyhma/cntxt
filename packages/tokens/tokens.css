@@ -1,7 +1,10 @@
 /*
  * Design tokens extracted from the PocketBase design system
  * (pocketbase/pocketbase/ui/src/css: vars.css, base.css, form.css),
- * recomputed as a single dark palette (this product has no light theme).
+ * recomputed as a dark palette with a light counterpart layered on top
+ * (see the data-color-scheme block at the end of this file) — applied
+ * independently of data-theme (baseline/indigo/brass), which only ever
+ * changes the accent hue, not light vs. dark.
  *
  * Consumers: `@import "@cntxt/tokens/tokens.css";` after `@import "tailwindcss";`
  * so the @theme block below extends Tailwind's generated utilities
@@ -20,10 +23,26 @@
      references, and dark enough that accent is the only saturated thing
      in the room instead of competing with a mid-toned ground. */
   --color-surface: #0e1013;
-  --color-surface-alt1: color-mix(in srgb, var(--color-surface), white 4%);
-  --color-surface-alt2: color-mix(in srgb, var(--color-surface), white 9%);
-  --color-surface-alt3: color-mix(in srgb, var(--color-surface), white 14%);
-  --color-surface-alt4: color-mix(in srgb, var(--color-surface), white 19%);
+  --color-surface-alt1: color-mix(
+    in srgb,
+    var(--color-surface),
+    var(--surface-mix) 4%
+  );
+  --color-surface-alt2: color-mix(
+    in srgb,
+    var(--color-surface),
+    var(--surface-mix) 9%
+  );
+  --color-surface-alt3: color-mix(
+    in srgb,
+    var(--color-surface),
+    var(--surface-mix) 14%
+  );
+  --color-surface-alt4: color-mix(
+    in srgb,
+    var(--color-surface),
+    var(--surface-mix) 19%
+  );
   --color-surface-txt: #eceef0;
   --color-surface-txt-hint: color-mix(
     in srgb,
@@ -97,6 +116,13 @@
  * var(--duration)`) rather than forced into Tailwind's namespaces.
  */
 :root {
+  /* Which way surface-alt1..4 lighten/darken for elevation: mixing toward
+     white works for a dark surface, toward black for a light one. Kept as
+     an indirection so the alt1..4 formulas above never have to be
+     restated per scheme — see the data-color-scheme="light" block below,
+     which only has to flip this one leaf. */
+  --surface-mix: white;
+
   --btn-height: 45px;
   --btn-height-sm: 35px;
   --btn-height-lg: 52px;
@@ -173,4 +199,28 @@
   --color-danger: #954049;
   --color-accent: #b8862e;
   --color-accent-txt: #14120e;
+}
+
+/*
+ * Light scheme — applied by setting data-color-scheme="light" on <html>
+ * (see utils/settings.ts's colorScheme + App.tsx for the extension,
+ * web/src/main.tsx for web), independently of data-theme above: only
+ * surface/surface-txt/surface-mix flip, so whichever accent theme
+ * (baseline/indigo/brass) is active keeps its own hue — e.g.
+ * data-theme="indigo" + data-color-scheme="light" is indigo's accent on
+ * a light ground. Default (no attribute) stays the dark palette above;
+ * @media below covers "system" (no explicit user choice yet).
+ */
+:root[data-color-scheme="light"] {
+  --color-surface: #faf9f7;
+  --color-surface-txt: #18181a;
+  --surface-mix: black;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-color-scheme="dark"]):not([data-color-scheme="light"]) {
+    --color-surface: #faf9f7;
+    --color-surface-txt: #18181a;
+    --surface-mix: black;
+  }
 }

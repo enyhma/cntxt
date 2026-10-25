@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>cntxt</title>
+    <script>
+      // Runs before paint so a stored scheme choice never flashes the
+      // other scheme first — mirrors the extension's App.tsx effect,
+      // which writes this same key via @/utils/settings. "system" (or
+      // nothing stored yet) leaves the attribute unset, so tokens.css's
+      // @media (prefers-color-scheme) fallback decides instead.
+      (function () {
+        var stored = localStorage.getItem("colorScheme");
+        if (stored === "light" || stored === "dark") {
+          document.documentElement.dataset.colorScheme = stored;
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

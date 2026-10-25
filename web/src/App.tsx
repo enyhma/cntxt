@@ -221,6 +221,26 @@ function App() {
     if (nav() === "timeline") refreshTimeline();
   });
 
+  // "system" (the default, nothing stored) deliberately leaves the
+  // attribute unset so tokens.css's @media (prefers-color-scheme)
+  // fallback decides — see index.html's inline script for the
+  // before-paint read of this same key, which this effect's write keeps
+  // in sync with.
+  type ColorScheme = "system" | "light" | "dark";
+  const [colorScheme, setColorScheme] = createSignal<ColorScheme>(
+    (localStorage.getItem("colorScheme") as ColorScheme | null) ?? "system",
+  );
+  createEffect(() => {
+    const scheme = colorScheme();
+    if (scheme === "system") {
+      delete document.documentElement.dataset.colorScheme;
+      localStorage.removeItem("colorScheme");
+    } else {
+      document.documentElement.dataset.colorScheme = scheme;
+      localStorage.setItem("colorScheme", scheme);
+    }
+  });
+
   const [pane, setPane] = createSignal<PaneView>();
   const [expandedFolders, setExpandedFolders] = createSignal<Set<string>>(
     new Set(),
@@ -761,6 +781,22 @@ function App() {
                           )}
                           basicCheckoutUrl={creemBasicCheckoutUrl(s().user.id)}
                         />
+                        <label class="flex flex-col gap-1.5 text-sm">
+                          <span class="text-surface-txt-hint">Appearance</span>
+                          <select
+                            class="select bg-surface-alt1 shadow-[var(--shadow-card)]"
+                            value={colorScheme()}
+                            onChange={(e) =>
+                              setColorScheme(
+                                e.currentTarget.value as ColorScheme,
+                              )
+                            }
+                          >
+                            <option value="system">Match system</option>
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                          </select>
+                        </label>
                         <button
                           type="button"
                           onClick={handleSignOut}

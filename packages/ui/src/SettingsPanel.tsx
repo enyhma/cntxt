@@ -3,12 +3,15 @@ import { PlanPanel } from "./PlanPanel";
 
 export type StartupBehavior = "none" | "lastUsed";
 export type Theme = "baseline" | "indigo" | "brass";
+export type ColorScheme = "system" | "light" | "dark";
 
 export function SettingsPanel(props: {
   startupBehavior: Accessor<StartupBehavior>;
   onStartupBehaviorChange: (v: StartupBehavior) => void;
   theme: Accessor<Theme>;
   onThemeChange: (v: Theme) => void;
+  colorScheme: Accessor<ColorScheme>;
+  onColorSchemeChange: (v: ColorScheme) => void;
   manualPullEnabled: Accessor<boolean>;
   onManualPullEnabledChange: (v: boolean) => void;
   experimentalFeaturesEnabled: Accessor<boolean>;
@@ -81,6 +84,20 @@ export function SettingsPanel(props: {
             <option value="baseline">Baseline</option>
             <option value="indigo">Graphite Indigo</option>
             <option value="brass">Brass on Obsidian</option>
+          </select>
+        </label>
+        <label class="flex flex-col gap-1.5 text-sm">
+          <span class="text-surface-txt-hint">Appearance</span>
+          <select
+            class="select bg-surface-alt1 shadow-[var(--shadow-card)]"
+            value={props.colorScheme()}
+            onChange={(e) =>
+              props.onColorSchemeChange(e.currentTarget.value as ColorScheme)
+            }
+          >
+            <option value="system">Match system</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
           </select>
         </label>
         <label class="flex items-start gap-2.5 text-sm">
