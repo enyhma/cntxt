@@ -15,9 +15,11 @@ import {
   LayoutGrid,
   Bookmark as BookmarkIcon,
   History,
+  MessageSquare,
   Trash2,
   Settings as SettingsIcon,
 } from "lucide-solid";
+import { initFeedbackWidget, openFeedback } from "./lib/userjot";
 import {
   BookmarksPanel,
   ConfigWarning,
@@ -194,6 +196,10 @@ function App() {
   async function handleSignOut() {
     await supabase!.auth.signOut();
   }
+
+  onMount(() => {
+    initFeedbackWidget();
+  });
 
   // Hash-synced nav — web, unlike the extension's single always-open tab,
   // is a real multi-page site: this gets shareable/bookmarkable links and
@@ -432,6 +438,14 @@ function App() {
                   </For>
                 </div>
                 <span class="flex-1" />
+                <button
+                  type="button"
+                  onClick={openFeedback}
+                  class="btn btn-sm h-8 shrink-0 gap-1.75 border border-surface-alt3 bg-surface-alt1 font-normal shadow-[var(--shadow-card)]"
+                >
+                  <MessageSquare size={13} />
+                  Feedback
+                </button>
                 <span class="truncate text-sm text-surface-txt-faint">
                   {s().user.email}
                 </span>

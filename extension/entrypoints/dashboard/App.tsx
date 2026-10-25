@@ -58,6 +58,7 @@ import {
   Layers as AreaIcon,
   Link as LinkIcon,
   type LucideProps,
+  MessageSquare,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -234,6 +235,11 @@ const NAV_ITEMS: Array<{
 ];
 
 const EXPERIMENTAL_NAV_KEYS = new Set(["automations", "bookmarks"]);
+
+// Manifest V3 extension pages can't load remotely-hosted JS (the CDN
+// widget marketing/web embed in-page), so this just opens UserJot's
+// public board in a new tab instead of showing an in-page widget.
+const FEEDBACK_URL = "https://cntxt.userjot.com";
 
 // Area (depth 0, parentId null) / Project (depth 1, parentId an Area) — see
 // supabase/migrations/20261005130000_folders.sql for why both tiers share
@@ -2772,6 +2778,15 @@ function App() {
                   </span>
                 </Show>
               </button>
+              <a
+                href={FEEDBACK_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-sm h-8 shrink-0 gap-1.75 border border-surface-alt3 bg-surface-alt1 font-normal shadow-[var(--shadow-card)]"
+              >
+                <MessageSquare size={13} />
+                Feedback
+              </a>
               <button
                 type="button"
                 title="Search everything"
